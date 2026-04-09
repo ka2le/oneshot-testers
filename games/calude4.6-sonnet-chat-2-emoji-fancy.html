@@ -1,0 +1,442 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  #game-root {
+    font-family: var(--font-sans);
+    min-height: 520px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 8px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* HUD */
+  #hud {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 480px;
+    margin-bottom: 10px;
+  }
+  #hearts { display: flex; gap: 4px; }
+  .heart {
+    font-size: 22px;
+    display: inline-block;
+    transition: transform .15s;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.15));
+  }
+  .heart.lost {
+    opacity: .18;
+    transform: scale(.85);
+    filter: grayscale(1);
+  }
+  .heart.shake {
+    animation: shakeHeart .35s ease;
+  }
+  #score-display {
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    letter-spacing: -0.5px;
+  }
+  #score-display span {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--color-text-secondary);
+    margin-right: 4px;
+  }
+
+  /* LEGEND PANELS */
+  #legend {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    max-width: 480px;
+    margin-bottom: 12px;
+  }
+  .legend-panel {
+    flex: 1;
+    border-radius: var(--border-radius-lg);
+    border: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-primary);
+    padding: 8px 10px;
+  }
+  .legend-title {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .legend-title.good { color: #2e8b57; }
+  .legend-title.bad { color: #c0392b; }
+  .legend-emojis {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  /* ARENA */
+  #arena {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    height: 260px;
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-lg);
+    border: 0.5px solid var(--color-border-tertiary);
+    overflow: hidden;
+  }
+
+  /* EMOJI BUBBLES */
+  .bubble {
+    position: absolute;
+    font-size: 36px;
+    cursor: pointer;
+    user-select: none;
+    transform: scale(0);
+    animation: popIn .25s cubic-bezier(.34,1.56,.64,1) forwards;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,.12));
+    line-height: 1;
+    border-radius: 50%;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    transition: border-color .1s;
+  }
+  .bubble:hover {
+    border-color: var(--color-border-primary);
+    transform: scale(1.08);
+    animation: none;
+    transform: scale(1.08) !important;
+  }
+  .bubble.tap-good {
+    animation: tapGood .3s ease forwards;
+  }
+  .bubble.tap-bad {
+    animation: tapBad .3s ease forwards;
+  }
+  .bubble.shrink-out {
+    animation: shrinkOut .25s ease forwards;
+  }
+
+  /* SCORE POP */
+  .score-pop {
+    position: absolute;
+    font-size: 20px;
+    font-weight: 500;
+    pointer-events: none;
+    animation: floatUp .65s ease forwards;
+    z-index: 10;
+  }
+  .score-pop.pos { color: #2e8b57; }
+  .score-pop.neg { color: #c0392b; }
+
+  /* PROGRESS BAR */
+  #progress-wrap {
+    width: 100%;
+    max-width: 480px;
+    margin-top: 8px;
+    height: 4px;
+    background: var(--color-background-secondary);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  #progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #4caf87, #2e8b57);
+    transition: width .3s;
+    border-radius: 2px;
+  }
+
+  /* GAME OVER */
+  #gameover {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-background-primary);
+    z-index: 20;
+    border-radius: var(--border-radius-lg);
+    gap: 10px;
+    padding: 24px;
+    text-align: center;
+  }
+  #gameover.visible { display: flex; }
+  #gameover .go-emoji { font-size: 52px; animation: popIn .4s cubic-bezier(.34,1.56,.64,1); }
+  #gameover .go-title { font-size: 24px; font-weight: 500; color: var(--color-text-primary); }
+  #gameover .go-subtitle { font-size: 14px; color: var(--color-text-secondary); }
+  #gameover .go-score { font-size: 40px; font-weight: 500; color: var(--color-text-primary); }
+  #gameover .go-score small { font-size: 16px; color: var(--color-text-secondary); font-weight: 400; }
+  #restart-btn {
+    margin-top: 8px;
+    padding: 10px 32px;
+    font-size: 15px;
+    font-weight: 500;
+    border-radius: 999px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: background .15s, transform .1s;
+  }
+  #restart-btn:hover { background: var(--color-background-tertiary); }
+  #restart-btn:active { transform: scale(.97); }
+
+  /* KEYFRAMES */
+  @keyframes popIn {
+    from { transform: scale(0); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+  @keyframes shrinkOut {
+    from { transform: scale(1); opacity: 1; }
+    to   { transform: scale(0); opacity: 0; }
+  }
+  @keyframes tapGood {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.35); background: #d4edda; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+  @keyframes tapBad {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.25); background: #fde8e8; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+  @keyframes floatUp {
+    0%   { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-50px) scale(1.2); }
+  }
+  @keyframes shakeHeart {
+    0%   { transform: translate(0); }
+    20%  { transform: translate(-5px, 0); }
+    40%  { transform: translate(5px, 0); }
+    60%  { transform: translate(-4px, 0); }
+    80%  { transform: translate(4px, 0); }
+    100% { transform: translate(0); }
+  }
+  @keyframes scoreCount {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.25); }
+    100% { transform: scale(1); }
+  }
+</style>
+
+<div id="game-root">
+  <div id="hud">
+    <div id="hearts">
+      <span class="heart" id="h1">❤️</span>
+      <span class="heart" id="h2">❤️</span>
+      <span class="heart" id="h3">❤️</span>
+    </div>
+    <div id="score-display"><span>score</span><b id="score-val">0</b></div>
+  </div>
+
+  <div id="legend">
+    <div class="legend-panel">
+      <div class="legend-title good">✓ tap these</div>
+      <div class="legend-emojis" id="good-list"></div>
+    </div>
+    <div class="legend-panel">
+      <div class="legend-title bad">✗ avoid these</div>
+      <div class="legend-emojis" id="bad-list"></div>
+    </div>
+  </div>
+
+  <div id="arena">
+    <div id="gameover">
+      <div class="go-emoji" id="go-emoji">💀</div>
+      <div class="go-title">game over</div>
+      <div class="go-subtitle">final score</div>
+      <div class="go-score"><b id="final-score">0</b> <small>pts</small></div>
+      <button id="restart-btn">play again</button>
+    </div>
+  </div>
+
+  <div id="progress-wrap">
+    <div id="progress-bar" style="width:0%"></div>
+  </div>
+</div>
+
+<script>
+const ALL_EMOJIS = ['🍕','🎉','🐶','🌈','🍦','💎','⚽','🎸','🦋','🍔',
+                    '🎃','💀','🔥','😈','☠️','🤢','🕷️','👾','🐍','⚡'];
+
+let goodEmojis, badEmojis, hearts, score, bubbles, spawnInterval, active;
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function initGame() {
+  const shuffled = shuffle(ALL_EMOJIS);
+  goodEmojis = shuffled.slice(0, 5);
+  badEmojis = shuffled.slice(5, 10);
+  hearts = 3;
+  score = 0;
+  bubbles = [];
+  active = true;
+
+  document.getElementById('good-list').textContent = '';
+  document.getElementById('bad-list').textContent = '';
+  goodEmojis.forEach(e => {
+    const s = document.createElement('span');
+    s.textContent = e;
+    document.getElementById('good-list').appendChild(s);
+  });
+  badEmojis.forEach(e => {
+    const s = document.createElement('span');
+    s.textContent = e;
+    document.getElementById('bad-list').appendChild(s);
+  });
+
+  updateHearts();
+  updateScore();
+  document.getElementById('gameover').classList.remove('visible');
+  document.getElementById('progress-bar').style.width = '0%';
+
+  clearAllBubbles();
+  if (spawnInterval) clearInterval(spawnInterval);
+  spawnInterval = setInterval(spawnBubble, 950);
+  spawnBubble();
+}
+
+function clearAllBubbles() {
+  const arena = document.getElementById('arena');
+  arena.querySelectorAll('.bubble').forEach(b => b.remove());
+  bubbles = [];
+}
+
+function spawnBubble() {
+  if (!active) return;
+  const arena = document.getElementById('arena');
+  const isGood = Math.random() < 0.55;
+  const pool = isGood ? goodEmojis : badEmojis;
+  const emoji = pool[Math.floor(Math.random() * pool.length)];
+
+  const el = document.createElement('div');
+  el.className = 'bubble';
+  el.textContent = emoji;
+
+  const W = arena.clientWidth - 60;
+  const H = arena.clientHeight - 60;
+  const x = 10 + Math.random() * W;
+  const y = 10 + Math.random() * H;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+
+  el.addEventListener('click', () => tapBubble(el, emoji, isGood, x, y));
+
+  arena.appendChild(el);
+
+  const lifespan = 1800 + Math.random() * 1200;
+  const timer = setTimeout(() => {
+    if (el.parentNode) {
+      el.classList.add('shrink-out');
+      setTimeout(() => el.remove(), 260);
+    }
+  }, lifespan);
+
+  bubbles.push({ el, timer });
+
+  if (bubbles.length > 8) {
+    const old = bubbles.shift();
+    clearTimeout(old.timer);
+    if (old.el.parentNode) {
+      old.el.classList.add('shrink-out');
+      setTimeout(() => old.el.remove(), 260);
+    }
+  }
+
+  const prog = Math.min(100, score * 2);
+  document.getElementById('progress-bar').style.width = prog + '%';
+}
+
+function tapBubble(el, emoji, isGood, x, y) {
+  if (!active || !el.parentNode) return;
+  el.removeEventListener('click', tapBubble);
+
+  if (isGood) {
+    score += 10;
+    updateScore();
+    el.classList.add('tap-good');
+    showPop('+10', x, y, true);
+  } else {
+    hearts--;
+    updateHearts();
+    el.classList.add('tap-bad');
+    showPop('−1 ❤️', x, y, false);
+    shakeHeart();
+    if (hearts <= 0) {
+      setTimeout(endGame, 320);
+    }
+  }
+
+  setTimeout(() => el.remove(), 320);
+}
+
+function showPop(text, x, y, pos) {
+  const arena = document.getElementById('arena');
+  const pop = document.createElement('div');
+  pop.className = 'score-pop ' + (pos ? 'pos' : 'neg');
+  pop.textContent = text;
+  pop.style.left = x + 'px';
+  pop.style.top = y + 'px';
+  arena.appendChild(pop);
+  setTimeout(() => pop.remove(), 680);
+}
+
+function shakeHeart() {
+  const heartIds = ['h1','h2','h3'];
+  const idx = hearts; // hearts already decremented
+  if (idx < 3) {
+    const el = document.getElementById(heartIds[idx]);
+    el.classList.add('shake');
+    setTimeout(() => el.classList.remove('shake'), 400);
+  }
+}
+
+function updateHearts() {
+  ['h1','h2','h3'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    el.classList.toggle('lost', i >= hearts);
+  });
+}
+
+function updateScore() {
+  const el = document.getElementById('score-val');
+  el.textContent = score;
+  el.style.animation = 'none';
+  void el.offsetWidth;
+  el.style.animation = 'scoreCount .2s ease';
+}
+
+function endGame() {
+  active = false;
+  clearInterval(spawnInterval);
+  const go = document.getElementById('gameover');
+  document.getElementById('final-score').textContent = score;
+  document.getElementById('go-emoji').textContent = score >= 50 ? '🏆' : score >= 20 ? '😅' : '💀';
+  go.classList.add('visible');
+}
+
+document.getElementById('restart-btn').addEventListener('click', initGame);
+
+initGame();
+</script>
