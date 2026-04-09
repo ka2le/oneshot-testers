@@ -25,7 +25,6 @@
             text-align: center;
         }
 
-        /* HUD Styling */
         #hud {
             display: flex;
             justify-content: space-between;
@@ -60,7 +59,12 @@
             margin-top: 5px;
         }
 
-        /* Game Area Styling */
+        #score {
+            font-size: 28px;
+            margin-top: 5px;
+            font-weight: bold;
+        }
+
         #game-area {
             height: 400px;
             border: 3px dashed #ccc;
@@ -68,7 +72,6 @@
             position: relative;
             overflow: hidden;
             background-color: #fafafa;
-            cursor: pointer;
         }
 
         .emoji-popup {
@@ -78,13 +81,13 @@
             transition: transform 0.1s ease-out;
             user-select: none;
             z-index: 10;
+            line-height: 1;
         }
 
         .emoji-popup:hover {
             transform: scale(1.1);
         }
 
-        /* Game Over Screen */
         #game-over-screen {
             display: none;
             position: absolute;
@@ -132,7 +135,6 @@
     <div id="game-container">
         <h1>Emoji Reaction Game</h1>
 
-        <!-- HUD -->
         <div id="hud">
             <div class="hud-section">
                 <h3>GOOD EMOJIS</h3>
@@ -148,11 +150,11 @@
             </div>
         </div>
 
-        <!-- Game Area -->
+        <div style="margin-bottom: 16px;">
+            Score: <span id="score">0</span>
+        </div>
+
         <div id="game-area">
-            <!-- Emojis will pop up here -->
-            
-            <!-- Game Over Screen -->
             <div id="game-over-screen">
                 <h2>GAME OVER!</h2>
                 <p id="final-score">Your Score: 0</p>
@@ -162,94 +164,80 @@
     </div>
 
     <script>
-        // --- Game Configuration ---
-        const ALL_EMOJIS = ['😀', '😂', '😍', '😎', '🥳', '😭', '😡', '😴', '🤔', '👍'];
-        const GOOD_EMOJIS = ['😀', '😍', '🥳', '😎', '👍']; // 5 Good
-        const BAD_EMOJIS = ['😂', '😭', '😡', '😴', '🤔']; // 5 Bad
+        const GOOD_EMOJIS = ['😀', '😍', '🥳', '😎', '👍'];
+        const BAD_EMOJIS = ['😂', '😭', '😡', '😴', '🤔'];
 
-        // --- Game State ---
         let score = 0;
         let hearts = 3;
         let gameActive = false;
         let currentGoodEmojis = [];
         let currentBadEmojis = [];
-        let gameInterval;
         let spawnInterval;
 
-        // --- DOM Elements ---
         const gameArea = document.getElementById('game-area');
         const goodListEl = document.getElementById('good-list');
         const badListEl = document.getElementById('bad-list');
         const heartsEl = document.getElementById('hearts');
+        const scoreEl = document.getElementById('score');
         const gameOverScreen = document.getElementById('game-over-screen');
         const finalScoreEl = document.getElementById('final-score');
         const restartButton = document.getElementById('restart-button');
-
-        // --- Initialization ---
 
         function initializeGame() {
             score = 0;
             hearts = 3;
             gameActive = true;
-            
-            // Reset UI
+
+            document.querySelectorAll('.emoji-popup').forEach(el => el.remove());
+
             gameOverScreen.style.display = 'none';
-            gameArea.innerHTML = '';
             updateHUD();
-            
-            // Select random sets for this round
+
             currentGoodEmojis = [...GOOD_EMOJIS].sort(() => 0.5 - Math.random()).slice(0, 5);
             currentBadEmojis = [...BAD_EMOJIS].sort(() => 0.5 - Math.random()).slice(0, 5);
 
-            // Update HUD lists
             goodListEl.innerHTML = currentGoodEmojis.map(e => `<span>${e}</span>`).join('');
             badListEl.innerHTML = currentBadEmojis.map(e => `<span>${e}</span>`).join('');
 
-            // Start game loops
-            if (gameInterval) clearInterval(gameInterval);
             if (spawnInterval) clearInterval(spawnInterval);
-            
-            // Spawn emojis every 800ms
             spawnInterval = setInterval(spawnEmoji, 800);
         }
 
         function updateHUD() {
             heartsEl.textContent = '❤️'.repeat(hearts);
+            scoreEl.textContent = score;
         }
-
-        // --- Game Logic ---
 
         function spawnEmoji() {
             if (!gameActive) return;
 
-            // Randomly choose whether to spawn a Good or Bad emoji
             const isGood = Math.random() < 0.5;
-            const emoji = isGood ? currentGoodEmojis[Math.floor(Math.random() * currentGoodEmojis.length)] : currentBadEmojis[Math.floor(Math.random() * currentBadEmojis.length)];
-            
+            const emoji = isGood
+                ? currentGoodEmojis[Math.floor(Math.random() * currentGoodEmojis.length)]
+                : currentBadEmojis[Math.floor(Math.random() * currentBadEmojis.length)];
+
             const emojiElement = document.createElement('div');
             emojiElement.className = 'emoji-popup';
             emojiElement.textContent = emoji;
             emojiElement.dataset.type = isGood ? 'good' : 'bad';
-            
-            
-            // Random position within the game area
-            const x = Math.random() * (gameArea.clientWidth - 80.1 * 800.1);
-            
+
+            const emojiSize = 60;
+            const x = Math.random() * (gameArea.clientWidth - emojiSize);
+            const y = Math.random() * (gameArea.clientHeight - emojiSize);
+
             emojiElement.style.left = `${x}px`;
-            
-            // Set a timeout to remove the emoji after 1.5 seconds
-            const duration = 150; 
+            emojiElement.style.top = `${y}px`;
+
+            gameArea.appendChild(emojiElement);
+
+            const duration = 1500;
             setTimeout(() => {
                 if (emojiElement.parentNode === gameArea) {
                     gameArea.removeChild(emojiElement);
                 }
             }, duration);
 
-            gameArea.appendChild(emojiElement);
-        
-            // Add click listener to the emoji
             emojiElement.addEventListener('click', handleEmojiClick);
-        
         }
 
         function handleEmojiClick(event) {
@@ -259,20 +247,14 @@
             const type = clickedEmoji.dataset.type;
 
             if (type === 'good') {
-                
                 score++;
-                updateHUD();
-                // Optional: Add a small visual feedback effect here
-            } else { // type === 'bad'
+            } else {
                 hearts--;
-                updateHUD();
-                // Optional: Add a small visual feedback effect here
             }
 
-            // Remove the clicked emoji immediately
+            updateHUD();
             clickedEmoji.remove();
 
-            // Check for game over
             if (hearts <= 0) {
                 endGame();
             }
@@ -281,20 +263,12 @@
         function endGame() {
             gameActive = false;
             clearInterval(spawnInterval);
-            
-            // Display results
-            
             finalScoreEl.textContent = `Your Score: ${score}`;
             gameOverScreen.style.display = 'flex';
         }
 
-        // --- Event Listeners ---
-
         restartButton.addEventListener('click', initializeGame);
-
-        // Start the game when the page loads
         initializeGame();
-
     </script>
 </body>
 </html>
