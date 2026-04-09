@@ -8,9 +8,27 @@ Mobile-friendly React launcher for standalone one-page HTML game tests.
 - The launcher auto-discovers every `.html` file in `games/` at build time.
 - The launcher should stay simple, touch-friendly, and easy to extend.
 
-## Ongoing project note
+## Publishing workflow
 
-When new standalone HTML files are added to `games/`, they should appear automatically in the launcher on the next build/deploy. The usual workflow is: add files, commit, and deploy to GitHub Pages.
+When new standalone HTML files are added to `games/`, they should appear automatically in the launcher on the next publish.
+
+Use one command:
+
+```bash
+npm run publish
+```
+
+Alias:
+
+```bash
+npm run deploy
+```
+
+That command:
+
+1. builds the React launcher
+2. copies the raw HTML files from `games/` into `dist/games/`
+3. publishes `dist/` to GitHub Pages
 
 ## Paste HTML loader
 
