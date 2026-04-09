@@ -1555,6 +1555,9 @@
         nextPickupAt: 7,
         slowUntil: 0,
         shieldCharges: 0,
+        shieldUntil: 0,
+        currentRoleCount: 1,
+        fullRoster: { good: [], bad: [] },
         goodPool: [],
         badPool: [],
         goodSet: new Set(),
@@ -1581,12 +1584,38 @@
         return clone;
       }
 
+      function getRoleCountForScore(score) {
+        if (score >= 50) return 5;
+        if (score >= 15) return 4;
+        if (score >= 10) return 3;
+        if (score >= 5) return 2;
+        return 1;
+      }
+
       function assignRoles() {
         const shuffled = shuffle(EMOJIS);
-        state.goodPool = shuffled.slice(0, 5);
-        state.badPool = shuffled.slice(5, 10);
+        state.fullRoster = {
+          good: shuffled.slice(0, 5),
+          bad: shuffled.slice(5, 10)
+        };
+        state.currentRoleCount = getRoleCountForScore(state.score);
+        state.goodPool = state.fullRoster.good.slice(0, state.currentRoleCount);
+        state.badPool = state.fullRoster.bad.slice(0, state.currentRoleCount);
         syncRoleSets();
         renderRoleLists();
+      }
+
+      function updateRoleCountProgress(forceBanner = false) {
+        const desired = getRoleCountForScore(state.score);
+        if (desired === state.currentRoleCount) return;
+        state.currentRoleCount = desired;
+        state.goodPool = state.fullRoster.good.slice(0, desired);
+        state.badPool = state.fullRoster.bad.slice(0, desired);
+        syncRoleSets();
+        renderRoleLists();
+        if (forceBanner || state.running) {
+          showBanner(swapBanner, `Roster expanded: ${desired} good + ${desired} bad active`);
+        }
       }
 
       function syncRoleSets() {
@@ -1632,12 +1661,13 @@
       }
 
       function computeDifficulty() {
-        const scorePart = Math.min(1, state.score / 95);
-        const timePart = Math.min(1, state.elapsed / 115);
-        const comboPart = Math.min(1, state.combo / 14) * 0.18;
-        const slowdown = performance.now() < state.slowUntil ? 0.16 : 0;
-        state.difficulty = Math.max(0, Math.min(1, scorePart * 0.52 + timePart * 0.3 + comboPart - slowdown));
-        state.level = 1 + Math.floor(state.score / 10) + Math.floor(state.elapsed / 24);
+        const scorePart = Math.min(1, state.score / 80);
+        const timePart = Math.min(1, state.elapsed / 95);
+        const comboPart = Math.min(1, state.combo / 12) * 0.2;
+        const rosterPart = Math.max(0, (state.currentRoleCount - 1) * 0.07);
+        const slowdown = performance.now() < state.slowUntil ? 0.18 : 0;
+        state.difficulty = Math.max(0, Math.min(1, scorePart * 0.58 + timePart * 0.34 + comboPart + rosterPart - slowdown));
+        state.level = 1 + Math.floor(state.score / 8) + Math.floor(state.elapsed / 20);
       }
 
       function getMultiplier() {
@@ -1645,22 +1675,24 @@
       }
 
       function getSpawnInterval() {
-        let interval = Math.max(235, 970 - state.difficulty * 410 - Math.min(220, state.score * 4));
-        if (performance.now() < state.slowUntil) interval += 160;
-        if (state.bossActive) interval *= 0.55;
+        const earlyEase = state.score < 5 ? 240 : state.score < 15 ? 120 : 0;
+        let interval = Math.max(220, 1120 - state.difficulty * 560 - Math.min(260, state.score * 5) + earlyEase);
+        if (performance.now() < state.slowUntil) interval += 180;
+        if (state.bossActive) interval *= 0.58;
         return interval;
       }
 
       function getLifetime() {
-        let lifetime = Math.max(760, 2150 - state.difficulty * 760 - Math.min(380, state.elapsed * 7));
-        if (performance.now() < state.slowUntil) lifetime += 240;
-        if (state.bossActive) lifetime += 180;
+        const earlyBonus = state.score < 5 ? 1100 : state.score < 15 ? 700 : state.score < 25 ? 320 : 0;
+        let lifetime = Math.max(1200, 3000 - state.difficulty * 1150 - Math.min(420, state.elapsed * 5) + earlyBonus);
+        if (performance.now() < state.slowUntil) lifetime += 300;
+        if (state.bossActive) lifetime += 220;
         return lifetime;
       }
 
       function getSpawnCount() {
         if (state.bossActive) return 4;
-        return 1 + (state.difficulty > 0.38 ? 1 : 0) + (state.difficulty > 0.82 ? 1 : 0);
+        return 1 + (state.difficulty > 0.5 ? 1 : 0) + (state.difficulty > 0.86 ? 1 : 0);
       }
 
       function getBadBias() {
@@ -1685,8 +1717,8 @@
 
         if (state.combo === 0) {
           comboTitle.textContent = 'Build your combo';
-          comboSub.textContent = state.shieldCharges > 0
-            ? `Shield ready (${state.shieldCharges}). One combo break can be ignored.`
+          comboSub.textContent = performance.now() < state.shieldUntil
+            ? `Shield active for ${Math.max(1, Math.ceil((state.shieldUntil - performance.now()) / 1000))}s. Bad taps and misses are blocked.`
             : 'Good taps stack bonus score. Misses and bad taps break it.';
         } else if (state.combo < 5) {
           comboTitle.textContent = 'Nice rhythm';
@@ -1751,11 +1783,11 @@
       }
 
       function breakCombo(reason, x = null, y = null) {
-        if (state.shieldCharges > 0) {
-          state.shieldCharges -= 1;
-          showBanner(comboBanner, '🛡️ Shield saved your combo');
+        if (performance.now() < state.shieldUntil) {
+          showBanner(comboBanner, '🛡️ Shield blocked the hit');
+          if (x !== null && y !== null) makeFloatingText(x, y, 'blocked', 'pickup');
           updateHUD();
-          return;
+          return false;
         }
         if (state.combo > 0 && x !== null && y !== null) {
           makeFloatingText(x, y, 'combo break', 'miss');
@@ -1764,9 +1796,12 @@
         state.perfectStreak = 0;
         if (reason === 'bad') comboSub.textContent = 'Bad tap. Combo dropped.';
         if (reason === 'miss') comboSub.textContent = 'Missed a good emoji. Combo dropped.';
+        return true;
       }
 
       function maybeSwapRoles() {
+        updateRoleCountProgress();
+        if (state.currentRoleCount < 4) return;
         while (state.score >= state.nextSwapScore) {
           if (state.goodPool.length && state.badPool.length) {
             const goodIndex = Math.floor(Math.random() * state.goodPool.length);
@@ -1882,7 +1917,8 @@
         const pool = spawnBad ? state.badPool : state.goodPool;
         const pick = pool[Math.floor(Math.random() * pool.length)];
         const isGood = state.goodSet.has(pick.emoji);
-        const size = Math.max(54, 82 - state.difficulty * 14 + Math.random() * 10);
+        const sizeBoost = state.score < 5 ? 22 : state.score < 15 ? 12 : state.score < 25 ? 5 : 0;
+        const size = Math.max(54, 82 - state.difficulty * 12 + sizeBoost + Math.random() * 10);
         const margin = size * 0.72;
         const x = pos?.x ?? (margin + Math.random() * Math.max(40, rect.width - margin * 2));
         const y = pos?.y ?? (margin + Math.random() * Math.max(40, rect.height - margin * 2));
@@ -1907,8 +1943,8 @@
           clearTimeout(warnTimer);
           if (!state.activeNodes.has(button)) return;
           if (isGood && state.running && !state.paused && !state.gameOver) {
-            breakCombo('miss', x, y);
-            makeFloatingText(x, y, 'miss', 'miss');
+            const broke = breakCombo('miss', x, y);
+            if (broke) makeFloatingText(x, y, 'miss', 'miss');
           }
           removeSpawn(button);
           updateHUD();
@@ -1933,11 +1969,15 @@
               showBanner(comboBanner, `${state.combo} streak · x${getMultiplier()} multiplier`);
             }
           } else {
-            breakCombo('bad', x, y);
-            loseHeart();
-            makeFloatingText(x, y, 'ouch!', 'bad');
-            makeBurst(x, y, 'radial-gradient(circle, rgba(255,100,125,0.8), rgba(255,100,125,0))');
-            flashArena('bad');
+            const broke = breakCombo('bad', x, y);
+            if (broke) {
+              loseHeart();
+              makeFloatingText(x, y, 'ouch!', 'bad');
+              makeBurst(x, y, 'radial-gradient(circle, rgba(255,100,125,0.8), rgba(255,100,125,0))');
+              flashArena('bad');
+            } else {
+              makeBurst(x, y, 'radial-gradient(circle, rgba(180,220,255,0.8), rgba(180,220,255,0))');
+            }
           }
 
           computeDifficulty();
@@ -2008,9 +2048,9 @@
             makeFloatingText(x, y, 'slow time', 'pickup');
             showBanner(comboBanner, '💨 Difficulty softened for 7s');
           } else if (type === 'shield') {
-            state.shieldCharges += 1;
-            makeFloatingText(x, y, 'shield', 'pickup');
-            showBanner(comboBanner, '🛡️ Combo shield gained');
+            state.shieldUntil = Math.max(state.shieldUntil, performance.now()) + 7000;
+            makeFloatingText(x, y, 'shield 7s', 'pickup');
+            showBanner(comboBanner, '🛡️ Shield active for 7 seconds');
           }
           computeDifficulty();
           updateAchievements();
@@ -2094,7 +2134,7 @@
         state.perfectStreak = 0;
         state.bestPerfectStreak = 0;
         state.swapCount = 0;
-        state.nextSwapScore = 15;
+        state.nextSwapScore = 30;
         state.totalGoodTaps = 0;
         state.clutchQualified = false;
         state.bossesSurvived = 0;
@@ -2105,11 +2145,13 @@
         state.nextPickupAt = 6 + Math.random() * 6;
         state.slowUntil = 0;
         state.shieldCharges = 0;
+        state.shieldUntil = 0;
         state.spawnTimer = 0;
         state.lastFrame = performance.now();
         state.runs += 1;
         persistMeta();
         assignRoles();
+        updateRoleCountProgress(true);
         renderHearts();
         renderAchievements();
         updateHUD();
@@ -2147,7 +2189,8 @@
       pauseButton.addEventListener('click', togglePause);
       reshuffleButton.addEventListener('click', () => {
         assignRoles();
-        state.nextSwapScore = Math.ceil(Math.max(5, state.score + 1) / 5) * 5;
+        updateRoleCountProgress(true);
+        state.nextSwapScore = Math.max(30, Math.ceil(Math.max(30, state.score + 1) / 15) * 15);
         showBanner(swapBanner, 'Fresh role set loaded');
         updateHUD();
       });
@@ -2163,6 +2206,7 @@
 
       renderAchievements();
       assignRoles();
+      updateRoleCountProgress(true);
       renderHearts();
       updateHUD();
     })();
