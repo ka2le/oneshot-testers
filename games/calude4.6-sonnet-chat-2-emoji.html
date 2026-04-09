@@ -1,0 +1,141 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  #game-root { font-family: var(--font-sans); min-height: 520px; padding: 1rem; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  #hud { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 680px; }
+  #score-display { font-size: 18px; font-weight: 500; color: var(--color-text-primary); }
+  #hearts { font-size: 22px; letter-spacing: 4px; }
+  #arena-wrap { display: flex; gap: 12px; width: 100%; max-width: 680px; }
+  .legend { width: 110px; flex-shrink: 0; background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 10px; }
+  .legend h3 { font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .legend.good h3 { color: #3B6D11; }
+  .legend.bad h3 { color: #A32D2D; }
+  .legend-emoji { font-size: 22px; line-height: 1.5; text-align: center; }
+  #arena { position: relative; flex: 1; height: 360px; background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden; }
+  .emoji-btn { position: absolute; font-size: 36px; background: var(--color-background-primary); border: 1.5px solid var(--color-border-secondary); border-radius: 12px; width: 58px; height: 58px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.1s; user-select: none; line-height: 1; }
+  .emoji-btn:hover { transform: scale(1.12); }
+  .emoji-btn.hit-good { border-color: #3B6D11; background: #EAF3DE; }
+  .emoji-btn.hit-bad { border-color: #A32D2D; background: #FCEBEB; }
+  .emoji-btn.fading { opacity: 0; transition: opacity 0.35s; }
+  #timer-bar-wrap { width: 100%; max-width: 680px; }
+  #timer-bar-bg { background: var(--color-border-tertiary); border-radius: 4px; height: 5px; width: 100%; }
+  #timer-bar { height: 5px; border-radius: 4px; background: #1D9E75; transition: width 0.1s linear; }
+  #overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(0,0,0,0.45); border-radius: var(--border-radius-lg); z-index: 10; }
+  #overlay h2 { color: #fff; font-size: 28px; font-weight: 500; }
+  #overlay .final-score { color: #9FE1CB; font-size: 18px; }
+  #overlay button { background: #1D9E75; color: #fff; border: none; border-radius: var(--border-radius-md); padding: 10px 28px; font-size: 16px; cursor: pointer; font-family: var(--font-sans); }
+  #overlay button:hover { background: #0F6E56; }
+  #combo { position: absolute; top: 8px; right: 12px; font-size: 13px; color: var(--color-text-secondary); }
+  .float-text { position: absolute; font-size: 16px; font-weight: 500; pointer-events: none; animation: floatUp 0.8s ease forwards; }
+  @keyframes floatUp { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-40px)} }
+</style>
+<div id="game-root">
+  <div id="hud">
+    <div id="score-display">Score: <span id="score">0</span></div>
+    <div id="hearts">❤️❤️❤️</div>
+  </div>
+  <div id="timer-bar-wrap"><div id="timer-bar-bg"><div id="timer-bar" style="width:100%"></div></div></div>
+  <div id="arena-wrap">
+    <div class="legend good"><h3>✅ Good</h3><div id="good-list" class="legend-emoji"></div></div>
+    <div id="arena"><span id="combo"></span><div id="overlay"><h2>Emoji Rush</h2><div class="final-score">Click the good emojis!</div><button onclick="startGame()">Start Game</button></div></div>
+    <div class="legend bad"><h3>❌ Bad</h3><div id="bad-list" class="legend-emoji"></div></div>
+  </div>
+</div>
+<script>
+const ALL_EMOJIS = ['🍕','🎯','🐸','🌵','🎸','💎','🦊','🍄','🚀','⚡'];
+let goodSet, badSet, score, hearts, tokens, spawnTimer, frameTimer, lastTime, running;
+
+function shuffle(arr){ return [...arr].sort(()=>Math.random()-0.5); }
+
+function startGame(){
+  clearAllTokens();
+  const sh = shuffle(ALL_EMOJIS);
+  goodSet = new Set(sh.slice(0,5));
+  badSet = new Set(sh.slice(5,10));
+  score = 0; hearts = 3; tokens = []; running = true;
+  document.getElementById('score').textContent = '0';
+  updateHearts();
+  document.getElementById('good-list').textContent = [...goodSet].join(' ');
+  document.getElementById('bad-list').textContent = [...badSet].join(' ');
+  const ov = document.getElementById('overlay');
+  ov.style.display = 'none';
+  document.getElementById('timer-bar').style.width = '100%';
+  spawnTimer = 0; lastTime = performance.now();
+  requestAnimationFrame(loop);
+}
+
+function clearAllTokens(){
+  tokens = tokens || [];
+  tokens.forEach(t => t.el && t.el.remove());
+  tokens = [];
+}
+
+function updateHearts(){
+  const h = ['','❤️','❤️❤️','❤️❤️❤️'][hearts] || '';
+  document.getElementById('hearts').textContent = h || '💀';
+}
+
+const arena = document.getElementById('arena');
+
+function spawnEmoji(){
+  const pool = [...goodSet,...badSet];
+  const em = pool[Math.floor(Math.random()*pool.length)];
+  const el = document.createElement('div');
+  el.className = 'emoji-btn';
+  el.textContent = em;
+  const arW = arena.clientWidth - 64, arH = arena.clientHeight - 64;
+  const x = 10 + Math.random()*arW, y = 10 + Math.random()*arH;
+  el.style.left = x+'px'; el.style.top = y+'px';
+  const life = 2200 + Math.random()*1200;
+  const token = { el, em, x, y, life, born: performance.now(), dead: false };
+  el.addEventListener('click', ()=>{ if(!running||token.dead) return; handleClick(token, x, y); });
+  arena.appendChild(el);
+  tokens.push(token);
+}
+
+function handleClick(token, x, y){
+  token.dead = true;
+  const isGood = goodSet.has(token.em);
+  token.el.classList.add(isGood ? 'hit-good' : 'hit-bad');
+  showFloat(isGood ? '+10' : '-❤️', x+58, y, isGood ? '#3B6D11' : '#A32D2D');
+  if(isGood){ score += 10; document.getElementById('score').textContent = score; }
+  else { hearts = Math.max(0,hearts-1); updateHearts(); if(hearts===0){ endGame(); return; } }
+  token.el.classList.add('fading');
+  setTimeout(()=>{ token.el && token.el.remove(); tokens = tokens.filter(t=>t!==token); }, 360);
+}
+
+function showFloat(txt, x, y, color){
+  const f = document.createElement('div');
+  f.className = 'float-text';
+  f.textContent = txt; f.style.color = color;
+  f.style.left = Math.min(x, arena.clientWidth-40)+'px';
+  f.style.top = Math.max(y-10,0)+'px';
+  arena.appendChild(f);
+  setTimeout(()=>f.remove(), 820);
+}
+
+function loop(now){
+  if(!running) return;
+  const dt = now - lastTime; lastTime = now;
+  spawnTimer += dt;
+  const spawnInterval = Math.max(800, 1600 - score*2);
+  if(spawnTimer >= spawnInterval){ spawnEmoji(); spawnTimer = 0; }
+  const alive = [];
+  for(const t of tokens){
+    if(t.dead){ alive.push(t); continue; }
+    const age = now - t.born;
+    if(age >= t.life){ t.dead=true; t.el && t.el.classList.add('fading'); setTimeout(()=>{t.el&&t.el.remove()},360); }
+    else { alive.push(t); }
+  }
+  tokens = alive;
+  requestAnimationFrame(loop);
+}
+
+function endGame(){
+  running = false;
+  clearTimeout(frameTimer);
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `<h2>Game Over</h2><div class="final-score">Final score: ${score}</div><button onclick="startGame()">Play again</button>`;
+  ov.style.display = 'flex';
+}
+</script>

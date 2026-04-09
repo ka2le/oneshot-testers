@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emoji Reaction Game</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+
+        #game-container {
+            width: 90%;
+            max-width: 1000px;
+            background-color: #ffffff;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            text-align: center;
+        }
+
+        #hud {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+        }
+
+        .hud-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .emoji-list {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        .emoji-list span {
+            font-size: 24px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+        }
+
+        #hearts {
+            font-size: 30px;
+            margin-top: 5px;
+        }
+
+        #score {
+            font-size: 28px;
+            margin-top: 5px;
+            font-weight: bold;
+        }
+
+        #game-area {
+            height: 400px;
+            border: 3px dashed #ccc;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+            background-color: #fafafa;
+        }
+
+        .emoji-popup {
+            position: absolute;
+            font-size: 60px;
+            cursor: pointer;
+            transition: transform 0.1s ease-out;
+            user-select: none;
+            z-index: 10;
+            line-height: 1;
+        }
+
+        .emoji-popup:hover {
+            transform: scale(1.1);
+        }
+
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            color: white;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 10px;
+            z-index: 100;
+        }
+
+        #game-over-screen h2 {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        #game-over-screen p {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        #restart-button {
+            padding: 15px 30px;
+            font-size: 20px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+        }
+
+        #restart-button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <h1>Emoji Reaction Game</h1>
+
+        <div id="hud">
+            <div class="hud-section">
+                <h3>GOOD EMOJIS</h3>
+                <div id="good-list" class="emoji-list"></div>
+            </div>
+            <div class="hud-section">
+                <h3>HEARTS</h3>
+                <div id="hearts">❤️❤️❤️</div>
+            </div>
+            <div class="hud-section">
+                <h3>BAD EMOJIS</h3>
+                <div id="bad-list" class="emoji-list"></div>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+            Score: <span id="score">0</span>
+        </div>
+
+        <div id="game-area">
+            <div id="game-over-screen">
+                <h2>GAME OVER!</h2>
+                <p id="final-score">Your Score: 0</p>
+                <button id="restart-button">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const GOOD_EMOJIS = ['😀', '😍', '🥳', '😎', '👍'];
+        const BAD_EMOJIS = ['😂', '😭', '😡', '😴', '🤔'];
+
+        let score = 0;
+        let hearts = 3;
+        let gameActive = false;
+        let currentGoodEmojis = [];
+        let currentBadEmojis = [];
+        let spawnInterval;
+
+        const gameArea = document.getElementById('game-area');
+        const goodListEl = document.getElementById('good-list');
+        const badListEl = document.getElementById('bad-list');
+        const heartsEl = document.getElementById('hearts');
+        const scoreEl = document.getElementById('score');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreEl = document.getElementById('final-score');
+        const restartButton = document.getElementById('restart-button');
+
+        function initializeGame() {
+            score = 0;
+            hearts = 3;
+            gameActive = true;
+
+            document.querySelectorAll('.emoji-popup').forEach(el => el.remove());
+
+            gameOverScreen.style.display = 'none';
+            updateHUD();
+
+            currentGoodEmojis = [...GOOD_EMOJIS].sort(() => 0.5 - Math.random()).slice(0, 5);
+            currentBadEmojis = [...BAD_EMOJIS].sort(() => 0.5 - Math.random()).slice(0, 5);
+
+            goodListEl.innerHTML = currentGoodEmojis.map(e => `<span>${e}</span>`).join('');
+            badListEl.innerHTML = currentBadEmojis.map(e => `<span>${e}</span>`).join('');
+
+            if (spawnInterval) clearInterval(spawnInterval);
+            spawnInterval = setInterval(spawnEmoji, 800);
+        }
+
+        function updateHUD() {
+            heartsEl.textContent = '❤️'.repeat(hearts);
+            scoreEl.textContent = score;
+        }
+
+        function spawnEmoji() {
+            if (!gameActive) return;
+
+            const isGood = Math.random() < 0.5;
+            const emoji = isGood
+                ? currentGoodEmojis[Math.floor(Math.random() * currentGoodEmojis.length)]
+                : currentBadEmojis[Math.floor(Math.random() * currentBadEmojis.length)];
+
+            const emojiElement = document.createElement('div');
+            emojiElement.className = 'emoji-popup';
+            emojiElement.textContent = emoji;
+            emojiElement.dataset.type = isGood ? 'good' : 'bad';
+
+            const emojiSize = 60;
+            const x = Math.random() * (gameArea.clientWidth - emojiSize);
+            const y = Math.random() * (gameArea.clientHeight - emojiSize);
+
+            emojiElement.style.left = `${x}px`;
+            emojiElement.style.top = `${y}px`;
+
+            gameArea.appendChild(emojiElement);
+
+            const duration = 1500;
+            setTimeout(() => {
+                if (emojiElement.parentNode === gameArea) {
+                    gameArea.removeChild(emojiElement);
+                }
+            }, duration);
+
+            emojiElement.addEventListener('click', handleEmojiClick);
+        }
+
+        function handleEmojiClick(event) {
+            if (!gameActive) return;
+
+            const clickedEmoji = event.target;
+            const type = clickedEmoji.dataset.type;
+
+            if (type === 'good') {
+                score++;
+            } else {
+                hearts--;
+            }
+
+            updateHUD();
+            clickedEmoji.remove();
+
+            if (hearts <= 0) {
+                endGame();
+            }
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(spawnInterval);
+            finalScoreEl.textContent = `Your Score: ${score}`;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        restartButton.addEventListener('click', initializeGame);
+        initializeGame();
+    </script>
+</body>
+</html>
