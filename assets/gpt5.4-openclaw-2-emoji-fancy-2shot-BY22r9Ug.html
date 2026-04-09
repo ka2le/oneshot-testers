@@ -1,0 +1,2171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Emoji Rush Royale: 2Shot</title>
+  <style>
+    :root {
+      --bg-1: #0a1020;
+      --bg-2: #161d3d;
+      --bg-3: #28184d;
+      --border: rgba(255, 255, 255, 0.16);
+      --text: #f8fbff;
+      --muted: rgba(248, 251, 255, 0.72);
+      --good: #53f0a8;
+      --good-2: #14c983;
+      --bad: #ff647d;
+      --gold: #ffd76a;
+      --purple: #8f7aff;
+      --blue: #64d9ff;
+      --orange: #ffb367;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% 16%, rgba(100, 217, 255, 0.22), transparent 24%),
+        radial-gradient(circle at 82% 14%, rgba(255, 95, 143, 0.24), transparent 28%),
+        radial-gradient(circle at 50% 100%, rgba(83, 240, 168, 0.15), transparent 32%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2) 46%, var(--bg-3));
+      overflow: hidden;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      width: 36vmax;
+      height: 36vmax;
+      border-radius: 50%;
+      filter: blur(48px);
+      opacity: 0.32;
+      pointer-events: none;
+      animation: drift 14s ease-in-out infinite alternate;
+      z-index: 0;
+    }
+
+    body::before {
+      top: -10vmax;
+      left: -8vmax;
+      background: radial-gradient(circle, rgba(100, 217, 255, 0.35), transparent 68%);
+    }
+
+    body::after {
+      right: -12vmax;
+      bottom: -12vmax;
+      background: radial-gradient(circle, rgba(255, 100, 125, 0.3), transparent 70%);
+      animation-duration: 18s;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(168px, 230px) minmax(280px, 1fr) minmax(168px, 230px);
+      gap: 14px;
+      height: 100vh;
+      padding: 14px;
+    }
+
+    .panel,
+    .center-wrap,
+    .modal-card {
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.08));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .panel {
+      border-radius: 26px;
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .panel::before,
+    .center-wrap::before,
+    .modal-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), transparent 36%);
+      pointer-events: none;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .panel-badge {
+      padding: 6px 9px;
+      border-radius: 999px;
+      font-size: 0.67rem;
+      letter-spacing: 0.06em;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .emoji-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 2px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .emoji-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 11px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+      animation: chipFloat 4.5s ease-in-out infinite;
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+    }
+
+    .emoji-chip.swapping {
+      background: rgba(255, 215, 106, 0.14);
+      border-color: rgba(255, 215, 106, 0.34);
+      transform: scale(1.03);
+    }
+
+    .emoji-chip:nth-child(2n) { animation-delay: -1.3s; }
+    .emoji-chip:nth-child(3n) { animation-delay: -2.1s; }
+
+    .emoji-chip .icon {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      font-size: 1.3rem;
+      flex: 0 0 auto;
+      background: rgba(255,255,255,0.11);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+
+    .emoji-chip .name {
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+
+    .emoji-chip .hint {
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .good-panel .icon {
+      background: linear-gradient(135deg, rgba(83,240,168,0.28), rgba(20,201,131,0.16));
+    }
+
+    .bad-panel .icon {
+      background: linear-gradient(135deg, rgba(255,100,125,0.28), rgba(255,63,97,0.14));
+    }
+
+    .center-wrap {
+      border-radius: 30px;
+      padding: 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      min-height: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .topbar {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      align-items: center;
+      gap: 10px;
+      z-index: 1;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+    }
+
+    .eyebrow {
+      color: var(--muted);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-weight: 800;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.18rem, 2.4vw, 1.85rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .score-block {
+      justify-self: center;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
+    }
+
+    .score-pill {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .score-pill .small {
+      font-size: 0.6rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-weight: 700;
+    }
+
+    .score-pill .big {
+      font-size: 1.25rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .meta {
+      justify-self: end;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .hud-chip {
+      padding: 8px 11px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 0.77rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+      white-space: nowrap;
+    }
+
+    .heart-stack {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .hearts {
+      display: inline-flex;
+      gap: 5px;
+    }
+
+    .heart {
+      font-size: 1rem;
+      filter: drop-shadow(0 6px 10px rgba(255, 80, 120, 0.35));
+      transition: transform 180ms ease, opacity 180ms ease;
+    }
+
+    .heart.lost {
+      opacity: 0.22;
+      transform: scale(0.82) translateY(2px);
+    }
+
+    .extra-hearts {
+      display: none;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(255,215,106,0.22), rgba(255,100,125,0.18));
+      border: 1px solid rgba(255,215,106,0.2);
+      font-size: 0.72rem;
+      font-weight: 900;
+      color: #fff4cf;
+    }
+
+    .extra-hearts.show { display: inline-flex; }
+
+    .streak-bar {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .combo-display {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .combo-orb {
+      width: 42px;
+      height: 42px;
+      border-radius: 15px;
+      display: grid;
+      place-items: center;
+      font-size: 1.2rem;
+      background: linear-gradient(135deg, rgba(255,215,106,0.26), rgba(143,122,255,0.22));
+      box-shadow: 0 12px 24px rgba(143,122,255,0.16), inset 0 1px 0 rgba(255,255,255,0.22);
+      flex: 0 0 auto;
+    }
+
+    .combo-copy .title {
+      font-size: 0.98rem;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+    }
+
+    .combo-copy .sub {
+      color: var(--muted);
+      font-size: 0.74rem;
+      margin-top: 2px;
+    }
+
+    .combo-meter {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .meter-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .meter-track,
+    .progress-track {
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #ffd76a, #ff9d67 45%, #ff647d 80%, #8f7aff);
+      box-shadow: 0 0 18px rgba(255, 157, 103, 0.35);
+      transition: width 220ms ease;
+    }
+
+    .mini-stats {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .mini-pill {
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.09);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 0.74rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .arena-wrap {
+      position: relative;
+      min-height: 0;
+      border-radius: 24px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)),
+        radial-gradient(circle at 50% -10%, rgba(100,217,255,0.18), transparent 42%),
+        linear-gradient(180deg, rgba(20, 26, 54, 0.9), rgba(10, 14, 30, 0.96));
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+
+    .arena {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .arena-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mask-image: linear-gradient(180deg, rgba(0,0,0,0.95), rgba(0,0,0,0.35));
+      pointer-events: none;
+    }
+
+    .arena-banner,
+    .swap-banner,
+    .boss-banner {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 8;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-weight: 900;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      max-width: calc(100% - 24px);
+    }
+
+    .arena-banner {
+      top: 12px;
+      background: linear-gradient(135deg, rgba(255,215,106,0.24), rgba(255,100,125,0.18));
+      border: 1px solid rgba(255,215,106,0.28);
+    }
+
+    .swap-banner {
+      top: 50px;
+      background: linear-gradient(135deg, rgba(100,217,255,0.22), rgba(143,122,255,0.24));
+      border: 1px solid rgba(100,217,255,0.24);
+      font-size: 0.85rem;
+    }
+
+    .boss-banner {
+      top: 88px;
+      background: linear-gradient(135deg, rgba(255,100,125,0.28), rgba(255,179,103,0.22));
+      border: 1px solid rgba(255,100,125,0.26);
+      font-size: 0.86rem;
+      box-shadow: 0 14px 30px rgba(0,0,0,0.2);
+    }
+
+    .arena-banner.show,
+    .boss-banner.show {
+      animation: bannerPop 1600ms ease forwards;
+    }
+
+    .swap-banner.show {
+      animation: bannerPop 2600ms ease forwards;
+    }
+
+    .spawn-emoji {
+      position: absolute;
+      width: var(--size);
+      height: var(--size);
+      border: none;
+      border-radius: 22px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.08)),
+        rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow:
+        0 14px 30px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255,255,255,0.24);
+      font-size: calc(var(--size) * 0.52);
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transform: translate(-50%, -50%) scale(0.6);
+      opacity: 0;
+      animation: popIn 240ms cubic-bezier(.2,.8,.2,1) forwards, bob var(--bobDur) ease-in-out infinite;
+      transition: transform 120ms ease, filter 120ms ease, opacity 200ms ease;
+    }
+
+    .spawn-emoji.good {
+      box-shadow: 0 14px 34px rgba(20, 201, 131, 0.12), 0 16px 34px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255,255,255,0.24);
+    }
+
+    .spawn-emoji.bad {
+      box-shadow: 0 14px 34px rgba(255, 63, 97, 0.12), 0 16px 34px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255,255,255,0.24);
+    }
+
+    .spawn-emoji:hover { filter: brightness(1.08); transform: translate(-50%, -50%) scale(1.06); }
+    .spawn-emoji:active { transform: translate(-50%, -50%) scale(0.96); }
+
+    .spawn-emoji.expiring {
+      filter: saturate(0.9) brightness(0.92);
+      box-shadow: 0 10px 22px rgba(0,0,0,0.18), inset 0 0 0 2px rgba(255,255,255,0.06);
+    }
+
+    .spawn-emoji.removing,
+    .spawn-pickup.removing {
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.55) rotate(-10deg);
+    }
+
+    .spawn-pickup {
+      position: absolute;
+      width: var(--size);
+      height: var(--size);
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      font-size: calc(var(--size) * 0.58);
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transform: translate(-50%, -50%) scale(0.5);
+      opacity: 0;
+      animation: popInPickup 260ms cubic-bezier(.2,.8,.2,1) forwards, bob var(--bobDur) ease-in-out infinite;
+      transition: transform 120ms ease, filter 120ms ease, opacity 200ms ease;
+      z-index: 4;
+    }
+
+    .pickup-core {
+      width: 100%;
+      height: 100%;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle, rgba(255,255,255,0.9), rgba(255,255,255,0.35) 45%, rgba(255,255,255,0.03) 72%, transparent 78%);
+      filter: drop-shadow(0 0 22px rgba(255,255,255,0.5));
+      position: relative;
+    }
+
+    .spawn-pickup.heart .pickup-core {
+      background: radial-gradient(circle, rgba(255,180,205,0.92), rgba(255,110,150,0.42) 44%, rgba(255,110,150,0.06) 72%, transparent 78%);
+      filter: drop-shadow(0 0 20px rgba(255,110,150,0.55));
+    }
+
+    .spawn-pickup.burst .pickup-core {
+      background: radial-gradient(circle, rgba(255,255,255,0.96), rgba(255,240,180,0.45) 42%, rgba(255,240,180,0.06) 72%, transparent 78%);
+      filter: drop-shadow(0 0 24px rgba(255,232,148,0.65));
+    }
+
+    .spawn-pickup.slow .pickup-core {
+      background: radial-gradient(circle, rgba(160,230,255,0.94), rgba(100,217,255,0.42) 42%, rgba(100,217,255,0.06) 72%, transparent 78%);
+      filter: drop-shadow(0 0 24px rgba(100,217,255,0.62));
+    }
+
+    .spawn-pickup.shield .pickup-core {
+      background: radial-gradient(circle, rgba(195,168,255,0.94), rgba(143,122,255,0.42) 42%, rgba(143,122,255,0.06) 72%, transparent 78%);
+      filter: drop-shadow(0 0 24px rgba(143,122,255,0.62));
+    }
+
+    .spawn-pickup:hover { transform: translate(-50%, -50%) scale(1.08); }
+    .spawn-pickup:active { transform: translate(-50%, -50%) scale(0.96); }
+
+    .floating-text,
+    .burst {
+      position: absolute;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .floating-text {
+      font-weight: 900;
+      font-size: 1.03rem;
+      text-shadow: 0 8px 20px rgba(0,0,0,0.28);
+      animation: floatUp 950ms ease-out forwards;
+      transform: translate(-50%, -50%);
+      white-space: nowrap;
+    }
+
+    .floating-text.good { color: #90ffd0; }
+    .floating-text.bad { color: #ff9dad; }
+    .floating-text.combo { color: #ffd76a; }
+    .floating-text.miss { color: #ffd76a; }
+    .floating-text.pickup { color: #dff7ff; }
+    .floating-text.heal { color: #ffc7db; }
+
+    .burst {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      animation: burst 560ms ease-out forwards;
+    }
+
+    .bottom-bar {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .progress-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 12px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .progress-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), #7bf0ff 45%, #8effc4);
+      box-shadow: 0 0 20px rgba(100,217,255,0.45);
+      transition: width 260ms ease;
+    }
+
+    .button-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button.control-btn,
+    button.cta,
+    button.close-btn {
+      border: none;
+      color: var(--text);
+      cursor: pointer;
+      transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease, opacity 140ms ease;
+      font-weight: 800;
+    }
+
+    button.control-btn {
+      border-radius: 16px;
+      padding: 11px 14px;
+      font-size: 0.84rem;
+      background: linear-gradient(135deg, rgba(100,217,255,0.26), rgba(143,122,255,0.24));
+      box-shadow: 0 12px 24px rgba(44, 60, 120, 0.24), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+
+    button.control-btn:hover,
+    button.cta:hover,
+    button.close-btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+    }
+
+    button.control-btn:active,
+    button.cta:active,
+    button.close-btn:active {
+      transform: translateY(1px) scale(0.98);
+    }
+
+    .overlay,
+    .modal {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(7, 11, 24, 0.48);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 10;
+      transition: opacity 240ms ease, visibility 240ms ease;
+    }
+
+    .overlay.hidden,
+    .modal.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .card,
+    .modal-card {
+      width: min(100%, 460px);
+      border-radius: 26px;
+      padding: 22px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.1));
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: var(--shadow);
+    }
+
+    .modal-card {
+      width: min(100%, 760px);
+      text-align: left;
+      padding: 22px;
+    }
+
+    .card .hero {
+      font-size: 3rem;
+      margin-bottom: 8px;
+      display: inline-block;
+      filter: drop-shadow(0 12px 18px rgba(0,0,0,0.24));
+      animation: heroBounce 2.4s ease-in-out infinite;
+    }
+
+    .card h2,
+    .modal-head h2 {
+      margin: 0 0 8px;
+      font-size: clamp(1.65rem, 4vw, 2.2rem);
+      letter-spacing: -0.04em;
+    }
+
+    .card p,
+    .modal-head p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }
+
+    .stats-row {
+      margin: 18px 0 20px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .stat {
+      border-radius: 18px;
+      padding: 12px 10px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .stat .k {
+      font-size: 0.68rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .stat .v {
+      font-size: 1.15rem;
+      font-weight: 900;
+    }
+
+    .cta {
+      width: 100%;
+      padding: 15px 18px;
+      border-radius: 18px;
+      font-size: 1rem;
+      letter-spacing: 0.02em;
+      color: #07111f !important;
+      background: linear-gradient(135deg, #8effc4, #64d9ff 55%, #8f7aff);
+      box-shadow: 0 18px 34px rgba(100,217,255,0.28);
+    }
+
+    .close-btn {
+      padding: 11px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+      font-size: 0.9rem;
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+
+    .achievements-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .achievement-card {
+      border-radius: 20px;
+      padding: 14px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      gap: 12px;
+      min-height: 92px;
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+    }
+
+    .achievement-card.unlocked {
+      background: linear-gradient(135deg, rgba(100,217,255,0.12), rgba(143,122,255,0.14));
+      border-color: rgba(100,217,255,0.24);
+      transform: translateY(-1px);
+    }
+
+    .achievement-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,0.1);
+      font-size: 1.3rem;
+      flex: 0 0 auto;
+    }
+
+    .achievement-card.unlocked .achievement-icon {
+      background: linear-gradient(135deg, rgba(255,215,106,0.24), rgba(100,217,255,0.22));
+    }
+
+    .achievement-name {
+      font-weight: 900;
+      font-size: 0.96rem;
+      margin-bottom: 4px;
+    }
+
+    .achievement-desc {
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.35;
+    }
+
+    .achievement-status {
+      margin-top: 7px;
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 800;
+      color: var(--gold);
+    }
+
+    .tiny {
+      margin-top: 12px;
+      font-size: 0.76rem;
+      color: rgba(248,251,255,0.62);
+    }
+
+    .pulse-hit { animation: pulseHit 260ms ease; }
+    .shake { animation: shake 320ms ease; }
+
+    .flash-good::after,
+    .flash-bad::after,
+    .flash-combo::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      animation: arenaFlash 320ms ease;
+    }
+
+    .flash-good::after { background: radial-gradient(circle, rgba(83,240,168,0.18), transparent 60%); }
+    .flash-bad::after { background: radial-gradient(circle, rgba(255,100,125,0.2), transparent 60%); }
+    .flash-combo::after { background: radial-gradient(circle, rgba(255,215,106,0.2), transparent 60%); }
+
+    @keyframes drift {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to { transform: translate3d(20px, 24px, 0) scale(1.08); }
+    }
+
+    @keyframes chipFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    @keyframes popInPickup {
+      from { opacity: 0; transform: translate(-50%, -50%) scale(0.35); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    @keyframes bob {
+      0%, 100% { margin-top: 0; }
+      50% { margin-top: -7px; }
+    }
+
+    @keyframes floatUp {
+      0% { opacity: 0; transform: translate(-50%, -40%) scale(0.8); }
+      12% { opacity: 1; }
+      100% { opacity: 0; transform: translate(-50%, -150%) scale(1.06); }
+    }
+
+    @keyframes burst {
+      0% { opacity: 0.9; transform: translate(-50%, -50%) scale(0.2); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(8); }
+    }
+
+    @keyframes heroBounce {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      20% { transform: translateY(-4px) rotate(-3deg); }
+      50% { transform: translateY(0) rotate(2deg); }
+      70% { transform: translateY(-2px) rotate(-1deg); }
+    }
+
+    @keyframes pulseHit {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      50% { transform: translateX(5px); }
+      75% { transform: translateX(-3px); }
+    }
+
+    @keyframes arenaFlash {
+      0% { opacity: 0; }
+      35% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes bannerPop {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.9); }
+      12%, 82% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.98); }
+    }
+
+    @media (max-width: 1080px) {
+      .streak-bar { grid-template-columns: 1fr; }
+      .mini-stats { justify-content: flex-start; }
+      .topbar { grid-template-columns: 1fr; justify-items: start; }
+      .score-block, .meta { justify-self: start; }
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        gap: 6px;
+        padding: 6px;
+        overflow: hidden;
+        height: 100dvh;
+      }
+
+      .panel {
+        padding: 6px 8px;
+        border-radius: 16px;
+        gap: 6px;
+      }
+
+      .panel-title {
+        font-size: 0.62rem;
+      }
+
+      .panel-badge {
+        padding: 4px 6px;
+        font-size: 0.56rem;
+      }
+
+      .panel .emoji-list {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 4px;
+      }
+
+      .emoji-chip {
+        padding: 4px;
+        min-height: 0;
+        justify-content: center;
+        border-radius: 11px;
+      }
+
+      .emoji-chip .label {
+        display: none;
+      }
+
+      .emoji-chip .icon {
+        width: 24px;
+        height: 24px;
+        font-size: 0.96rem;
+        border-radius: 8px;
+      }
+
+      .center-wrap {
+        min-height: 0;
+        padding: 6px;
+        gap: 6px;
+        border-radius: 16px;
+        grid-template-rows: auto auto 1fr auto;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+        gap: 5px;
+        justify-items: stretch;
+      }
+
+      .brand {
+        gap: 0;
+      }
+
+      h1 {
+        font-size: 0.94rem;
+      }
+
+      .eyebrow {
+        font-size: 0.52rem;
+      }
+
+      .score-block {
+        width: 100%;
+        justify-content: space-between;
+        gap: 4px;
+        padding: 5px 6px;
+        border-radius: 12px;
+      }
+
+      .score-pill {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .score-pill .small {
+        font-size: 0.5rem;
+      }
+
+      .score-pill .big {
+        font-size: 0.9rem;
+      }
+
+      .meta {
+        width: 100%;
+        gap: 4px;
+      }
+
+      .hud-chip {
+        padding: 4px 6px;
+        font-size: 0.58rem;
+        border-radius: 999px;
+      }
+
+      .heart {
+        font-size: 0.82rem;
+      }
+
+      .extra-hearts {
+        padding: 3px 6px;
+        font-size: 0.58rem;
+      }
+
+      .streak-bar {
+        padding: 6px;
+        gap: 6px;
+        border-radius: 14px;
+        grid-template-columns: 1fr;
+      }
+
+      .combo-display {
+        gap: 7px;
+      }
+
+      .combo-orb {
+        width: 28px;
+        height: 28px;
+        border-radius: 10px;
+        font-size: 0.88rem;
+      }
+
+      .combo-copy .title {
+        font-size: 0.72rem;
+      }
+
+      .combo-copy .sub,
+      .meter-head,
+      .mini-pill,
+      .progress-head {
+        font-size: 0.56rem;
+      }
+
+      .meter-track,
+      .progress-track {
+        height: 8px;
+      }
+
+      .mini-stats {
+        gap: 4px;
+      }
+
+      .mini-pill {
+        padding: 4px 7px;
+      }
+
+      .arena-wrap {
+        min-height: 0;
+        height: 100%;
+        border-radius: 16px;
+      }
+
+      .arena-banner,
+      .swap-banner,
+      .boss-banner {
+        padding: 7px 10px;
+        font-size: 0.66rem;
+      }
+
+      .swap-banner { top: 40px; }
+      .boss-banner { top: 68px; }
+
+      .bottom-bar {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .progress-card {
+        padding: 6px 8px;
+        border-radius: 14px;
+      }
+
+      .button-row {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 5px;
+      }
+
+      button.control-btn {
+        width: 100%;
+        padding: 7px 4px;
+        font-size: 0.6rem;
+        border-radius: 11px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      body { overflow: hidden; }
+
+      .app {
+        grid-template-rows: auto minmax(0, 1fr) auto;
+      }
+
+      .good-panel,
+      .bad-panel {
+        padding: 5px 6px;
+      }
+
+      .panel .emoji-list {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 3px;
+      }
+
+      .emoji-chip .icon {
+        width: 22px;
+        height: 22px;
+        font-size: 0.9rem;
+      }
+
+      .center-wrap {
+        padding: 5px;
+        gap: 5px;
+      }
+
+      h1 {
+        font-size: 0.88rem;
+      }
+
+      .eyebrow {
+        font-size: 0.48rem;
+      }
+
+      .score-block {
+        padding: 4px 6px;
+      }
+
+      .score-pill .big {
+        font-size: 0.82rem;
+      }
+
+      .hud-chip {
+        padding: 4px 5px;
+        font-size: 0.54rem;
+      }
+
+      .streak-bar {
+        padding: 5px;
+      }
+
+      .combo-orb {
+        width: 24px;
+        height: 24px;
+        font-size: 0.74rem;
+      }
+
+      .combo-copy .sub {
+        display: none;
+      }
+
+      .arena-wrap {
+        border-radius: 14px;
+      }
+
+      button.control-btn {
+        padding: 6px 3px;
+        font-size: 0.56rem;
+      }
+
+      .stats-row,
+      .achievements-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-head {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel good-panel">
+      <div class="panel-title">
+        <span>✨ Good</span>
+        <span class="panel-badge" id="goodCountBadge">5 active</span>
+      </div>
+      <div class="emoji-list" id="goodList"></div>
+    </aside>
+
+    <main class="center-wrap" id="gameShell">
+      <div class="topbar">
+        <div class="brand">
+          <div class="eyebrow">Emoji Rush Royale · 2Shot</div>
+          <h1>Combo the right chaos</h1>
+        </div>
+
+        <div class="score-block" id="scoreBlock">
+          <div class="score-pill">
+            <div class="small">Score</div>
+            <div class="big" id="scoreValue">0</div>
+          </div>
+          <div class="score-pill">
+            <div class="small">Best</div>
+            <div class="big" id="bestValue">0</div>
+          </div>
+          <div class="score-pill">
+            <div class="small">Combo</div>
+            <div class="big" id="comboValue">x1</div>
+          </div>
+        </div>
+
+        <div class="meta">
+          <div class="hud-chip">⏱️ <span id="timeValue">0.0s</span></div>
+          <div class="hud-chip">🔥 Lv <span id="levelValue">1</span></div>
+          <div class="hud-chip">🏆 <span id="unlockedValue">0</span></div>
+          <div class="hud-chip">
+            <div class="heart-stack">
+              <div class="hearts" id="heartsWrap"></div>
+              <div class="extra-hearts" id="extraHearts">+0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section class="streak-bar">
+        <div class="combo-display">
+          <div class="combo-orb">⚡</div>
+          <div class="combo-copy">
+            <div class="title" id="comboTitle">Build your combo</div>
+            <div class="sub" id="comboSub">Good taps stack bonus score. Misses and bad taps break it.</div>
+          </div>
+        </div>
+
+        <div class="combo-meter">
+          <div class="meter-head">
+            <span>Streak Charge</span>
+            <span id="streakValue">0 streak</span>
+          </div>
+          <div class="meter-track">
+            <div class="meter-fill" id="streakFill"></div>
+          </div>
+        </div>
+
+        <div class="mini-stats">
+          <div class="mini-pill">Best Combo: <span id="bestComboValue">0</span></div>
+          <div class="mini-pill">Runs: <span id="runsValue">0</span></div>
+          <div class="mini-pill">Swaps: <span id="swapValue">0</span></div>
+        </div>
+      </section>
+
+      <section class="arena-wrap" id="arenaWrap">
+        <div class="arena-grid"></div>
+        <div class="arena-banner" id="comboBanner"></div>
+        <div class="swap-banner" id="swapBanner"></div>
+        <div class="boss-banner" id="bossBanner"></div>
+        <div class="arena" id="arena"></div>
+
+        <div class="overlay" id="startOverlay">
+          <div class="card">
+            <div class="hero">🎯</div>
+            <h2>Tap the good emojis fast</h2>
+            <p>Now with pickups, overheal hearts, boss waves, combo multipliers, score-triggered role swaps, and persistent achievements. Watch the side lists — they are live.</p>
+            <div class="stats-row">
+              <div class="stat">
+                <div class="k">Pickups</div>
+                <div class="v">Glow only</div>
+              </div>
+              <div class="stat">
+                <div class="k">Boss Wave</div>
+                <div class="v">Spam time</div>
+              </div>
+              <div class="stat">
+                <div class="k">Goal</div>
+                <div class="v">Chase 100s</div>
+              </div>
+            </div>
+            <button class="cta" id="startButton">Start Game</button>
+            <div class="tiny">Tip: glowing pickups have no square border, so you can spot them instantly.</div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="gameOverOverlay">
+          <div class="card">
+            <div class="hero">💥</div>
+            <h2>Run Over</h2>
+            <p>You ran out of hearts. Still, that looked pretty heroic in motion.</p>
+            <div class="stats-row">
+              <div class="stat">
+                <div class="k">Final Score</div>
+                <div class="v" id="finalScore">0</div>
+              </div>
+              <div class="stat">
+                <div class="k">Best Combo</div>
+                <div class="v" id="finalCombo">0</div>
+              </div>
+              <div class="stat">
+                <div class="k">Time</div>
+                <div class="v" id="finalTime">0.0s</div>
+              </div>
+            </div>
+            <button class="cta" id="restartButton">Play Again</button>
+            <div class="tiny">Fresh roles, fresh swaps, fresh glowing nonsense.</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="bottom-bar">
+        <div class="progress-card">
+          <div class="progress-head">
+            <span>Difficulty pressure</span>
+            <span id="difficultyText">Warm-up mode</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="difficultyFill"></div>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button class="control-btn" id="pauseButton">⏸️ Pause</button>
+          <button class="control-btn" id="achievementsButton">🏆 Achievements</button>
+          <button class="control-btn" id="reshuffleButton">🔀 Roles</button>
+        </div>
+      </div>
+
+      <div class="modal hidden" id="achievementsModal">
+        <div class="modal-card">
+          <div class="modal-head">
+            <div>
+              <h2>Achievements</h2>
+              <p>Persistent unlocks for clean streaks, big scores, survival, and embracing the escalating emoji nonsense.</p>
+            </div>
+            <button class="close-btn" id="closeAchievements">Close</button>
+          </div>
+          <div class="achievements-grid" id="achievementsGrid"></div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="panel bad-panel">
+      <div class="panel-title">
+        <span>⚠️ Bad</span>
+        <span class="panel-badge" id="badCountBadge">5 active</span>
+      </div>
+      <div class="emoji-list" id="badList"></div>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const EMOJIS = [
+        { emoji: '😀', name: 'Grin' },
+        { emoji: '😎', name: 'Cool' },
+        { emoji: '🥳', name: 'Party' },
+        { emoji: '🤖', name: 'Bot' },
+        { emoji: '👻', name: 'Ghost' },
+        { emoji: '🦄', name: 'Unicorn' },
+        { emoji: '🐸', name: 'Frog' },
+        { emoji: '🍕', name: 'Pizza' },
+        { emoji: '🌈', name: 'Rainbow' },
+        { emoji: '⚡', name: 'Bolt' },
+        { emoji: '🍓', name: 'Berry' },
+        { emoji: '🐱', name: 'Cat' },
+        { emoji: '🌟', name: 'Star' },
+        { emoji: '🎈', name: 'Balloon' },
+        { emoji: '🍩', name: 'Donut' },
+        { emoji: '🎮', name: 'Gamepad' },
+        { emoji: '🛸', name: 'Saucer' },
+        { emoji: '🐼', name: 'Panda' }
+      ];
+
+      const PICKUPS = {
+        heart: { emoji: '❤️', label: 'Heart Bloom' },
+        burst: { emoji: '◉', label: 'White Burst' },
+        slow: { emoji: '💨', label: 'Slow Drift' },
+        shield: { emoji: '🛡️', label: 'Combo Shield' }
+      };
+
+      const ACHIEVEMENTS = [
+        { id: 'firstTap', icon: '👆', name: 'First Tap', desc: 'Hit your first good emoji.', check: s => s.totalGoodTaps >= 1 },
+        { id: 'combo5', icon: '⚡', name: 'Combo 5', desc: 'Reach a 5-hit streak.', check: s => s.bestComboRun >= 5 },
+        { id: 'combo10', icon: '🔥', name: 'Combo 10', desc: 'Reach a 10-hit streak.', check: s => s.bestComboRun >= 10 },
+        { id: 'score25', icon: '🏅', name: 'Score 25', desc: 'Reach 25 points in a run.', check: s => s.score >= 25 },
+        { id: 'score50', icon: '👑', name: 'Score 50', desc: 'Reach 50 points in a run.', check: s => s.score >= 50 },
+        { id: 'survive60', icon: '⏳', name: 'Minute Survived', desc: 'Stay alive for 60 seconds.', check: s => s.elapsed >= 60 },
+        { id: 'survive100', icon: '🕰️', name: '100 Seconds', desc: 'Stay alive for 100 seconds.', check: s => s.elapsed >= 100 },
+        { id: 'perfect12', icon: '💎', name: 'Perfect Twelve', desc: 'Get a 12 streak without a miss or bad tap.', check: s => s.bestPerfectStreak >= 12 },
+        { id: 'swapMaster', icon: '🔀', name: 'Swap Master', desc: 'Survive 6 role swaps in one run.', check: s => s.swapCount >= 6 },
+        { id: 'clutch', icon: '❤️', name: 'Heart Clutch', desc: 'Score 30+ while on your last heart.', check: s => s.clutchQualified },
+        { id: 'overheal', icon: '💖', name: 'Overhealed', desc: 'Reach +2 extra hearts above base.', check: s => s.maxExtraHearts >= 2 },
+        { id: 'bossWave', icon: '💥', name: 'Boss Breaker', desc: 'Survive a boss wave.', check: s => s.bossesSurvived >= 1 },
+      ];
+
+      const storage = {
+        best: 'emoji-rush-2shot-best',
+        bestCombo: 'emoji-rush-2shot-best-combo',
+        runs: 'emoji-rush-2shot-runs',
+        achievements: 'emoji-rush-2shot-achievements'
+      };
+
+      const arena = document.getElementById('arena');
+      const arenaWrap = document.getElementById('arenaWrap');
+      const goodList = document.getElementById('goodList');
+      const badList = document.getElementById('badList');
+      const goodCountBadge = document.getElementById('goodCountBadge');
+      const badCountBadge = document.getElementById('badCountBadge');
+      const heartsWrap = document.getElementById('heartsWrap');
+      const extraHearts = document.getElementById('extraHearts');
+      const scoreValue = document.getElementById('scoreValue');
+      const bestValue = document.getElementById('bestValue');
+      const comboValue = document.getElementById('comboValue');
+      const timeValue = document.getElementById('timeValue');
+      const levelValue = document.getElementById('levelValue');
+      const difficultyFill = document.getElementById('difficultyFill');
+      const difficultyText = document.getElementById('difficultyText');
+      const scoreBlock = document.getElementById('scoreBlock');
+      const gameShell = document.getElementById('gameShell');
+      const startOverlay = document.getElementById('startOverlay');
+      const gameOverOverlay = document.getElementById('gameOverOverlay');
+      const startButton = document.getElementById('startButton');
+      const restartButton = document.getElementById('restartButton');
+      const pauseButton = document.getElementById('pauseButton');
+      const achievementsButton = document.getElementById('achievementsButton');
+      const reshuffleButton = document.getElementById('reshuffleButton');
+      const achievementsModal = document.getElementById('achievementsModal');
+      const closeAchievements = document.getElementById('closeAchievements');
+      const achievementsGrid = document.getElementById('achievementsGrid');
+      const finalScore = document.getElementById('finalScore');
+      const finalCombo = document.getElementById('finalCombo');
+      const finalTime = document.getElementById('finalTime');
+      const comboTitle = document.getElementById('comboTitle');
+      const comboSub = document.getElementById('comboSub');
+      const streakFill = document.getElementById('streakFill');
+      const streakValue = document.getElementById('streakValue');
+      const bestComboValue = document.getElementById('bestComboValue');
+      const runsValue = document.getElementById('runsValue');
+      const swapValue = document.getElementById('swapValue');
+      const unlockedValue = document.getElementById('unlockedValue');
+      const comboBanner = document.getElementById('comboBanner');
+      const swapBanner = document.getElementById('swapBanner');
+      const bossBanner = document.getElementById('bossBanner');
+
+      const state = {
+        score: 0,
+        best: Number(localStorage.getItem(storage.best) || 0),
+        bestComboGlobal: Number(localStorage.getItem(storage.bestCombo) || 0),
+        runs: Number(localStorage.getItem(storage.runs) || 0),
+        unlocked: JSON.parse(localStorage.getItem(storage.achievements) || '[]'),
+        hearts: 3,
+        baseHearts: 3,
+        maxHeartsCap: 5,
+        maxExtraHearts: 0,
+        level: 1,
+        difficulty: 0,
+        elapsed: 0,
+        running: false,
+        paused: false,
+        gameOver: false,
+        combo: 0,
+        bestComboRun: 0,
+        perfectStreak: 0,
+        bestPerfectStreak: 0,
+        swapCount: 0,
+        nextSwapScore: 5,
+        totalGoodTaps: 0,
+        clutchQualified: false,
+        bossesSurvived: 0,
+        nextBossAt: 18,
+        bossActive: false,
+        bossWaveTimer: 0,
+        pickupTimer: 0,
+        nextPickupAt: 7,
+        slowUntil: 0,
+        shieldCharges: 0,
+        goodPool: [],
+        badPool: [],
+        goodSet: new Set(),
+        badSet: new Set(),
+        activeNodes: new Set(),
+        loopId: null,
+        spawnTimer: 0,
+        lastFrame: 0,
+      };
+
+      function persistMeta() {
+        localStorage.setItem(storage.best, String(state.best));
+        localStorage.setItem(storage.bestCombo, String(state.bestComboGlobal));
+        localStorage.setItem(storage.runs, String(state.runs));
+        localStorage.setItem(storage.achievements, JSON.stringify(state.unlocked));
+      }
+
+      function shuffle(arr) {
+        const clone = [...arr];
+        for (let i = clone.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [clone[i], clone[j]] = [clone[j], clone[i]];
+        }
+        return clone;
+      }
+
+      function assignRoles() {
+        const shuffled = shuffle(EMOJIS);
+        state.goodPool = shuffled.slice(0, 5);
+        state.badPool = shuffled.slice(5, 10);
+        syncRoleSets();
+        renderRoleLists();
+      }
+
+      function syncRoleSets() {
+        state.goodSet = new Set(state.goodPool.map(item => item.emoji));
+        state.badSet = new Set(state.badPool.map(item => item.emoji));
+      }
+
+      function renderRoleLists(swappedEmoji = null) {
+        renderSideList(goodList, state.goodPool, 'Tap this', swappedEmoji);
+        renderSideList(badList, state.badPool, 'Avoid this', swappedEmoji);
+        goodCountBadge.textContent = `${state.goodPool.length} active`;
+        badCountBadge.textContent = `${state.badPool.length} active`;
+      }
+
+      function renderSideList(target, items, hintText, swappedEmoji = null) {
+        target.innerHTML = '';
+        items.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'emoji-chip' + (swappedEmoji === item.emoji ? ' swapping' : '');
+          row.innerHTML = `
+            <div class="icon">${item.emoji}</div>
+            <div class="label">
+              <div class="name">${item.name}</div>
+              <div class="hint">${hintText}</div>
+            </div>
+          `;
+          target.appendChild(row);
+        });
+      }
+
+      function renderHearts() {
+        heartsWrap.innerHTML = '';
+        const visible = Math.min(state.baseHearts, state.hearts);
+        for (let i = 0; i < state.baseHearts; i++) {
+          const heart = document.createElement('span');
+          heart.className = 'heart' + (i >= visible ? ' lost' : '');
+          heart.textContent = '❤';
+          heartsWrap.appendChild(heart);
+        }
+        const extra = Math.max(0, state.hearts - state.baseHearts);
+        extraHearts.textContent = `+${extra}`;
+        extraHearts.classList.toggle('show', extra > 0);
+      }
+
+      function computeDifficulty() {
+        const scorePart = Math.min(1, state.score / 95);
+        const timePart = Math.min(1, state.elapsed / 115);
+        const comboPart = Math.min(1, state.combo / 14) * 0.18;
+        const slowdown = performance.now() < state.slowUntil ? 0.16 : 0;
+        state.difficulty = Math.max(0, Math.min(1, scorePart * 0.52 + timePart * 0.3 + comboPart - slowdown));
+        state.level = 1 + Math.floor(state.score / 10) + Math.floor(state.elapsed / 24);
+      }
+
+      function getMultiplier() {
+        return 1 + Math.floor(state.combo / 4);
+      }
+
+      function getSpawnInterval() {
+        let interval = Math.max(235, 970 - state.difficulty * 410 - Math.min(220, state.score * 4));
+        if (performance.now() < state.slowUntil) interval += 160;
+        if (state.bossActive) interval *= 0.55;
+        return interval;
+      }
+
+      function getLifetime() {
+        let lifetime = Math.max(760, 2150 - state.difficulty * 760 - Math.min(380, state.elapsed * 7));
+        if (performance.now() < state.slowUntil) lifetime += 240;
+        if (state.bossActive) lifetime += 180;
+        return lifetime;
+      }
+
+      function getSpawnCount() {
+        if (state.bossActive) return 4;
+        return 1 + (state.difficulty > 0.38 ? 1 : 0) + (state.difficulty > 0.82 ? 1 : 0);
+      }
+
+      function getBadBias() {
+        let bias = Math.min(0.62, 0.42 + state.difficulty * 0.16);
+        if (state.bossActive) bias = 0.45;
+        return bias;
+      }
+
+      function updateHUD() {
+        scoreValue.textContent = state.score;
+        bestValue.textContent = state.best;
+        comboValue.textContent = `x${getMultiplier()}`;
+        timeValue.textContent = `${state.elapsed.toFixed(1)}s`;
+        levelValue.textContent = state.level;
+        bestComboValue.textContent = state.bestComboGlobal;
+        runsValue.textContent = state.runs;
+        swapValue.textContent = state.swapCount;
+        unlockedValue.textContent = state.unlocked.length;
+        streakValue.textContent = `${state.combo} streak`;
+        streakFill.style.width = `${Math.min(100, (state.combo / 12) * 100)}%`;
+        difficultyFill.style.width = `${Math.min(100, state.difficulty * 100)}%`;
+
+        if (state.combo === 0) {
+          comboTitle.textContent = 'Build your combo';
+          comboSub.textContent = state.shieldCharges > 0
+            ? `Shield ready (${state.shieldCharges}). One combo break can be ignored.`
+            : 'Good taps stack bonus score. Misses and bad taps break it.';
+        } else if (state.combo < 5) {
+          comboTitle.textContent = 'Nice rhythm';
+          comboSub.textContent = `Multiplier x${getMultiplier()} · keep the chain alive.`;
+        } else if (state.combo < 10) {
+          comboTitle.textContent = 'Combo cooking';
+          comboSub.textContent = `Multiplier x${getMultiplier()} · one miss and it drops.`;
+        } else {
+          comboTitle.textContent = 'Absolute heater';
+          comboSub.textContent = `Multiplier x${getMultiplier()} · you are legally a reaction machine.`;
+        }
+
+        if (state.bossActive) difficultyText.textContent = 'Boss wave!';
+        else if (performance.now() < state.slowUntil) difficultyText.textContent = 'Time slowed';
+        else if (state.difficulty < 0.2) difficultyText.textContent = 'Warm-up mode';
+        else if (state.difficulty < 0.4) difficultyText.textContent = 'Flow state';
+        else if (state.difficulty < 0.62) difficultyText.textContent = 'Fast fingers';
+        else if (state.difficulty < 0.82) difficultyText.textContent = 'Crowded arena';
+        else difficultyText.textContent = 'Arcade panic';
+      }
+
+      function clearArena() {
+        state.activeNodes.forEach(node => node.remove());
+        state.activeNodes.clear();
+        arena.querySelectorAll('.floating-text, .burst').forEach(el => el.remove());
+      }
+
+      function showBanner(el, text) {
+        el.textContent = text;
+        el.classList.remove('show');
+        void el.offsetWidth;
+        el.classList.add('show');
+      }
+
+      function makeFloatingText(x, y, text, className) {
+        const el = document.createElement('div');
+        el.className = `floating-text ${className}`;
+        el.textContent = text;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        arena.appendChild(el);
+        setTimeout(() => el.remove(), 980);
+      }
+
+      function makeBurst(x, y, color, count = 6) {
+        for (let i = 0; i < count; i++) {
+          const burst = document.createElement('div');
+          burst.className = 'burst';
+          burst.style.left = `${x}px`;
+          burst.style.top = `${y}px`;
+          burst.style.background = color;
+          burst.style.animationDelay = `${i * 18}ms`;
+          arena.appendChild(burst);
+          setTimeout(() => burst.remove(), 620);
+        }
+      }
+
+      function flashArena(type) {
+        arenaWrap.classList.remove('flash-good', 'flash-bad', 'flash-combo');
+        void arenaWrap.offsetWidth;
+        arenaWrap.classList.add(type === 'good' ? 'flash-good' : type === 'bad' ? 'flash-bad' : 'flash-combo');
+      }
+
+      function breakCombo(reason, x = null, y = null) {
+        if (state.shieldCharges > 0) {
+          state.shieldCharges -= 1;
+          showBanner(comboBanner, '🛡️ Shield saved your combo');
+          updateHUD();
+          return;
+        }
+        if (state.combo > 0 && x !== null && y !== null) {
+          makeFloatingText(x, y, 'combo break', 'miss');
+        }
+        state.combo = 0;
+        state.perfectStreak = 0;
+        if (reason === 'bad') comboSub.textContent = 'Bad tap. Combo dropped.';
+        if (reason === 'miss') comboSub.textContent = 'Missed a good emoji. Combo dropped.';
+      }
+
+      function maybeSwapRoles() {
+        while (state.score >= state.nextSwapScore) {
+          if (state.goodPool.length && state.badPool.length) {
+            const goodIndex = Math.floor(Math.random() * state.goodPool.length);
+            const badIndex = Math.floor(Math.random() * state.badPool.length);
+            const oldGood = state.goodPool[goodIndex];
+            const oldBad = state.badPool[badIndex];
+            state.goodPool[goodIndex] = oldBad;
+            state.badPool[badIndex] = oldGood;
+            syncRoleSets();
+            renderRoleLists(oldBad.emoji);
+            state.swapCount += 1;
+            showBanner(swapBanner, `Role swap! ${oldBad.emoji} is now GOOD · ${oldGood.emoji} is now BAD`);
+          }
+          state.nextSwapScore += 15;
+        }
+      }
+
+      function updateAchievements() {
+        let unlockedAny = false;
+        for (const achievement of ACHIEVEMENTS) {
+          if (!state.unlocked.includes(achievement.id) && achievement.check(state)) {
+            state.unlocked.push(achievement.id);
+            unlockedAny = true;
+            showBanner(comboBanner, `🏆 Achievement unlocked: ${achievement.name}`);
+          }
+        }
+        if (unlockedAny) {
+          persistMeta();
+          renderAchievements();
+        }
+      }
+
+      function renderAchievements() {
+        achievementsGrid.innerHTML = '';
+        ACHIEVEMENTS.forEach((item) => {
+          const unlocked = state.unlocked.includes(item.id);
+          const card = document.createElement('div');
+          card.className = 'achievement-card' + (unlocked ? ' unlocked' : '');
+          card.innerHTML = `
+            <div class="achievement-icon">${item.icon}</div>
+            <div class="achievement-text">
+              <div class="achievement-name">${item.name}</div>
+              <div class="achievement-desc">${item.desc}</div>
+              <div class="achievement-status">${unlocked ? 'Unlocked' : 'Locked'}</div>
+            </div>
+          `;
+          achievementsGrid.appendChild(card);
+        });
+        unlockedValue.textContent = state.unlocked.length;
+      }
+
+      function adjustScore(baseAmount, x, y) {
+        const gain = baseAmount * getMultiplier();
+        state.score = Math.max(0, state.score + gain);
+        if (state.score > state.best) state.best = state.score;
+        if (state.combo > state.bestComboRun) state.bestComboRun = state.combo;
+        if (state.bestComboRun > state.bestComboGlobal) state.bestComboGlobal = state.bestComboRun;
+        persistMeta();
+        scoreBlock.classList.remove('pulse-hit');
+        void scoreBlock.offsetWidth;
+        scoreBlock.classList.add('pulse-hit');
+        makeFloatingText(x, y, `+${gain}`, state.combo >= 4 ? 'combo' : 'good');
+      }
+
+      function gainHeart(amount, x, y) {
+        state.hearts = Math.min(state.maxHeartsCap, state.hearts + amount);
+        state.maxExtraHearts = Math.max(state.maxExtraHearts, Math.max(0, state.hearts - state.baseHearts));
+        renderHearts();
+        makeFloatingText(x, y, amount > 1 ? `+${amount} hearts` : '+1 heart', 'heal');
+        showBanner(comboBanner, state.hearts > state.baseHearts ? `Overheal! ${state.hearts - state.baseHearts} extra heart${state.hearts - state.baseHearts > 1 ? 's' : ''}` : 'Heart restored');
+      }
+
+      function loseHeart() {
+        state.hearts = Math.max(0, state.hearts - 1);
+        renderHearts();
+        gameShell.classList.remove('shake');
+        void gameShell.offsetWidth;
+        gameShell.classList.add('shake');
+        if (state.hearts <= 0) gameOver();
+      }
+
+      function removeSpawn(node) {
+        if (!state.activeNodes.has(node)) return;
+        state.activeNodes.delete(node);
+        node.classList.add('removing');
+        setTimeout(() => node.remove(), 190);
+      }
+
+      function getAvailablePositions(count, size) {
+        const rect = arena.getBoundingClientRect();
+        const cols = Math.max(2, Math.floor(rect.width / Math.max(90, size * 1.25)));
+        const rows = Math.max(2, Math.floor(rect.height / Math.max(90, size * 1.2)));
+        const cells = [];
+        const padX = size * 0.8;
+        const padY = size * 0.9;
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const x = padX + ((rect.width - padX * 2) * ((c + 0.5) / cols));
+            const y = padY + ((rect.height - padY * 2) * ((r + 0.5) / rows));
+            cells.push({
+              x: x + (Math.random() - 0.5) * Math.min(26, rect.width * 0.05),
+              y: y + (Math.random() - 0.5) * Math.min(22, rect.height * 0.05)
+            });
+          }
+        }
+        return shuffle(cells).slice(0, count);
+      }
+
+      function spawnEmojiAt(pos = null) {
+        const rect = arena.getBoundingClientRect();
+        const spawnBad = Math.random() < getBadBias();
+        const pool = spawnBad ? state.badPool : state.goodPool;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        const isGood = state.goodSet.has(pick.emoji);
+        const size = Math.max(54, 82 - state.difficulty * 14 + Math.random() * 10);
+        const margin = size * 0.72;
+        const x = pos?.x ?? (margin + Math.random() * Math.max(40, rect.width - margin * 2));
+        const y = pos?.y ?? (margin + Math.random() * Math.max(40, rect.height - margin * 2));
+        const lifetime = getLifetime() * (0.88 + Math.random() * 0.24);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `spawn-emoji ${isGood ? 'good' : 'bad'}`;
+        button.textContent = pick.emoji;
+        button.setAttribute('aria-label', `${pick.name} emoji`);
+        button.style.left = `${x}px`;
+        button.style.top = `${y}px`;
+        button.style.setProperty('--size', `${size}px`);
+        button.style.setProperty('--bobDur', `${2.1 + Math.random() * 1.7}s`);
+        arena.appendChild(button);
+        state.activeNodes.add(button);
+
+        const warnTimer = setTimeout(() => {
+          if (state.activeNodes.has(button)) button.classList.add('expiring');
+        }, Math.max(360, lifetime - 340));
+
+        const removeTimer = setTimeout(() => {
+          clearTimeout(warnTimer);
+          if (!state.activeNodes.has(button)) return;
+          if (isGood && state.running && !state.paused && !state.gameOver) {
+            breakCombo('miss', x, y);
+            makeFloatingText(x, y, 'miss', 'miss');
+          }
+          removeSpawn(button);
+          updateHUD();
+        }, lifetime);
+
+        button.addEventListener('click', () => {
+          if (!state.running || state.paused || state.gameOver) return;
+          clearTimeout(warnTimer);
+          clearTimeout(removeTimer);
+
+          if (isGood) {
+            state.totalGoodTaps += 1;
+            state.combo += 1;
+            state.perfectStreak += 1;
+            state.bestPerfectStreak = Math.max(state.bestPerfectStreak, state.perfectStreak);
+            state.clutchQualified = state.clutchQualified || (state.hearts === 1 && state.score >= 30);
+            adjustScore(1, x, y);
+            maybeSwapRoles();
+            makeBurst(x, y, 'radial-gradient(circle, rgba(83,240,168,0.8), rgba(83,240,168,0))');
+            flashArena(state.combo >= 6 ? 'combo' : 'good');
+            if (state.combo === 5 || state.combo === 10 || state.combo === 15) {
+              showBanner(comboBanner, `${state.combo} streak · x${getMultiplier()} multiplier`);
+            }
+          } else {
+            breakCombo('bad', x, y);
+            loseHeart();
+            makeFloatingText(x, y, 'ouch!', 'bad');
+            makeBurst(x, y, 'radial-gradient(circle, rgba(255,100,125,0.8), rgba(255,100,125,0))');
+            flashArena('bad');
+          }
+
+          computeDifficulty();
+          updateAchievements();
+          updateHUD();
+          removeSpawn(button);
+        }, { passive: true });
+      }
+
+      function collectVisibleGoods() {
+        let collected = 0;
+        [...state.activeNodes].forEach((node) => {
+          if (node.classList.contains('spawn-emoji') && node.classList.contains('good') && !node.classList.contains('removing')) {
+            const x = parseFloat(node.style.left);
+            const y = parseFloat(node.style.top);
+            state.totalGoodTaps += 1;
+            state.combo += 1;
+            state.perfectStreak += 1;
+            state.bestPerfectStreak = Math.max(state.bestPerfectStreak, state.perfectStreak);
+            adjustScore(1, x, y);
+            maybeSwapRoles();
+            makeBurst(x, y, 'radial-gradient(circle, rgba(255,255,255,0.85), rgba(255,255,255,0))', 5);
+            removeSpawn(node);
+            collected += 1;
+          }
+        });
+        return collected;
+      }
+
+      function spawnPickup(type) {
+        const rect = arena.getBoundingClientRect();
+        const size = 58 + Math.random() * 14;
+        const margin = size * 0.9;
+        const x = margin + Math.random() * Math.max(40, rect.width - margin * 2);
+        const y = margin + Math.random() * Math.max(40, rect.height - margin * 2);
+        const lifetime = 3000 + Math.random() * 1200;
+        const meta = PICKUPS[type];
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `spawn-pickup ${type}`;
+        button.style.left = `${x}px`;
+        button.style.top = `${y}px`;
+        button.style.setProperty('--size', `${size}px`);
+        button.style.setProperty('--bobDur', `${2 + Math.random() * 1.8}s`);
+        button.setAttribute('aria-label', meta.label);
+        button.innerHTML = `<div class="pickup-core">${meta.emoji}</div>`;
+        arena.appendChild(button);
+        state.activeNodes.add(button);
+
+        const removeTimer = setTimeout(() => {
+          if (!state.activeNodes.has(button)) return;
+          removeSpawn(button);
+        }, lifetime);
+
+        button.addEventListener('click', () => {
+          if (!state.running || state.paused || state.gameOver) return;
+          clearTimeout(removeTimer);
+          if (type === 'heart') {
+            gainHeart(1, x, y);
+            makeBurst(x, y, 'radial-gradient(circle, rgba(255,135,180,0.85), rgba(255,135,180,0))', 7);
+          } else if (type === 'burst') {
+            const collected = collectVisibleGoods();
+            makeFloatingText(x, y, collected > 0 ? `burst +${collected}` : 'burst', 'pickup');
+            showBanner(comboBanner, collected > 0 ? `White burst collected ${collected} good emoji${collected > 1 ? 's' : ''}` : 'White burst fired');
+            flashArena('combo');
+          } else if (type === 'slow') {
+            state.slowUntil = performance.now() + 7000;
+            makeFloatingText(x, y, 'slow time', 'pickup');
+            showBanner(comboBanner, '💨 Difficulty softened for 7s');
+          } else if (type === 'shield') {
+            state.shieldCharges += 1;
+            makeFloatingText(x, y, 'shield', 'pickup');
+            showBanner(comboBanner, '🛡️ Combo shield gained');
+          }
+          computeDifficulty();
+          updateAchievements();
+          updateHUD();
+          removeSpawn(button);
+        }, { passive: true });
+      }
+
+      function maybeSpawnPickup(dt) {
+        state.pickupTimer += dt / 1000;
+        if (state.pickupTimer < state.nextPickupAt || state.bossActive) return;
+        state.pickupTimer = 0;
+        state.nextPickupAt = 6 + Math.random() * 8;
+        const roll = Math.random();
+        if (roll < 0.28) spawnPickup('heart');
+        else if (roll < 0.56) spawnPickup('burst');
+        else if (roll < 0.8) spawnPickup('slow');
+        else spawnPickup('shield');
+      }
+
+      function maybeStartBossWave() {
+        if (state.bossActive || state.elapsed < state.nextBossAt) return;
+        state.bossActive = true;
+        state.bossWaveTimer = 7.2;
+        showBanner(bossBanner, '💥 Boss wave! Tap through the storm');
+      }
+
+      function runBossWave(dt) {
+        if (!state.bossActive) return;
+        state.bossWaveTimer -= dt / 1000;
+        if (state.bossWaveTimer <= 0) {
+          state.bossActive = false;
+          state.nextBossAt = state.elapsed + 26 + Math.random() * 12;
+          state.bossesSurvived += 1;
+          showBanner(bossBanner, 'Boss wave cleared');
+          updateAchievements();
+        }
+      }
+
+      function gameLoop(now) {
+        if (!state.running || state.paused || state.gameOver) return;
+        const dt = Math.min(40, now - state.lastFrame);
+        state.lastFrame = now;
+        state.elapsed += dt / 1000;
+        if (state.hearts === 1 && state.score >= 30) state.clutchQualified = true;
+
+        maybeStartBossWave();
+        runBossWave(dt);
+        maybeSpawnPickup(dt);
+        computeDifficulty();
+        state.spawnTimer += dt;
+
+        const interval = getSpawnInterval();
+        while (state.spawnTimer >= interval) {
+          state.spawnTimer -= interval;
+          const count = getSpawnCount();
+          const positions = state.bossActive ? getAvailablePositions(count, 74) : [];
+          for (let i = 0; i < count; i++) {
+            spawnEmojiAt(positions[i] || null);
+          }
+        }
+
+        updateAchievements();
+        updateHUD();
+        state.loopId = requestAnimationFrame(gameLoop);
+      }
+
+      function startRun() {
+        clearArena();
+        state.score = 0;
+        state.hearts = 3;
+        state.maxExtraHearts = 0;
+        state.level = 1;
+        state.difficulty = 0;
+        state.elapsed = 0;
+        state.running = true;
+        state.paused = false;
+        state.gameOver = false;
+        state.combo = 0;
+        state.bestComboRun = 0;
+        state.perfectStreak = 0;
+        state.bestPerfectStreak = 0;
+        state.swapCount = 0;
+        state.nextSwapScore = 15;
+        state.totalGoodTaps = 0;
+        state.clutchQualified = false;
+        state.bossesSurvived = 0;
+        state.nextBossAt = 18 + Math.random() * 5;
+        state.bossActive = false;
+        state.bossWaveTimer = 0;
+        state.pickupTimer = 0;
+        state.nextPickupAt = 6 + Math.random() * 6;
+        state.slowUntil = 0;
+        state.shieldCharges = 0;
+        state.spawnTimer = 0;
+        state.lastFrame = performance.now();
+        state.runs += 1;
+        persistMeta();
+        assignRoles();
+        renderHearts();
+        renderAchievements();
+        updateHUD();
+        startOverlay.classList.add('hidden');
+        gameOverOverlay.classList.add('hidden');
+        achievementsModal.classList.add('hidden');
+        pauseButton.textContent = '⏸️ Pause';
+        if (state.loopId) cancelAnimationFrame(state.loopId);
+        state.loopId = requestAnimationFrame(gameLoop);
+      }
+
+      function togglePause() {
+        if (!state.running || state.gameOver) return;
+        state.paused = !state.paused;
+        pauseButton.textContent = state.paused ? '▶️ Resume' : '⏸️ Pause';
+        if (!state.paused) {
+          state.lastFrame = performance.now();
+          state.loopId = requestAnimationFrame(gameLoop);
+        }
+      }
+
+      function gameOver() {
+        state.running = false;
+        state.gameOver = true;
+        finalScore.textContent = state.score;
+        finalCombo.textContent = state.bestComboRun;
+        finalTime.textContent = `${state.elapsed.toFixed(1)}s`;
+        persistMeta();
+        updateAchievements();
+        gameOverOverlay.classList.remove('hidden');
+      }
+
+      startButton.addEventListener('click', startRun);
+      restartButton.addEventListener('click', startRun);
+      pauseButton.addEventListener('click', togglePause);
+      reshuffleButton.addEventListener('click', () => {
+        assignRoles();
+        state.nextSwapScore = Math.ceil(Math.max(5, state.score + 1) / 5) * 5;
+        showBanner(swapBanner, 'Fresh role set loaded');
+        updateHUD();
+      });
+      achievementsButton.addEventListener('click', () => achievementsModal.classList.remove('hidden'));
+      closeAchievements.addEventListener('click', () => achievementsModal.classList.add('hidden'));
+      achievementsModal.addEventListener('click', (e) => {
+        if (e.target === achievementsModal) achievementsModal.classList.add('hidden');
+      });
+
+      window.addEventListener('blur', () => {
+        if (state.running && !state.paused && !state.gameOver) togglePause();
+      });
+
+      renderAchievements();
+      assignRoles();
+      renderHearts();
+      updateHUD();
+    })();
+  </script>
+</body>
+</html>

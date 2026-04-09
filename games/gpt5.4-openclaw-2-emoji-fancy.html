@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Emoji Rush Royale</title>
+  <style>
+    :root {
+      --bg-1: #0f1226;
+      --bg-2: #1a1f48;
+      --bg-3: #261946;
+      --panel: rgba(255, 255, 255, 0.1);
+      --panel-strong: rgba(255, 255, 255, 0.16);
+      --border: rgba(255, 255, 255, 0.18);
+      --text: #f8fbff;
+      --muted: rgba(248, 251, 255, 0.72);
+      --good: #53f0a8;
+      --good-2: #14c983;
+      --bad: #ff647d;
+      --bad-2: #ff3f61;
+      --gold: #ffd76a;
+      --blue: #64d9ff;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(100, 217, 255, 0.22), transparent 28%),
+        radial-gradient(circle at 80% 10%, rgba(255, 95, 143, 0.24), transparent 30%),
+        radial-gradient(circle at 50% 100%, rgba(83, 240, 168, 0.15), transparent 32%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2) 48%, var(--bg-3));
+      overflow: hidden;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: auto;
+      width: 36vmax;
+      height: 36vmax;
+      border-radius: 50%;
+      filter: blur(50px);
+      opacity: 0.32;
+      pointer-events: none;
+      animation: drift 14s ease-in-out infinite alternate;
+      z-index: 0;
+    }
+
+    body::before {
+      top: -10vmax;
+      left: -8vmax;
+      background: radial-gradient(circle, rgba(100, 217, 255, 0.35), transparent 68%);
+    }
+
+    body::after {
+      right: -12vmax;
+      bottom: -12vmax;
+      background: radial-gradient(circle, rgba(255, 100, 125, 0.3), transparent 70%);
+      animation-duration: 18s;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(160px, 230px) minmax(280px, 1fr) minmax(160px, 230px);
+      gap: 18px;
+      height: 100vh;
+      padding: 18px;
+    }
+
+    .panel,
+    .center-wrap {
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.08));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .panel {
+      border-radius: 28px;
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), transparent 40%);
+      pointer-events: none;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .emoji-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .emoji-chip {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+      transform: translateZ(0);
+      animation: chipFloat 4.5s ease-in-out infinite;
+    }
+
+    .emoji-chip:nth-child(2n) { animation-delay: -1.3s; }
+    .emoji-chip:nth-child(3n) { animation-delay: -2.1s; }
+
+    .emoji-chip .icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      font-size: 1.5rem;
+      flex: 0 0 auto;
+      background: rgba(255,255,255,0.11);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+
+    .emoji-chip .label {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .emoji-chip .name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .emoji-chip .hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .good-panel .icon {
+      background: linear-gradient(135deg, rgba(83,240,168,0.28), rgba(20,201,131,0.16));
+      box-shadow: 0 10px 22px rgba(20,201,131,0.16), inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+
+    .bad-panel .icon {
+      background: linear-gradient(135deg, rgba(255,100,125,0.28), rgba(255,63,97,0.14));
+      box-shadow: 0 10px 22px rgba(255,63,97,0.14), inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+
+    .center-wrap {
+      border-radius: 34px;
+      padding: 16px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 14px;
+      min-height: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .center-wrap::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.1), transparent 18%),
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,0.08), transparent 45%);
+      pointer-events: none;
+    }
+
+    .topbar {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+      z-index: 1;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .eyebrow {
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-weight: 800;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.5rem, 3vw, 2.3rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .score-block {
+      justify-self: center;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 18px;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
+    }
+
+    .score-pill {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 90px;
+      text-align: center;
+    }
+
+    .score-pill .small {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-weight: 700;
+    }
+
+    .score-pill .big {
+      font-size: 1.7rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .meta {
+      justify-self: end;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .hud-chip {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--text);
+      font-size: 0.88rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+    }
+
+    .hearts {
+      display: inline-flex;
+      gap: 6px;
+    }
+
+    .heart {
+      font-size: 1.15rem;
+      filter: drop-shadow(0 6px 10px rgba(255, 80, 120, 0.35));
+      transform-origin: center;
+      transition: transform 180ms ease, opacity 180ms ease, filter 180ms ease;
+    }
+
+    .heart.lost {
+      opacity: 0.24;
+      filter: grayscale(0.2);
+      transform: scale(0.8) translateY(2px);
+    }
+
+    .arena-wrap {
+      position: relative;
+      min-height: 0;
+      border-radius: 28px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)),
+        radial-gradient(circle at 50% -10%, rgba(100,217,255,0.18), transparent 42%),
+        linear-gradient(180deg, rgba(20, 26, 54, 0.9), rgba(10, 14, 30, 0.96));
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+
+    .arena {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .arena-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mask-image: linear-gradient(180deg, rgba(0,0,0,0.95), rgba(0,0,0,0.35));
+      pointer-events: none;
+    }
+
+    .spawn-emoji {
+      position: absolute;
+      width: var(--size);
+      height: var(--size);
+      border: none;
+      border-radius: 24px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.08)),
+        rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow:
+        0 16px 34px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255,255,255,0.24);
+      font-size: calc(var(--size) * 0.52);
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transform: translate(-50%, -50%) scale(0.6);
+      opacity: 0;
+      animation: popIn 240ms cubic-bezier(.2,.8,.2,1) forwards, bob var(--bobDur) ease-in-out infinite;
+      transition: transform 120ms ease, filter 120ms ease, opacity 200ms ease;
+    }
+
+    .spawn-emoji.good {
+      box-shadow:
+        0 14px 34px rgba(20, 201, 131, 0.12),
+        0 16px 34px rgba(0, 0, 0, 0.25),
+        inset 0 1px 0 rgba(255,255,255,0.24);
+    }
+
+    .spawn-emoji.bad {
+      box-shadow:
+        0 14px 34px rgba(255, 63, 97, 0.12),
+        0 16px 34px rgba(0, 0, 0, 0.25),
+        inset 0 1px 0 rgba(255,255,255,0.24);
+    }
+
+    .spawn-emoji:hover {
+      filter: brightness(1.08);
+      transform: translate(-50%, -50%) scale(1.06);
+    }
+
+    .spawn-emoji:active {
+      transform: translate(-50%, -50%) scale(0.96);
+    }
+
+    .spawn-emoji.expiring {
+      animation-play-state: running;
+      box-shadow:
+        0 10px 22px rgba(0,0,0,0.18),
+        inset 0 0 0 2px rgba(255,255,255,0.06);
+      filter: saturate(0.9);
+    }
+
+    .spawn-emoji.removing {
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.55) rotate(-10deg);
+    }
+
+    .trail,
+    .burst,
+    .floating-text {
+      position: absolute;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .floating-text {
+      font-weight: 900;
+      font-size: 1.05rem;
+      text-shadow: 0 8px 20px rgba(0,0,0,0.28);
+      animation: floatUp 900ms ease-out forwards;
+      transform: translate(-50%, -50%);
+      white-space: nowrap;
+    }
+
+    .floating-text.good { color: #90ffd0; }
+    .floating-text.bad { color: #ff9dad; }
+    .floating-text.miss { color: #ffd76a; }
+
+    .burst {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      animation: burst 560ms ease-out forwards;
+    }
+
+    .bottom-bar {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .progress-card {
+      flex: 1 1 260px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 14px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .progress-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.88rem;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .progress-track {
+      position: relative;
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), #7bf0ff 45%, #8effc4);
+      box-shadow: 0 0 20px rgba(100,217,255,0.45);
+      transition: width 260ms ease;
+    }
+
+    .button-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button.control-btn {
+      border: none;
+      border-radius: 18px;
+      padding: 13px 18px;
+      font-size: 0.94rem;
+      font-weight: 800;
+      color: var(--text);
+      cursor: pointer;
+      transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+      background: linear-gradient(135deg, rgba(100,217,255,0.26), rgba(143,122,255,0.24));
+      box-shadow: 0 14px 28px rgba(44, 60, 120, 0.24), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+
+    button.control-btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+    }
+
+    button.control-btn:active {
+      transform: translateY(1px) scale(0.98);
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(7, 11, 24, 0.48);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 10;
+      transition: opacity 240ms ease, visibility 240ms ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .card {
+      width: min(100%, 430px);
+      border-radius: 28px;
+      padding: 24px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.1));
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.14), transparent 42%);
+      pointer-events: none;
+    }
+
+    .card .hero {
+      font-size: 3.2rem;
+      margin-bottom: 8px;
+      display: inline-block;
+      filter: drop-shadow(0 12px 18px rgba(0,0,0,0.24));
+      animation: heroBounce 2.4s ease-in-out infinite;
+    }
+
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: clamp(1.8rem, 4vw, 2.35rem);
+      letter-spacing: -0.04em;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.98rem;
+    }
+
+    .stats-row {
+      margin: 18px 0 20px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .stat {
+      border-radius: 18px;
+      padding: 12px 10px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .stat .k {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .stat .v {
+      font-size: 1.3rem;
+      font-weight: 900;
+    }
+
+    .cta {
+      width: 100%;
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: none;
+      color: #07111f;
+      cursor: pointer;
+      font-weight: 900;
+      font-size: 1rem;
+      letter-spacing: 0.02em;
+      background: linear-gradient(135deg, #8effc4, #64d9ff 55%, #8f7aff);
+      box-shadow: 0 18px 34px rgba(100,217,255,0.28);
+      transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+    }
+
+    .cta:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.04);
+    }
+
+    .cta:active {
+      transform: translateY(1px) scale(0.99);
+    }
+
+    .tiny {
+      margin-top: 12px;
+      font-size: 0.78rem;
+      color: rgba(248,251,255,0.62);
+    }
+
+    .pulse-hit {
+      animation: pulseHit 260ms ease;
+    }
+
+    .shake {
+      animation: shake 320ms ease;
+    }
+
+    .flash-good::after,
+    .flash-bad::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      animation: arenaFlash 320ms ease;
+    }
+
+    .flash-good::after { background: radial-gradient(circle, rgba(83,240,168,0.18), transparent 60%); }
+    .flash-bad::after { background: radial-gradient(circle, rgba(255,100,125,0.2), transparent 60%); }
+
+    @keyframes drift {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to { transform: translate3d(20px, 24px, 0) scale(1.08); }
+    }
+
+    @keyframes chipFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    @keyframes bob {
+      0%, 100% { margin-top: 0; }
+      50% { margin-top: -7px; }
+    }
+
+    @keyframes floatUp {
+      0% { opacity: 0; transform: translate(-50%, -40%) scale(0.8); }
+      12% { opacity: 1; }
+      100% { opacity: 0; transform: translate(-50%, -150%) scale(1.06); }
+    }
+
+    @keyframes burst {
+      0% { opacity: 0.9; transform: translate(-50%, -50%) scale(0.2); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(8); }
+    }
+
+    @keyframes heroBounce {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      20% { transform: translateY(-4px) rotate(-3deg); }
+      50% { transform: translateY(0) rotate(2deg); }
+      70% { transform: translateY(-2px) rotate(-1deg); }
+    }
+
+    @keyframes pulseHit {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      50% { transform: translateX(5px); }
+      75% { transform: translateX(-3px); }
+    }
+
+    @keyframes arenaFlash {
+      0% { opacity: 0; }
+      35% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto 1fr;
+        overflow: auto;
+        height: 100vh;
+      }
+
+      .panel {
+        order: 2;
+      }
+
+      .good-panel { order: 1; }
+      .bad-panel { order: 3; }
+      .center-wrap { order: 2; min-height: 68vh; }
+
+      .panel .emoji-list {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      body { overflow: auto; }
+      .app { padding: 12px; gap: 12px; }
+      .panel, .center-wrap { border-radius: 24px; }
+      .topbar {
+        grid-template-columns: 1fr;
+        justify-items: start;
+      }
+      .score-block { justify-self: start; }
+      .meta { justify-self: start; }
+      .panel .emoji-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stats-row { grid-template-columns: 1fr; }
+      .bottom-bar { flex-direction: column; align-items: stretch; }
+      .button-row { width: 100%; }
+      button.control-btn { flex: 1 1 auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel good-panel">
+      <div class="panel-title">✨ Tap for points</div>
+      <div class="emoji-list" id="goodList"></div>
+    </aside>
+
+    <main class="center-wrap" id="gameShell">
+      <div class="topbar">
+        <div class="brand">
+          <div class="eyebrow">Emoji Rush Royale</div>
+          <h1>Catch the right vibes</h1>
+        </div>
+
+        <div class="score-block" id="scoreBlock">
+          <div class="score-pill">
+            <div class="small">Score</div>
+            <div class="big" id="scoreValue">0</div>
+          </div>
+          <div class="score-pill">
+            <div class="small">Best</div>
+            <div class="big" id="bestValue">0</div>
+          </div>
+        </div>
+
+        <div class="meta">
+          <div class="hud-chip">⏱️ <span id="timeValue">0.0s</span></div>
+          <div class="hud-chip">🔥 Lv <span id="levelValue">1</span></div>
+          <div class="hud-chip">
+            <span>❤️</span>
+            <div class="hearts" id="heartsWrap"></div>
+          </div>
+        </div>
+      </div>
+
+      <section class="arena-wrap" id="arenaWrap">
+        <div class="arena-grid"></div>
+        <div class="arena" id="arena"></div>
+
+        <div class="overlay" id="startOverlay">
+          <div class="card">
+            <div class="hero">🎯</div>
+            <h2>Tap the good emojis</h2>
+            <p>Every run picks 5 good and 5 bad emojis. Good taps raise your score, bad taps cost hearts, and the pace ramps up as your score climbs and time passes.</p>
+            <div class="stats-row">
+              <div class="stat">
+                <div class="k">Goal</div>
+                <div class="v">React fast</div>
+              </div>
+              <div class="stat">
+                <div class="k">Lives</div>
+                <div class="v">3 Hearts</div>
+              </div>
+              <div class="stat">
+                <div class="k">Style</div>
+                <div class="v">Combo glow</div>
+              </div>
+            </div>
+            <button class="cta" id="startButton">Start Game</button>
+            <div class="tiny">Tip: the outer lists tell you what is safe and what is cursed this run.</div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="gameOverOverlay">
+          <div class="card">
+            <div class="hero">💥</div>
+            <h2>Game Over</h2>
+            <p>You ran out of hearts. Nice run though — want another round with a fresh emoji lineup?</p>
+            <div class="stats-row">
+              <div class="stat">
+                <div class="k">Final Score</div>
+                <div class="v" id="finalScore">0</div>
+              </div>
+              <div class="stat">
+                <div class="k">Best</div>
+                <div class="v" id="finalBest">0</div>
+              </div>
+              <div class="stat">
+                <div class="k">Time</div>
+                <div class="v" id="finalTime">0.0s</div>
+              </div>
+            </div>
+            <button class="cta" id="restartButton">Play Again</button>
+            <div class="tiny">Fresh roles, fresh chaos.</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="bottom-bar">
+        <div class="progress-card">
+          <div class="progress-head">
+            <span>Difficulty pressure</span>
+            <span id="difficultyText">Relaxed start</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="difficultyFill"></div>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button class="control-btn" id="pauseButton">⏸️ Pause</button>
+          <button class="control-btn" id="reshuffleButton">🔀 New Roles</button>
+        </div>
+      </div>
+    </main>
+
+    <aside class="panel bad-panel">
+      <div class="panel-title">⚠️ Avoid these</div>
+      <div class="emoji-list" id="badList"></div>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const EMOJIS = [
+        { emoji: '😀', name: 'Grin' },
+        { emoji: '😎', name: 'Cool' },
+        { emoji: '🥳', name: 'Party' },
+        { emoji: '🤖', name: 'Bot' },
+        { emoji: '👻', name: 'Ghost' },
+        { emoji: '🦄', name: 'Unicorn' },
+        { emoji: '🐸', name: 'Frog' },
+        { emoji: '🍕', name: 'Pizza' },
+        { emoji: '🌈', name: 'Rainbow' },
+        { emoji: '⚡', name: 'Bolt' }
+      ];
+
+      const arena = document.getElementById('arena');
+      const arenaWrap = document.getElementById('arenaWrap');
+      const goodList = document.getElementById('goodList');
+      const badList = document.getElementById('badList');
+      const heartsWrap = document.getElementById('heartsWrap');
+      const scoreValue = document.getElementById('scoreValue');
+      const bestValue = document.getElementById('bestValue');
+      const timeValue = document.getElementById('timeValue');
+      const levelValue = document.getElementById('levelValue');
+      const difficultyFill = document.getElementById('difficultyFill');
+      const difficultyText = document.getElementById('difficultyText');
+      const scoreBlock = document.getElementById('scoreBlock');
+      const gameShell = document.getElementById('gameShell');
+      const startOverlay = document.getElementById('startOverlay');
+      const gameOverOverlay = document.getElementById('gameOverOverlay');
+      const startButton = document.getElementById('startButton');
+      const restartButton = document.getElementById('restartButton');
+      const pauseButton = document.getElementById('pauseButton');
+      const reshuffleButton = document.getElementById('reshuffleButton');
+      const finalScore = document.getElementById('finalScore');
+      const finalBest = document.getElementById('finalBest');
+      const finalTime = document.getElementById('finalTime');
+
+      const state = {
+        score: 0,
+        best: Number(localStorage.getItem('emoji-rush-best') || 0),
+        hearts: 3,
+        level: 1,
+        difficulty: 0,
+        elapsed: 0,
+        running: false,
+        paused: false,
+        gameOver: false,
+        goodSet: new Set(),
+        badSet: new Set(),
+        activeNodes: new Set(),
+        loopId: null,
+        spawnTimer: 0,
+        pulseTimer: 0,
+        startTime: 0,
+        lastFrame: 0,
+      };
+
+      bestValue.textContent = state.best;
+      finalBest.textContent = state.best;
+
+      function shuffle(arr) {
+        const clone = [...arr];
+        for (let i = clone.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [clone[i], clone[j]] = [clone[j], clone[i]];
+        }
+        return clone;
+      }
+
+      function assignRoles() {
+        const shuffled = shuffle(EMOJIS);
+        const good = shuffled.slice(0, 5);
+        const bad = shuffled.slice(5);
+        state.goodSet = new Set(good.map(item => item.emoji));
+        state.badSet = new Set(bad.map(item => item.emoji));
+        renderSideList(goodList, good, 'Good pick', 'Tap this');
+        renderSideList(badList, bad, 'Bad pick', 'Avoid this');
+      }
+
+      function renderSideList(target, items, titleText, hintText) {
+        target.innerHTML = '';
+        items.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'emoji-chip';
+          row.innerHTML = `
+            <div class="icon">${item.emoji}</div>
+            <div class="label">
+              <div class="name">${item.name}</div>
+              <div class="hint">${hintText}</div>
+            </div>
+          `;
+          target.appendChild(row);
+        });
+      }
+
+      function renderHearts() {
+        heartsWrap.innerHTML = '';
+        for (let i = 0; i < 3; i++) {
+          const heart = document.createElement('span');
+          heart.className = 'heart' + (i >= state.hearts ? ' lost' : '');
+          heart.textContent = '❤';
+          heartsWrap.appendChild(heart);
+        }
+      }
+
+      function updateHUD() {
+        scoreValue.textContent = state.score;
+        bestValue.textContent = state.best;
+        timeValue.textContent = `${state.elapsed.toFixed(1)}s`;
+        levelValue.textContent = state.level;
+        const pct = Math.min(100, state.difficulty * 100);
+        difficultyFill.style.width = pct + '%';
+
+        if (state.difficulty < 0.25) difficultyText.textContent = 'Relaxed start';
+        else if (state.difficulty < 0.45) difficultyText.textContent = 'Picking up';
+        else if (state.difficulty < 0.7) difficultyText.textContent = 'Quick fingers';
+        else if (state.difficulty < 0.9) difficultyText.textContent = 'Intense flow';
+        else difficultyText.textContent = 'Absolute chaos';
+      }
+
+      function computeDifficulty() {
+        const scorePart = Math.min(1, state.score / 55);
+        const timePart = Math.min(1, state.elapsed / 70);
+        state.difficulty = Math.min(1, scorePart * 0.68 + timePart * 0.32);
+        state.level = 1 + Math.floor(state.score / 8) + Math.floor(state.elapsed / 18);
+      }
+
+      function getSpawnInterval() {
+        return Math.max(320, 980 - state.difficulty * 480 - Math.min(160, state.score * 4));
+      }
+
+      function getLifetime() {
+        return Math.max(820, 2050 - state.difficulty * 700 - Math.min(320, state.elapsed * 8));
+      }
+
+      function getSpawnCount() {
+        return 1 + (state.difficulty > 0.42 ? 1 : 0) + (state.difficulty > 0.8 ? 1 : 0);
+      }
+
+      function clearArena() {
+        state.activeNodes.forEach(node => node.remove());
+        state.activeNodes.clear();
+        arena.querySelectorAll('.floating-text, .burst').forEach(el => el.remove());
+      }
+
+      function startRun() {
+        clearArena();
+        state.score = 0;
+        state.hearts = 3;
+        state.level = 1;
+        state.difficulty = 0;
+        state.elapsed = 0;
+        state.running = true;
+        state.paused = false;
+        state.gameOver = false;
+        state.spawnTimer = 0;
+        state.pulseTimer = 0;
+        state.startTime = performance.now();
+        state.lastFrame = performance.now();
+        assignRoles();
+        renderHearts();
+        updateHUD();
+        startOverlay.classList.add('hidden');
+        gameOverOverlay.classList.add('hidden');
+        pauseButton.textContent = '⏸️ Pause';
+        if (state.loopId) cancelAnimationFrame(state.loopId);
+        state.loopId = requestAnimationFrame(gameLoop);
+      }
+
+      function togglePause() {
+        if (!state.running || state.gameOver) return;
+        state.paused = !state.paused;
+        pauseButton.textContent = state.paused ? '▶️ Resume' : '⏸️ Pause';
+        if (!state.paused) {
+          state.lastFrame = performance.now();
+          state.loopId = requestAnimationFrame(gameLoop);
+        }
+      }
+
+      function gameOver() {
+        state.running = false;
+        state.gameOver = true;
+        finalScore.textContent = state.score;
+        finalBest.textContent = state.best;
+        finalTime.textContent = `${state.elapsed.toFixed(1)}s`;
+        gameOverOverlay.classList.remove('hidden');
+      }
+
+      function adjustScore(amount) {
+        state.score = Math.max(0, state.score + amount);
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem('emoji-rush-best', String(state.best));
+        }
+        scoreBlock.classList.remove('pulse-hit');
+        void scoreBlock.offsetWidth;
+        scoreBlock.classList.add('pulse-hit');
+      }
+
+      function loseHeart() {
+        state.hearts = Math.max(0, state.hearts - 1);
+        renderHearts();
+        gameShell.classList.remove('shake');
+        void gameShell.offsetWidth;
+        gameShell.classList.add('shake');
+        if (state.hearts <= 0) {
+          gameOver();
+        }
+      }
+
+      function makeFloatingText(x, y, text, className) {
+        const el = document.createElement('div');
+        el.className = `floating-text ${className}`;
+        el.textContent = text;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        arena.appendChild(el);
+        setTimeout(() => el.remove(), 920);
+      }
+
+      function makeBurst(x, y, color) {
+        for (let i = 0; i < 6; i++) {
+          const burst = document.createElement('div');
+          burst.className = 'burst';
+          burst.style.left = `${x}px`;
+          burst.style.top = `${y}px`;
+          burst.style.background = color;
+          burst.style.opacity = '0.9';
+          burst.style.animationDelay = `${i * 18}ms`;
+          arena.appendChild(burst);
+          setTimeout(() => burst.remove(), 620);
+        }
+      }
+
+      function flashArena(type) {
+        arenaWrap.classList.remove('flash-good', 'flash-bad');
+        void arenaWrap.offsetWidth;
+        arenaWrap.classList.add(type === 'good' ? 'flash-good' : 'flash-bad');
+      }
+
+      function removeSpawn(node) {
+        if (!state.activeNodes.has(node)) return;
+        state.activeNodes.delete(node);
+        node.classList.add('removing');
+        setTimeout(() => node.remove(), 190);
+      }
+
+      function spawnEmoji() {
+        const rect = arena.getBoundingClientRect();
+        const pool = shuffle(EMOJIS);
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        const isGood = state.goodSet.has(pick.emoji);
+        const size = Math.max(58, 86 - state.difficulty * 18 + Math.random() * 10);
+        const margin = size * 0.7;
+        const x = margin + Math.random() * Math.max(40, rect.width - margin * 2);
+        const y = margin + Math.random() * Math.max(40, rect.height - margin * 2);
+        const lifetime = getLifetime() * (0.88 + Math.random() * 0.28);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `spawn-emoji ${isGood ? 'good' : 'bad'}`;
+        button.textContent = pick.emoji;
+        button.setAttribute('aria-label', `${pick.name} emoji`);
+        button.style.left = `${x}px`;
+        button.style.top = `${y}px`;
+        button.style.setProperty('--size', `${size}px`);
+        button.style.setProperty('--bobDur', `${2.6 + Math.random() * 1.8}s`);
+        arena.appendChild(button);
+        state.activeNodes.add(button);
+
+        const expireWarnAt = Math.max(400, lifetime - 380);
+        const warnTimer = setTimeout(() => {
+          if (state.activeNodes.has(button)) button.classList.add('expiring');
+        }, expireWarnAt);
+
+        const removeTimer = setTimeout(() => {
+          clearTimeout(warnTimer);
+          if (!state.activeNodes.has(button)) return;
+          if (isGood && state.running && !state.paused && !state.gameOver) {
+            makeFloatingText(x, y, 'miss', 'miss');
+          }
+          removeSpawn(button);
+        }, lifetime);
+
+        button.addEventListener('click', () => {
+          if (!state.running || state.paused || state.gameOver) return;
+          clearTimeout(warnTimer);
+          clearTimeout(removeTimer);
+          if (isGood) {
+            const bonus = 1 + (state.score > 24 ? 1 : 0);
+            adjustScore(bonus);
+            makeFloatingText(x, y, `+${bonus}`, 'good');
+            makeBurst(x, y, 'radial-gradient(circle, rgba(83,240,168,0.8), rgba(83,240,168,0))');
+            flashArena('good');
+          } else {
+            loseHeart();
+            makeFloatingText(x, y, 'ouch!', 'bad');
+            makeBurst(x, y, 'radial-gradient(circle, rgba(255,100,125,0.8), rgba(255,100,125,0))');
+            flashArena('bad');
+          }
+          removeSpawn(button);
+          updateHUD();
+        }, { passive: true });
+      }
+
+      function gameLoop(now) {
+        if (!state.running || state.paused || state.gameOver) return;
+        const dt = Math.min(40, now - state.lastFrame);
+        state.lastFrame = now;
+        state.elapsed += dt / 1000;
+        computeDifficulty();
+        state.spawnTimer += dt;
+
+        const interval = getSpawnInterval();
+        while (state.spawnTimer >= interval) {
+          state.spawnTimer -= interval;
+          const count = getSpawnCount();
+          for (let i = 0; i < count; i++) {
+            spawnEmoji();
+          }
+        }
+
+        updateHUD();
+        state.loopId = requestAnimationFrame(gameLoop);
+      }
+
+      startButton.addEventListener('click', startRun);
+      restartButton.addEventListener('click', startRun);
+      pauseButton.addEventListener('click', togglePause);
+      reshuffleButton.addEventListener('click', () => {
+        assignRoles();
+        if (!state.running) {
+          renderHearts();
+          updateHUD();
+        }
+      });
+
+      window.addEventListener('blur', () => {
+        if (state.running && !state.paused && !state.gameOver) {
+          togglePause();
+        }
+      });
+
+      assignRoles();
+      renderHearts();
+      updateHUD();
+    })();
+  </script>
+</body>
+</html>
