@@ -1,8 +1,7 @@
 :root {
   color-scheme: dark;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background:
-    radial-gradient(circle at top, #1f2a44 0%, #0f172a 45%, #020617 100%);
+  background: radial-gradient(circle at top, #1f2a44 0%, #0f172a 45%, #020617 100%);
   color: #e2e8f0;
 }
 
@@ -14,6 +13,15 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+}
+
+code {
+  font-family: 'Cascadia Code', 'SFMono-Regular', Consolas, monospace;
+}
+
+button,
+textarea {
+  font: inherit;
 }
 
 #root {
@@ -30,7 +38,8 @@ body {
 }
 
 .hero-card,
-.list-card {
+.list-card,
+.paste-card {
   background: rgba(15, 23, 42, 0.78);
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 20px;
@@ -42,8 +51,33 @@ body {
   padding: 24px 20px;
 }
 
-.list-card {
-  padding: 10px;
+.list-card,
+.paste-card {
+  padding: 14px;
+}
+
+.hero-row,
+.paste-header,
+.paste-actions,
+.preview-toolbar,
+.meta-row {
+  display: flex;
+  gap: 12px;
+}
+
+.hero-row,
+.preview-toolbar {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.paste-header {
+  flex-direction: column;
+}
+
+.meta-row {
+  margin-top: 18px;
+  flex-wrap: wrap;
 }
 
 .eyebrow {
@@ -55,17 +89,87 @@ body {
   text-transform: uppercase;
 }
 
-h1 {
+h1,
+h2 {
   margin: 0;
+}
+
+h1 {
   font-size: clamp(2rem, 6vw, 3rem);
   line-height: 1.05;
 }
 
-.intro {
+h2 {
+  font-size: 1.15rem;
+}
+
+.intro,
+.paste-header p {
   margin: 14px 0 0;
   color: #cbd5e1;
   line-height: 1.6;
   font-size: 1rem;
+}
+
+.meta-pill {
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(30, 41, 59, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+  font-size: 0.92rem;
+}
+
+.paste-toggle,
+.primary-button,
+.secondary-button {
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+}
+
+.paste-toggle,
+.primary-button {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: white;
+  font-weight: 700;
+}
+
+.secondary-button {
+  background: rgba(30, 41, 59, 0.95);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.paste-toggle:hover,
+.primary-button:hover,
+.secondary-button:hover,
+.game-link:hover,
+.game-link:focus-visible {
+  transform: translateY(-1px);
+}
+
+.paste-input {
+  width: 100%;
+  min-height: 220px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  resize: vertical;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.92);
+  color: #e2e8f0;
+}
+
+.paste-actions {
+  margin-top: 14px;
+}
+
+.paste-error {
+  margin: 12px 0 0;
+  color: #fca5a5;
 }
 
 .game-list {
@@ -92,7 +196,6 @@ h1 {
 
 .game-link:hover,
 .game-link:focus-visible {
-  transform: translateY(-1px);
   border-color: rgba(96, 165, 250, 0.6);
   background: rgba(37, 99, 235, 0.18);
   outline: none;
@@ -109,6 +212,54 @@ h1 {
   font-size: 1.2rem;
 }
 
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(8px);
+  padding: 12px;
+}
+
+.preview-shell {
+  width: min(1100px, 100%);
+  height: min(92vh, 100%);
+  margin: 0 auto;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 20px;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.preview-toolbar {
+  padding: 12px;
+  align-items: center;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.preview-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #020617;
+}
+
+@media (max-width: 640px) {
+  .hero-row,
+  .paste-actions,
+  .preview-toolbar {
+    flex-direction: column;
+  }
+
+  .paste-toggle,
+  .primary-button,
+  .secondary-button {
+    width: 100%;
+  }
+}
+
 @media (min-width: 640px) {
   .app-shell {
     padding: 40px 24px 56px;
@@ -118,7 +269,8 @@ h1 {
     padding: 32px 28px;
   }
 
-  .list-card {
+  .list-card,
+  .paste-card {
     padding: 14px;
   }
 

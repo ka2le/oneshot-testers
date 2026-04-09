@@ -1,24 +1,20 @@
 const base = import.meta.env.BASE_URL
 
-export const games = [
-  {
-    slug: 'gemma4e4b-openclaw-1',
-    name: 'gemma4e4b-openclaw-1',
-    href: `${base}games/gemma4e4b-openclaw-1.html`,
-  },
-  {
-    slug: 'gemma4e4b-chat-1',
-    name: 'gemma4e4b-chat-1',
-    href: `${base}games/gemma4e4b-chat-1.html`,
-  },
-  {
-    slug: 'gpt5.4-openclaw-1',
-    name: 'gpt5.4-openclaw-1',
-    href: `${base}games/gpt5.4-openclaw-1.html`,
-  },
-  {
-    slug: 'gpt5.4-chat-1',
-    name: 'gpt5.4-chat-1',
-    href: `${base}games/gpt5.4-chat-1.html`,
-  },
-]
+const gameModules = import.meta.glob('../games/*.html', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+})
+
+export const games = Object.entries(gameModules)
+  .map(([path, href]) => {
+    const fileName = path.split('/').pop() ?? ''
+    const name = fileName.replace(/\.html$/i, '')
+
+    return {
+      slug: name,
+      name,
+      href: typeof href === 'string' && href.startsWith('/') ? href : `${base}games/${fileName}`,
+    }
+  })
+  .sort((a, b) => a.name.localeCompare(b.name))
