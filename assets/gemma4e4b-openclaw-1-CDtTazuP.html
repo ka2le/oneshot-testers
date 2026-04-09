@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Asteroid Shooter Prototype ☄️</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000011; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { border: 2px solid #333; background-color: #000000; display: block; }
+        #game-container { position: relative; width: 800px; height: 600px; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div style="position: absolute; top: 10px; left: 10px; color: white; font-family: sans-serif;">Score: <span id="score">0</span></div>
+        <div style="position: absolute; top: 10px; right: 10px; color: white; font-family: sans-serif;">Wave: <span id="wave">1</span></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        const waveDisplay = document.getElementById('wave');
+
+        const GAME_WIDTH = canvas.width;
+        const GAME_HEIGHT = canvas.height;
+
+        // --- GAME CONSTANTS ---
+        const PLAYER = {
+            x: GAME_WIDTH / 2,
+            y: GAME_HEIGHT - 50,
+            width: 40,
+            height: 30,
+            emoji: "🚀",
+            color: "#00FF00"
+        };
+
+        let bullets = [];
+        let asteroids = [];
+        let keys = {};
+        let score = 0;
+        let wave = 1;
+        let gameLoopId;
+        let lastShotTime = 0;
+        let fireRateCooldown = 200; // Initial delay in ms
+        let upgradeInterval = 5000; // Initial upgrade chance timer (ms)
+        let lastUpgradeTime = Date.now();
+
+        // --- GAME OBJECTS ---
+        class Bullet {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 4;
+                this.speed = 15;
+                this.emoji = "✨";
+            }
+
+            update() {
+                this.y -= this.speed;
+            }
+
+            draw() {
+                ctx.fillStyle = this.emoji;
+                ctx.fillText(this.emoji, this.x - 10, this.y);
+            }
+        }
+
+        class Asteroid {
+            constructor() {
+                this.size = Math.random() * 30 + 20;
+                this.x = Math.random() * (GAME_WIDTH - this.size * 2) + this.size;
+                this.y = -this.size;
+                this.speed = Math.random() * 2 + 1;
+                this.emoji = "☄️";
+                this.rotation = Math.random() * Math.PI;
+            }
+
+            update() {
+                this.y += this.speed;
+            }
+
+            draw() {
+                ctx.fillText(this.emoji, this.x - this.size / 2, this.y);
+            }
+        }
+
+        // --- INPUT HANDLING ---
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+                e.preventDefault(); // Prevent scrolling with arrow keys/space
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // --- GAME LOGIC ---
+
+        function updatePlayer() {
+            const speed = 6;
+            if (keys['ArrowLeft']) {
+                PLAYER.x -= speed;
+            }
+            if (keys['ArrowRight']) {
+                PLAYER.x += speed;
+            }
+            // Keep player within bounds
+            PLAYER.x = Math.max(PLAYER.width / 2, Math.min(GAME_WIDTH - PLAYER.width / 2, PLAYER.x));
+        }
+
+        function playerShoot(currentTime) {
+            if (currentTime - lastShotTime > fireRateCooldown) {
+                // Shoot from the center top of the player
+                const newBullet = new Bullet(PLAYER.x, PLAYER.y - 10);
+                bullets.push(newBullet);
+                lastShotTime = currentTime;
+            }
+        }
+
+        function spawnAsteroid() {
+            // Asteroid density increases with wave
+            const spawnRate = Math.max(500, 2000 - (wave * 150));
+            if (Math.random() * spawnRate < 1) {
+                asteroids.push(new Asteroid());
+            }
+        }
+
+        function checkCollisions() {
+            // Bullet vs Asteroid
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let bullet = bullets[i];
+                for (let j = asteroids.length - 1; j >= 0; j--) {
+                    let asteroid = asteroids[j];
+
+                    // Simple proximity check (approximation for circles/emojis)
+                    const dx = bullet.x - asteroid.x;
+                    const dy = bullet.y - asteroid.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < asteroid.size * 0.7 + bullet.radius) {
+                        // Collision occurred!
+                        score += 10;
+                        scoreDisplay.textContent = score;
+
+                        // Remove both objects
+                        bullets.splice(i, 1);
+                        asteroids.splice(j, 1);
+                        
+                        // Break inner loop since bullet 'i' was removed
+                        break; 
+                    }
+                }
+            }
+
+            // Player vs Asteroid (Checking only if bullets were fired recently, to prevent spamming)
+            // For a simple prototype, we'll just check if the player is close to an asteroid's path.
+            // Real game physics would be better, but this suffices for a demo.
+            for (let j = asteroids.length - 1; j >= 0; j--) {
+                let asteroid = asteroids[j];
+                const dx = PLAYER.x - asteroid.x;
+                const dy = (PLAYER.y + 15) - asteroid.y; // Check center mass
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < asteroid.size * 0.8 + 15) {
+                    // Game Over!
+                    gameOver();
+                    return;
+                }
+            }
+        }
+
+        function updateGameLogic(currentTime) {
+            // 1. Update Player & Shoot
+            updatePlayer();
+            playerShoot(currentTime);
+
+            // 2. Update & Filter Bullets
+            bullets = bullets.filter(bullet => {
+                bullet.update();
+                return bullet.y > -10; // Keep if visible
+            });
+
+            // 3. Update & Filter Asteroids
+            asteroids.forEach(asteroid => asteroid.update());
+            asteroids = asteroids.filter(asteroid => {
+                return asteroid.y < GAME_HEIGHT + asteroid.size; // Keep if on screen
+            });
+
+            // 4. Spawning & Collision
+            spawnAsteroid();
+            checkCollisions();
+        }
+
+        function drawGame() {
+            // Clear screen (Canvas background handles this, but an explicit clear is safer)
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            // Draw Player (handled by updatePlayer visually in the loop below if we wanted emojis, but for now, let's just draw the action elements)
+            // The player draw is implicitly covered by the central element placement if we stick to emojis for everything.
+            ctx.fillText(PLAYER.emoji, PLAYER.x - 10, PLAYER.y + 10);
+
+
+            // Draw Bullets
+            bullets.forEach(b => b.draw());
+
+            // Draw Asteroids
+            asteroids.forEach(a => a.draw());
+
+            // Update UI
+            scoreDisplay.textContent = score;
+            waveDisplay.textContent = wave;
+        }
+
+        function gameLoop(currentTime) {
+            updateGameLogic(currentTime);
+            drawGame();
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function handleLevelUp() {
+            // Increase difficulty over time
+            fireRateCooldown = Math.max(50, fireRateCooldown * 0.98); // Reduce fire rate cooldown by 2%
+            // Increase asteroid spawn frequency slightly
+            // We'll handle spawn rate dynamically in spawnAsteroid, but maybe increase the base spawn check.
+        }
+
+        function checkUpgrades() {
+            const now = Date.now();
+            if (now - lastUpgradeTime > upgradeInterval) {
+                if (Math.random() < 0.3) { // 30% chance to trigger an upgrade check
+                    handleLevelUp();
+                    // Increase chance of upgrade check happening sooner
+                    upgradeInterval = Math.max(2000, upgradeInterval * 0.95); 
+                    lastUpgradeTime = now;
+                    console.log("🚀 Found potential upgrade! Fire rate adjusted.");
+                }
+            }
+        }
+
+
+        function gameOver() {
+            cancelAnimationFrame(gameLoopId);
+            alert(`💥 GAME OVER! 💥\n\nFinal Score: ${score}\nWave Reached: ${wave}\n\nThanks for playing! Better luck next time. 👍`);
+            // Reset game state for replaying
+            location.reload();
+        }
+        
+        function setupGame() {
+            // Initial state setup
+            bullets = [];
+            asteroids = [];
+            score = 0;
+            wave = 1;
+            fireRateCooldown = 200;
+            upgradeInterval = 5000;
+            lastShotTime = 0;
+            lastUpgradeTime = Date.now();
+            
+            // Start the loops
+            gameLoopId = requestAnimationFrame(gameLoop);
+            
+            // Use setInterval for background checks like upgrades, independent of requestAnimationFrame's render cycle
+            setInterval(() => {
+                checkUpgrades();
+            }, 100); 
+        }
+
+        // Start everything when the script loads
+        setupGame();
+
+    </script>
+</body>
+</html>

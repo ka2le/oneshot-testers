@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Emoji Asteroid Blaster</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 20%, #15203a 0%, #090d18 40%, #03050a 100%);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    cursor: crosshair;
+  }
+  #hud, #help {
+    position: fixed;
+    left: 12px;
+    z-index: 2;
+    color: #fff;
+    text-shadow: 0 2px 10px rgba(0,0,0,.7);
+    user-select: none;
+    pointer-events: none;
+  }
+  #hud {
+    top: 12px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(10, 16, 28, 0.5);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 14px;
+    line-height: 1.45;
+    backdrop-filter: blur(6px);
+  }
+  #help {
+    bottom: 12px;
+    font-size: 13px;
+    opacity: 0.9;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(10, 16, 28, 0.38);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud"></div>
+<div id="help">WASD / Arrows move • Mouse aims • Hold click or Space to shoot • R restarts</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const hud = document.getElementById('hud');
+
+let w = 0;
+let h = 0;
+let lastTime = 0;
+let gameOver = false;
+let screenShake = 0;
+let bestScore = Number(localStorage.getItem('emojiAsteroidBest') || 0);
+
+const keys = {};
+const mouse = { x: 0, y: 0, down: false };
+
+const player = {
+  x: 0,
+  y: 0,
+  vx: 0,
+  vy: 0,
+  angle: 0,
+  r: 20,
+  hp: 5,
+  maxHp: 5,
+  fireInterval: 320,
+  fireCooldown: 0,
+  upgradeLevel: 0,
+  invuln: 0,
+  score: 0
+};
+
+let bullets = [];
+let asteroids = [];
+let upgrades = [];
+let particles = [];
+let asteroidTimer = 0;
+let upgradeTimer = 8;
+
+function resize() {
+  w = window.innerWidth;
+  h = window.innerHeight;
+  canvas.width = w;
+  canvas.height = h;
+  mouse.x = w / 2;
+  mouse.y = h / 2;
+}
+
+function rand(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+function distanceSquared(ax, ay, bx, by) {
+  const dx = ax - bx;
+  const dy = ay - by;
+  return dx * dx + dy * dy;
+}
+
+function resetGame() {
+  player.x = 0;
+  player.y = 0;
+  player.vx = 0;
+  player.vy = 0;
+  player.angle = 0;
+  player.hp = player.maxHp;
+  player.fireInterval = 320;
+  player.fireCooldown = 0;
+  player.upgradeLevel = 0;
+  player.invuln = 0;
+  player.score = 0;
+
+  bullets = [];
+  asteroids = [];
+  upgrades = [];
+  particles = [];
+
+  asteroidTimer = 0.6;
+  upgradeTimer = 8;
+  screenShake = 0;
+  gameOver = false;
+}
+
+function spawnParticles(x, y, amount, color = '#ffd36b', speed = 260) {
+  for (let i = 0; i < amount; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = rand(speed * 0.25, speed);
+    particles.push({
+      x,
+      y,
+      vx: Math.cos(a) * s,
+      vy: Math.sin(a) * s,
+      life: rand(0.25, 0.65),
+      maxLife: 1,
+      size: rand(2, 5),
+      color
+    });
+  }
+}
+
+function spawnAsteroid(extraX = 0, extraY = 0, radius = rand(26, 52), hpScale = 1) {
+  const angle = Math.random() * Math.PI * 2;
+  const distance = Math.max(w, h) * 0.6 + rand(160, 420);
+  const x = player.x + Math.cos(angle) * distance + extraX;
+  const y = player.y + Math.sin(angle) * distance + extraY;
+  const dx = player.x - x;
+  const dy = player.y - y;
+  const d = Math.max(1, Math.hypot(dx, dy));
+  const speed = rand(22, 62);
+
+  asteroids.push({
+    x,
+    y,
+    vx: dx / d * speed + rand(-18, 18),
+    vy: dy / d * speed + rand(-18, 18),
+    r: radius,
+    hp: Math.max(1, Math.round((radius / 18) * hpScale)),
+    spin: rand(-2.5, 2.5),
+    rot: rand(0, Math.PI * 2),
+    emoji: Math.random() < 0.5 ? '🪨' : '☄️'
+  });
+}
+
+function spawnUpgrade() {
+  const angle = Math.random() * Math.PI * 2;
+  const distance = Math.max(w, h) * 0.45 + rand(100, 260);
+  upgrades.push({
+    x: player.x + Math.cos(angle) * distance,
+    y: player.y + Math.sin(angle) * distance,
+    vx: rand(-20, 20),
+    vy: rand(-20, 20),
+    r: 18,
+    pulse: rand(0, Math.PI * 2),
+    life: 16
+  });
+}
+
+function shoot() {
+  const spread = player.upgradeLevel >= 6 ? 0.08 : 0;
+  const count = player.upgradeLevel >= 10 ? 2 : 1;
+
+  for (let i = 0; i < count; i++) {
+    const offset = count === 2 ? (i === 0 ? -spread : spread) : 0;
+    const angle = player.angle + offset;
+    const speed = 920;
+
+    bullets.push({
+      x: player.x + Math.cos(angle) * 28,
+      y: player.y + Math.sin(angle) * 28,
+      vx: player.vx + Math.cos(angle) * speed,
+      vy: player.vy + Math.sin(angle) * speed,
+      r: 5,
+      life: 1.2
+    });
+  }
+
+  spawnParticles(
+    player.x + Math.cos(player.angle) * 24,
+    player.y + Math.sin(player.angle) * 24,
+    5,
+    '#8ff7ff',
+    140
+  );
+}
+
+function worldToScreen(x, y) {
+  return {
+    x: w * 0.5 + (x - player.x),
+    y: h * 0.5 + (y - player.y)
+  };
+}
+
+function handleInput(dt) {
+  const accel = 720;
+  let ax = 0;
+  let ay = 0;
+
+  if (keys.w || keys.arrowup) ay -= 1;
+  if (keys.s || keys.arrowdown) ay += 1;
+  if (keys.a || keys.arrowleft) ax -= 1;
+  if (keys.d || keys.arrowright) ax += 1;
+
+  const len = Math.hypot(ax, ay) || 1;
+  ax /= len;
+  ay /= len;
+
+  player.vx += ax * accel * dt;
+  player.vy += ay * accel * dt;
+
+  const drag = Math.pow(0.86, dt * 60);
+  player.vx *= drag;
+  player.vy *= drag;
+
+  const maxSpeed = 420;
+  const speed = Math.hypot(player.vx, player.vy);
+  if (speed > maxSpeed) {
+    player.vx = player.vx / speed * maxSpeed;
+    player.vy = player.vy / speed * maxSpeed;
+  }
+
+  player.x += player.vx * dt;
+  player.y += player.vy * dt;
+
+  const mx = mouse.x - w * 0.5;
+  const my = mouse.y - h * 0.5;
+  player.angle = Math.atan2(my, mx);
+}
+
+function update(dt) {
+  if (gameOver) return;
+
+  handleInput(dt);
+
+  player.invuln = Math.max(0, player.invuln - dt);
+  player.fireCooldown -= dt * 1000;
+
+  if ((mouse.down || keys.space) && player.fireCooldown <= 0) {
+    shoot();
+    player.fireCooldown = player.fireInterval;
+  }
+
+  asteroidTimer -= dt;
+  const spawnInterval = Math.max(0.28, 1.05 - player.score * 0.0025);
+  if (asteroidTimer <= 0) {
+    spawnAsteroid();
+    if (player.score > 120 && Math.random() < 0.35) {
+      spawnAsteroid(rand(-120, 120), rand(-120, 120), rand(22, 38), 0.85);
+    }
+    asteroidTimer = spawnInterval;
+  }
+
+  upgradeTimer -= dt;
+  if (upgradeTimer <= 0) {
+    spawnUpgrade();
+    upgradeTimer = rand(9, 14);
+  }
+
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.life -= dt;
+    if (b.life <= 0 || distanceSquared(b.x, b.y, player.x, player.y) > 2400 * 2400) {
+      bullets.splice(i, 1);
+    }
+  }
+
+  for (let i = upgrades.length - 1; i >= 0; i--) {
+    const u = upgrades[i];
+    u.x += u.vx * dt;
+    u.y += u.vy * dt;
+    u.pulse += dt * 5;
+    u.life -= dt;
+
+    if (distanceSquared(u.x, u.y, player.x, player.y) < (u.r + player.r) * (u.r + player.r)) {
+      upgrades.splice(i, 1);
+      player.upgradeLevel += 1;
+      player.fireInterval = Math.max(70, player.fireInterval * 0.87);
+      player.score += 15;
+      spawnParticles(u.x, u.y, 24, '#6ef7a8', 240);
+      screenShake = Math.max(screenShake, 6);
+      continue;
+    }
+
+    if (u.life <= 0 || distanceSquared(u.x, u.y, player.x, player.y) > 2600 * 2600) {
+      upgrades.splice(i, 1);
+    }
+  }
+
+  for (let i = asteroids.length - 1; i >= 0; i--) {
+    const a = asteroids[i];
+    const dx = player.x - a.x;
+    const dy = player.y - a.y;
+    const d = Math.max(1, Math.hypot(dx, dy));
+    const homing = 10 + Math.min(20, player.score * 0.03);
+
+    a.vx += dx / d * homing * dt;
+    a.vy += dy / d * homing * dt;
+
+    const max = 150;
+    const sp = Math.hypot(a.vx, a.vy);
+    if (sp > max) {
+      a.vx = a.vx / sp * max;
+      a.vy = a.vy / sp * max;
+    }
+
+    a.x += a.vx * dt;
+    a.y += a.vy * dt;
+    a.rot += a.spin * dt;
+
+    let removed = false;
+
+    for (let j = bullets.length - 1; j >= 0; j--) {
+      const b = bullets[j];
+      const hitRadius = a.r + b.r;
+      if (distanceSquared(a.x, a.y, b.x, b.y) < hitRadius * hitRadius) {
+        bullets.splice(j, 1);
+        a.hp -= 1;
+        a.r *= 0.92;
+        spawnParticles(b.x, b.y, 8, '#ffd58a', 180);
+        screenShake = Math.max(screenShake, 2);
+
+        if (a.hp <= 0) {
+          player.score += Math.round(10 + a.r * 0.5);
+          spawnParticles(a.x, a.y, 18, '#ffb36b', 260);
+          screenShake = Math.max(screenShake, 7);
+
+          if (a.r > 28 && Math.random() < 0.45) {
+            spawnAsteroid(a.x - player.x, a.y - player.y, a.r * 0.6, 0.7);
+            spawnAsteroid(a.x - player.x, a.y - player.y, a.r * 0.55, 0.7);
+          }
+
+          asteroids.splice(i, 1);
+          removed = true;
+        }
+        break;
+      }
+    }
+
+    if (removed) continue;
+
+    const crashRadius = a.r + player.r - 2;
+    if (distanceSquared(a.x, a.y, player.x, player.y) < crashRadius * crashRadius) {
+      asteroids.splice(i, 1);
+      spawnParticles(a.x, a.y, 24, '#ff8d8d', 300);
+      screenShake = Math.max(screenShake, 12);
+
+      if (player.invuln <= 0) {
+        player.hp -= 1;
+        player.invuln = 1.1;
+        player.vx -= dx / d * 180;
+        player.vy -= dy / d * 180;
+      }
+
+      if (player.hp <= 0) {
+        gameOver = true;
+        bestScore = Math.max(bestScore, player.score);
+        localStorage.setItem('emojiAsteroidBest', String(bestScore));
+      }
+    }
+  }
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= Math.pow(0.92, dt * 60);
+    p.vy *= Math.pow(0.92, dt * 60);
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  screenShake *= Math.pow(0.86, dt * 60);
+}
+
+function drawStarLayer(cellSize, sizeMin, sizeMax, parallax, alpha) {
+  const px = player.x * parallax;
+  const py = player.y * parallax;
+  const startX = Math.floor((px - w * 0.5) / cellSize) - 1;
+  const endX = Math.floor((px + w * 0.5) / cellSize) + 1;
+  const startY = Math.floor((py - h * 0.5) / cellSize) - 1;
+  const endY = Math.floor((py + h * 0.5) / cellSize) + 1;
+
+  ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+
+  for (let gx = startX; gx <= endX; gx++) {
+    for (let gy = startY; gy <= endY; gy++) {
+      const seed = Math.sin(gx * 127.1 + gy * 311.7) * 43758.5453;
+      const seed2 = Math.sin(gx * 269.5 + gy * 183.3) * 41572.8271;
+      const fx = seed - Math.floor(seed);
+      const fy = seed2 - Math.floor(seed2);
+      const x = gx * cellSize + fx * cellSize - px + w * 0.5;
+      const y = gy * cellSize + fy * cellSize - py + h * 0.5;
+      const r = sizeMin + (Math.abs(seed2) % 1) * (sizeMax - sizeMin);
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawShip(thrusting) {
+  ctx.save();
+  ctx.translate(w * 0.5, h * 0.5);
+  ctx.rotate(player.angle + Math.PI / 2);
+
+  if (player.invuln > 0 && Math.floor(player.invuln * 16) % 2 === 0) {
+    ctx.globalAlpha = 0.45;
+  }
+
+  if (thrusting) {
+    ctx.save();
+    ctx.font = '24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🔥', 0, 30 + Math.sin(performance.now() * 0.03) * 4);
+    ctx.restore();
+  }
+
+  ctx.font = '36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🚀', 0, 0);
+  ctx.restore();
+}
+
+function render() {
+  ctx.clearRect(0, 0, w, h);
+
+  const shakeX = screenShake > 0.2 ? rand(-screenShake, screenShake) : 0;
+  const shakeY = screenShake > 0.2 ? rand(-screenShake, screenShake) : 0;
+
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  drawStarLayer(160, 0.8, 1.8, 0.18, 0.45);
+  drawStarLayer(260, 1.2, 2.6, 0.4, 0.75);
+
+  for (const u of upgrades) {
+    const s = worldToScreen(u.x, u.y);
+    const pulse = 1 + Math.sin(u.pulse) * 0.15;
+
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 18 * pulse, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(110, 247, 168, 0.12)';
+    ctx.fill();
+
+    ctx.font = `${28 * pulse}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⚡', s.x, s.y + 1);
+  }
+
+  for (const b of bullets) {
+    const s = worldToScreen(b.x, b.y);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = '#8ff7ff';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, b.r * 2.2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(143, 247, 255, 0.12)';
+    ctx.fill();
+  }
+
+  for (const a of asteroids) {
+    const s = worldToScreen(a.x, a.y);
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(a.rot);
+    ctx.font = `${a.r * 1.35}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(a.emoji, 0, 0);
+    ctx.restore();
+  }
+
+  for (const p of particles) {
+    const s = worldToScreen(p.x, p.y);
+    ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, p.size, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  const thrusting = !!(keys.w || keys.a || keys.s || keys.d || keys.arrowup || keys.arrowleft || keys.arrowdown || keys.arrowright);
+  drawShip(thrusting);
+
+  ctx.restore();
+
+  if (gameOver) {
+    ctx.fillStyle = 'rgba(3, 7, 14, 0.68)';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 52px system-ui, sans-serif';
+    ctx.fillText('💥 Game Over', w / 2, h / 2 - 42);
+
+    ctx.font = '24px system-ui, sans-serif';
+    ctx.fillText(`Score: ${player.score}   •   Best: ${bestScore}`, w / 2, h / 2 + 4);
+
+    ctx.font = '18px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.86)';
+    ctx.fillText('Press R or click to restart', w / 2, h / 2 + 42);
+  }
+
+  const fireRate = (1000 / player.fireInterval).toFixed(1);
+  hud.innerHTML = `
+    <div><strong>Score:</strong> ${player.score}</div>
+    <div><strong>HP:</strong> ${'❤️'.repeat(player.hp)}${'🖤'.repeat(player.maxHp - player.hp)}</div>
+    <div><strong>Fire Upgrades:</strong> ${player.upgradeLevel}</div>
+    <div><strong>Shots / sec:</strong> ${fireRate}</div>
+    <div><strong>Best:</strong> ${bestScore}</div>
+  `;
+}
+
+function loop(time) {
+  const dt = Math.min(0.033, (time - lastTime) / 1000 || 0.016);
+  lastTime = time;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener('resize', resize);
+
+window.addEventListener('mousemove', e => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+});
+
+window.addEventListener('mousedown', () => {
+  if (gameOver) {
+    resetGame();
+    return;
+  }
+  mouse.down = true;
+});
+
+window.addEventListener('mouseup', () => {
+  mouse.down = false;
+});
+
+window.addEventListener('blur', () => {
+  mouse.down = false;
+  for (const key in keys) keys[key] = false;
+});
+
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  if (e.code === 'Space') keys.space = true;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+  if (k === 'r') resetGame();
+});
+
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  keys[k] = false;
+  if (e.code === 'Space') keys.space = false;
+});
+
+resize();
+resetGame();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

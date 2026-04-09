@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emoji Wisdom Game</title>
+    <style>
+        /* General Setup */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #6a1b9a;
+            margin-bottom: 30px;
+        }
+
+        /* Header/Score Area */
+        .status-bar {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-end;
+            max-width: 800px;
+            margin: 0 auto 40px;
+            padding: 15px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .score-display, .heart-container {
+            padding: 10px;
+        }
+
+        .heart-container span {
+            font-size: 30px;
+            transition: transform 0.2s;
+        }
+
+        /* Game Grid Layout */
+        #game-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        /* Side Panels (Left/Right) */
+        .panel {
+            flex: 1;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            min-height: 300px;
+        }
+
+        .panel h2 {
+            margin-top: 0;
+            font-size: 1.2em;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        /* Emoji Grid */
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 15px;
+            padding: 10px 0;
+        }
+
+        /* Individual Emoji Buttons */
+        .emoji-button {
+            font-size: 3rem;
+            cursor: pointer;
+            border: none;
+            background: none;
+            padding: 15px;
+            border-radius: 10px;
+            transition: transform 0.1s, box-shadow 0.1s;
+            user-select: none;
+            opacity: 0; /* Start hidden */
+            transform: scale(0.9);
+            transition: opacity 0.5s, transform 0.5s;
+        }
+
+        /* Active/Visible State */
+        .emoji-button.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Hover effect */
+        .emoji-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+        }
+
+        /* Game State Overlays */
+        #game-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        #game-overlay h2 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+
+        #restart-button {
+            padding: 15px 30px;
+            font-size: 1.5em;
+            cursor: pointer;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+        }
+        
+        #restart-button:hover {
+            background-color: #45a049;
+        }
+
+        /* Utility Classes for feedback */
+        .feedback-good {
+            animation: popGreen 0.3s forwards;
+            color: green;
+            font-weight: bold;
+        }
+
+        .feedback-bad {
+            animation: popRed 0.3s forwards;
+            color: red;
+            font-weight: bold;
+        }
+
+        /* Keyframe Animations */
+        @keyframes popGreen {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.2); opacity: 0; }
+        }
+
+        @keyframes popRed {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.2); opacity: 0; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>✨ Emoji Wisdom Game ✨</h1>
+    <p>Good emojis (😍, 💖, etc.) give points! Bad emojis (🤢, 😡, etc.) cost a heart!</p>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="score-display">
+            🌟 Score: <span id="score-display">0</span>
+        </div>
+        <div class="heart-container">
+            ❤️ Hearts: <span id="hearts-display">❤️❤️❤️</span>
+        </div>
+    </div>
+
+    <!-- Main Game Container -->
+    <div id="game-container">
+        
+        <!-- Left Panel (Good Emojis) -->
+        <div class="panel" id="left-panel">
+            <h2>✅ Good Vibes 😄</h2>
+            <div class="emoji-grid" id="good-emojis-grid">
+                <!-- Emojis populate here -->
+            </div>
+        </div>
+
+        <!-- Right Panel (Bad Emojis) -->
+        <div class="panel" id="right-panel">
+            <h2>❌ Bad Vibes 😬</h2>
+            <div class="emoji-grid" id="bad-emojis-grid">
+                <!-- Emojis populate here -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div id="game-overlay">
+        <div>
+            <h2>GAME OVER! 👋</h2>
+            <p>Your final score is: <span id="final-score">0</span></p>
+            <button id="restart-button" onclick="startGame()">Play Again</button>
+        </div>
+    </div>
+
+
+    <script>
+        // --- Game State Variables ---
+        const GAME_STATE = {
+            score: 0,
+            hearts: 3,
+            isPlaying: false,
+            activeEmojis: [] // To track which emojis have been activated in the current round
+        };
+
+        // --- Emoji Definitions ---
+        // Good Emojis (Positive/Happy)
+        const GOOD_EMOJIS = ['😍', '💖', '😇', '✨', '😊', '😄', '👍', '✅', '💯', '🎉'];
+        // Bad Emojis (Negative/Upset)
+        const BAD_EMOJIS = ['🤢', '😡', '💩', '😵', '😭', '👎', '❌', '⚠️', '🔥', '💀'];
+
+        // --- DOM Elements ---
+        const scoreDisplay = document.getElementById('score-display');
+        const heartsDisplay = document.getElementById('hearts-display');
+        const goodGrid = document.getElementById('good-emojis-grid');
+        const badGrid = document.getElementById('bad-emojis-grid');
+        const overlay = document.getElementById('game-overlay');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const restartButton = document.getElementById('restart-button');
+
+        /**
+         * Utility function to shuffle an array (Fisher-Yates algorithm).
+         * @param {Array} array 
+         * @returns {Array} Shuffled array
+         */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        /**
+         * Initializes the game UI and state.
+         */
+        function initializeUI() {
+            // Clear previous emojis
+            goodGrid.innerHTML = '';
+            badGrid.innerHTML = '';
+
+            // Display initial emojis (randomly chosen)
+            const shuffledGood = shuffleArray([...GOOD_EMOJIS]).slice(0, 5);
+            const shuffledBad = shuffleArray([...BAD_EMOJIS]).slice(0, 5);
+
+            // Populate left side with "good" emojis
+            shuffledGood.forEach(emoji => {
+                goodGrid.innerHTML += `<button class="emoji-button" data-type="good" data-value="${emoji}" onclick="handleEmojiClick(this, 'good')">${emoji}</button>`;
+            });
+
+            // Populate right side with "bad" emojis
+            shuffledBad.forEach(emoji => {
+                badGrid.innerHTML += `<button class="emoji-button" data-type="bad" data-value="${emoji}" onclick="handleEmojiClick(this, 'bad')">${emoji}</button>`;
+            });
+        }
+
+        /**
+         * Updates the visible score and heart counts.
+         */
+        function updateStatus() {
+            scoreDisplay.textContent = GAME_STATE.score;
+            // Use emojis for heart display
+            heartsDisplay.innerHTML = '❤️'.repeat(GAME_STATE.hearts) + '🤍'.repeat(3 - GAME_STATE.hearts);
+        }
+
+        /**
+         * Handles the core game logic when an emoji is clicked.
+         * @param {HTMLElement} button - The clicked emoji button.
+         * @param {string} type - 'good' or 'bad'.
+         */
+        function handleEmojiClick(button, type) {
+            if (!GAME_STATE.isPlaying) return;
+
+            const emoji = button.getAttribute('data-value');
+            
+            if (type === 'good') {
+                // Good Click: Increase score
+                GAME_STATE.score += 1;
+                displayFeedback("👍 +1 Point! Good choice!", 'feedback-good');
+                button.style.transition = 'transform 0.1s';
+                button.style.opacity = 0.5; // Visual feedback of being used
+                button.style.pointerEvents = 'none';
+
+            } else {
+                // Bad Click: Lose a heart
+                GAME_STATE.hearts -= 1;
+                displayFeedback("👎 -1 Heart! Bad choice!", 'feedback-bad');
+                button.style.transition = 'transform 0.1s';
+                button.style.opacity = 0.5; // Visual feedback of being used
+                button.style.pointerEvents = 'none';
+            }
+
+            // Update UI immediately
+            updateStatus();
+
+            // Check Game Over Condition
+            if (GAME_STATE.hearts <= 0) {
+                endGame();
+            }
+        }
+        
+        /**
+         * Displays temporary feedback message on the screen.
+         * @param {string} message - The message to display.
+         * @param {string} className - The CSS class for styling.
+         */
+        function displayFeedback(message, className) {
+            const feedbackDiv = document.createElement('div');
+            feedbackDiv.className = className;
+            feedbackDiv.textContent = message;
+            
+            // Append feedback momentarily to the body or a visible area
+            document.body.appendChild(feedbackDiv);
+
+            // Remove the feedback after a short delay
+            setTimeout(() => {
+                feedbackDiv.remove();
+            }, 800);
+        }
+
+        /**
+         * Ends the game and shows the results overlay.
+         */
+        function endGame() {
+            GAME_STATE.isPlaying = false;
+            // Disable all buttons
+            document.querySelectorAll('.emoji-button').forEach(btn => {
+                btn.onclick = null;
+                btn.style.pointerEvents = 'none';
+                btn.style.opacity = 0.5;
+            });
+
+            // Show overlay
+            finalScoreDisplay.textContent = GAME_STATE.score;
+            overlay.style.display = 'flex';
+        }
+
+        /**
+         * Resets the state and starts the game.
+         */
+        function startGame() {
+            // Reset state
+            GAME_STATE.score = 0;
+            GAME_STATE.hearts = 3;
+            GAME_STATE.isPlaying = true;
+            
+            // Reset UI
+            initializeUI();
+            updateStatus();
+            
+            // Hide overlay
+            overlay.style.display = 'none';
+        }
+
+        // --- Event Listeners ---
+        // Attach event listener to the restart button
+        restartButton.addEventListener('click', startGame);
+
+        // Start the game when the page loads
+        window.onload = startGame;
+    </script>
+
+</body>
+</html>

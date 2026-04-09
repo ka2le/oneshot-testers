@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌌 Asteroid Shooter Prototype</title>
+    <style>
+        body {
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+        canvas {
+            border: 2px solid #00bfff;
+            background-color: #0d1117; /* Deep space background */
+            cursor: crosshair;
+        }
+        #game-info {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffffff;
+            text-align: center;
+            font-size: 20px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-info">Score: 0 | Press SPACE to Shoot!</div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // --- CANVAS SETUP ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const infoDisplay = document.getElementById('game-info');
+
+        // Set canvas size (relative to screen/ideal dimensions)
+        canvas.width = 800;
+        canvas.height = 600;
+
+        // --- GAME CONSTANTS ---
+        const SHIP_SYMBOL = '🚀';
+        const LASER_SYMBOL = '💥';
+        const ASTEROID_SYMBOL = '☄️';
+        const GRAVITY_EFFECT = 0.1;
+
+        // --- GAME STATE ---
+        let gameRunning = true;
+        let score = 0;
+        let lastSpawnTime = 0;
+        let lastShotTime = 0;
+        
+        // Difficulty variables (increase over time/score)
+        let difficultyMultiplier = 1; 
+
+        // --- OBJECT ARRAYS ---
+        let lasers = [];
+        let asteroids = [];
+
+        // --- PLAYER OBJECT (Fixed at center) ---
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 50,
+            width: 30,
+            height: 40
+        };
+
+        // --- HELPER FUNCTIONS ---
+
+        /**
+         * Generates a random number within a range.
+        * @param {number} min 
+        * @param {number} max 
+        * @returns {number}
+        */
+        function randomRange(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        /**
+         * Creates a new Asteroid object.
+        * @param {number} x - starting x position
+        * @param {number} y - starting y position
+        */
+        function createAsteroid(x, y) {
+            return {
+                x: x,
+                y: y,
+                size: Math.random() * 20 + 15, // Size between 15 and 35
+                speed: randomRange(2, 4) * difficultyMultiplier,
+                emoji: ASTEROID_SYMBOL
+            };
+        }
+
+        // --- LASER / PROJECTILE MANAGEMENT ---
+        
+        /**
+         * Shoots a laser from the ship's center.
+         */
+        function shootLaser() {
+            const now = Date.now();
+            // Implement a cooldown mechanism
+            if (now - lastShotTime < 200 / difficultyMultiplier) {
+                return; 
+            }
+            
+            lasers.push({
+                x: player.x,
+                y: player.y - 10,
+                speed: 10,
+                emoji: LASER_SYMBOL
+            });
+            lastShotTime = now;
+        }
+        
+        /**
+         * Updates and draws all active lasers.
+         */
+        function updateLasers() {
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                let laser = lasers[i];
+                laser.y -= laser.speed;
+
+                // Draw the laser
+                ctx.fillText(laser.emoji, laser.x, laser.y);
+
+                // Remove laser if it goes off screen
+                if (laser.y < 0) {
+                    lasers.splice(i, 1);
+                }
+            }
+        }
+
+        // --- ASTEROID MANAGEMENT ---
+
+        /**
+         * Spawns a new asteroid at a random top position.
+         */
+        function spawnAsteroid() {
+            // Asteroids spawn randomly across the top width
+            const startX = randomRange(50, canvas.width - 50);
+            // Start just above the canvas visible area
+            const startY = -50; 
+
+            asteroids.push(createAsteroid(startX, startY));
+        }
+
+        /**
+         * Updates and draws all asteroids.
+         */
+        function updateAsteroids(deltaTime) {
+            // Adjust the spawn rate based on difficulty
+            const spawnInterval = Math.max(500, 1500 / difficultyMultiplier);
+
+            if (Date.now() - lastSpawnTime > spawnInterval) {
+                spawnAsteroid();
+                lastSpawnTime = Date.now();
+            }
+
+            for (let i = asteroids.length - 1; i >= 0; i--) {
+                let asteroid = asteroids[i];
+                
+                // Movement (falling towards the player)
+                asteroid.y += asteroid.speed;
+
+                // Draw the asteroid
+                ctx.fillText(asteroid.emoji, asteroid.x, asteroid.y);
+
+                // Remove asteroid if it goes off the bottom
+                if (asteroid.y > canvas.height + 20) {
+                    asteroids.splice(i, 1);
+                }
+            }
+        }
+
+        // --- COLLISION DETECTION ---
+
+        /**
+         * Checks for collisions between lasers and asteroids.
+         * If collision occurs, it removes both objects and updates the score.
+         */
+        function checkCollisions() {
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                let laser = lasers[i];
+                for (let j = asteroids.length - 1; j >= 0; j--) {
+                    let asteroid = asteroids[j];
+
+                    // Simple square overlap collision detection
+                    if (laser.x > asteroid.x - 10 &&
+                        laser.x < asteroid.x + 10 &&
+                        laser.y > asteroid.y - 10 &&
+                        laser.y < asteroid.y + asteroid.size) {
+                        
+                        // Collision detected!
+                        score += 10;
+                        
+                        // Remove both objects
+                        lasers.splice(i, 1); 
+                        asteroids.splice(j, 1);
+                        
+                        // Break inner loop since we removed the laser
+                        break; 
+                    }
+                }
+            }
+        }
+        
+        // --- DRAWING FUNCTIONS ---
+
+        /**
+         * Clears the canvas and draws the background elements.
+         */
+        function drawBackground() {
+            // Clear the canvas for a fresh frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Simple star effect (optional visual flair)
+            ctx.fillStyle = '#ffffff30';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        /**
+         * Draws the stationary player ship.
+         */
+        function drawPlayer() {
+            ctx.fillText(SHIP_SYMBOL, player.x - 15, player.y + 20);
+        }
+
+        /**
+         * Updates the score and difficulty display.
+         */
+        function updateUI() {
+            infoDisplay.innerHTML = `Score: ${score} | Difficulty: x${difficultyMultiplier.toFixed(2)} | Shoot: SPACE`;
+        }
+
+
+        // --- GAME LOOP ---
+
+        let lastFrameTime = 0;
+        const gameLoop = (timestamp) => {
+            if (!gameRunning) return;
+
+            const deltaTime = timestamp - lastFrameTime;
+            lastFrameTime = timestamp;
+
+            // 1. Clear and Draw Background
+            drawBackground();
+            
+            // 2. Handle Player Input (Shoot on game cycle, based on cooldown)
+            // The actual shooting logic is handled in the event listener, but we call the update here.
+            updateLasers();
+
+            // 3. Spawn and Move Enemies
+            updateAsteroids(deltaTime);
+            
+            // 4. Check for interactions
+            checkCollisions();
+
+            // 5. Draw Player (Draw last so it's visible over other objects)
+            drawPlayer();
+
+            // 6. Update Score and Difficulty (The core difficulty upgrade)
+            score += 0.1; // Small score tick just for passing time
+            difficultyMultiplier = 1 + (score / 100); // Difficulty increases every 100 points
+            updateUI();
+
+            requestAnimationFrame(gameLoop);
+        };
+
+        // --- EVENT HANDLERS ---
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && gameRunning) {
+                shootLaser();
+                // Optional: Play a sound/flash effect here
+            }
+        });
+
+        // --- GAME START ---
+        function startGame() {
+            // Reset game state
+            gameRunning = true;
+            score = 0;
+            difficultyMultiplier = 1;
+            lasers = [];
+            asteroids = [];
+            lastSpawnTime = 0;
+            lastShotTime = 0;
+            
+            console.log("Game Started!");
+            // Start the main game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game automatically when the page loads
+        startGame();
+
+    </script>
+</body>
+</html>
