@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Emoji Pop! | Prototype</title>
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --glass: rgba(255, 255, 255, 0.2);
+            --glass-border: rgba(255, 255, 255, 0.3);
+            --text-color: #ffffff;
+            --good-color: #4ade80;
+            --bad-color: #fb7185;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-gradient);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            color: var(--text-color);
+        }
+
+        #game-wrapper {
+            position: relative;
+            width: 100vw;
+            max-width: 800px;
+            height: 100vh;
+            max-height: 600px;
+            display: grid;
+            grid-template-columns: 150px 1fr 150px;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        /* Side Panels */
+        .side-panel {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .side-panel h3 {
+            margin: 0 0 15px 0;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.9;
+        }
+
+        .emoji-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            font-size: 2rem;
+            text-align: center;
+        }
+
+        /* Game Area */
+        #game-board {
+            position: relative;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 30px;
+            border: 2px dashed var(--glass-border);
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        /* UI Header */
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 30px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .stat-pill {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            padding: 8px 20px;
+            border-radius: 50px;
+            border: 1px solid var(--glass-border);
+            font-weight: bold;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        /* Game Elements */
+        .target-emoji {
+            position: absolute;
+            font-size: 3rem;
+            cursor: pointer;
+            transition: transform 0.1s active;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 5;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+
+        /* Effects */
+        .floating-text {
+            position: absolute;
+            pointer-events: none;
+            font-weight: bold;
+            font-size: 1.5rem;
+            animation: floatUp 0.6s ease-out forwards;
+            z-index: 20;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-50px); opacity: 0; }
+        }
+
+        .shake {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        /* Game Over Overlay */
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            border-radius: 30px;
+        }
+
+        #overlay h2 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        #overlay p {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+        }
+
+        .btn-restart {
+            background: #fff;
+            color: #764ba2;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-restart:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255,255,255,0.4);
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 600px) {
+            #game-wrapper {
+                grid-template-columns: 80px 1fr 80px;
+                padding: 10px;
+            }
+            .side-panel h3 { display: none; }
+            .emoji-list { font-size: 1.5rem; }
+            .target-emoji { font-size: 2.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <!-- Left: Good List -->
+        <div class="side-panel">
+            <h3>✅ Good</h3>
+            <div id="good-list" class="emoji-list"></div>
+        </div>
+
+        <!-- Center: Play Area -->
+        <div id="game-board">
+            <div id="ui-layer">
+                <div class="stat-pill">⭐ <span id="score">0</span></div>
+                <div class="stat-pill">❤️ <span id="hearts">3</span></div>
+            </div>
+
+            <div id="overlay">
+                <h2>Game Over!</h2>
+                <p>Final Score: <span id="final-score">0</span></p>
+                <button class="btn-restart" onclick="startGame()">Play Again</button>
+            </div>
+        </div>
+
+        <!-- Right: Bad List -->
+        <div class="side-panel">
+            <h3>❌ Bad</h3>
+            <div id="bad-list" class="emoji-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const emojiPool = ['🌟', '🔥', '💎', '🍎', '🌈', '💣', '💀', '👾', '💩', '⚡'];
+        let goodEmojis = [];
+        let badEmojis = [];
+        let score = 0;
+        let hearts = 3;
+        let gameActive = false;
+        let spawnTimer;
+
+        const board = document.getElementById('game-board');
+        const scoreEl = document.getElementById('score');
+        const heartsEl = document.getElementById('hearts');
+        const goodListEl = document.getElementById('good-list');
+        const badListEl = document.getElementById('bad-list');
+        const overlay = document.getElementById('overlay');
+        const finalScoreEl = document.getElementById('final-score');
+
+        function shuffle(array) {
+            return array.sort(() => Math.random() - 0.5);
+        }
+
+        function startGame() {
+            // Reset state
+            score = 0;
+            hearts = 3;
+            gameActive = true;
+            scoreEl.innerText = score;
+            heartsEl.innerText = hearts;
+            overlay.style.display = 'none';
+            
+            // Randomize Good/Bad emojis
+            const shuffled = shuffle([...emojiPool]);
+            goodEmojis = shuffled.slice(0, 5);
+            badEmojis = shuffled.slice(5, 10);
+
+            // Update UI lists
+            updateEmojiLists();
+
+            // Clear board of old emojis
+            const oldEmojis = document.querySelectorAll('.target-emoji');
+            oldEmojis.forEach(e => e.remove());
+
+            // Start spawning
+            if(spawnTimer) clearInterval(spawnTimer);
+            spawnTimer = setInterval(spawnEmoji, 800);
+        }
+
+        function updateEmojiLists() {
+            goodListEl.innerHTML = '';
+            badListEl.innerHTML = '';
+            goodEmojis.forEach(e => {
+                const div = document.createElement('div');
+                div.innerText = e;
+                goodListEl.appendChild(div);
+            });
+            badEmojis.forEach(e => {
+                const div = document.createElement('div');
+                div.innerText = e;
+                badListEl.appendChild(div);
+            });
+        }
+
+        function spawnEmoji() {
+            if (!gameActive) return;
+
+            const emoji = document.createElement('div');
+            const isGood = Math.random() > 0.4; // 60% chance of a good emoji
+            const char = isGood 
+                ? goodEmojis[Math.floor(Math.random() * goodEmojis.length)]
+                : badEmojis[Math.floor(Math.random() * badEmojis.length)];
+
+            emoji.className = 'target-emoji';
+            emoji.innerText = char;
+            
+            // Random position
+            const x = Math.random() * (board.clientWidth - 60);
+            const y = Math.random() * (board.clientHeight - 60);
+            emoji.style.left = `${x}px`;
+            emoji.style.top = `${y}px`;
+
+            emoji.onclick = (e) => handleEmojiClick(e, isGood, emoji);
+
+            board.appendChild(emoji);
+
+            // Despawn after 1.5 seconds
+            setTimeout(() => {
+                if (emoji.parentNode) {
+                    emoji.style.transform = 'scale(0)';
+                    emoji.style.opacity = '0';
+                    setTimeout(() => emoji.remove(), 200);
+                }
+            }, 1500);
+        }
+
+        function handleEmojiClick(event, isGood, element) {
+            if (!gameActive) return;
+
+            if (isGood) {
+                score++;
+                scoreEl.innerText = score;
+                createFloatingText(event.clientX, event.clientY, '+1', 'var(--good-color)');
+            } else {
+                hearts--;
+                heartsEl.innerText = hearts;
+                createFloatingText(event.clientX, event.clientY, '-❤️', 'var(--bad-color)');
+                
+                // Visual feedback for mistake
+                board.classList.add('shake');
+                setTimeout(() => board.classList.remove('shake'), 400);
+
+                if (hearts <= 0) endGame();
+            }
+
+            element.remove();
+        }
+
+        function createFloatingText(x, y, text, color) {
+            const ft = document.createElement('div');
+            ft.className = 'floating-text';
+            ft.innerText = text;
+            ft.style.left = `${x - board.offsetLeft}px`;
+            ft.style.top = `${y - board.offsetTop}px`;
+            ft.style.color = color;
+            board.appendChild(ft);
+            setTimeout(() => ft.remove(), 600);
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(spawnTimer);
+            finalScoreEl.innerText = score;
+            overlay.style.display = 'flex';
+        }
+
+        // Start on load
+        startGame();
+    </script>
+</body>
+</html>
