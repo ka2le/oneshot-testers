@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>PATTERN TAP</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #02020c;
+    display: flex; justify-content: center; align-items: center;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  canvas { display: block; cursor: none; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  PATTERN TAP  ·  4-Lane Rhythm Reaction Game
+// ═══════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('game');
+const ctx    = canvas.getContext('2d');
+
+// ── Logical resolution ──────────────────────────────────────
+const GW = 400, GH = 700;
+canvas.width = GW; canvas.height = GH;
+
+function resize() {
+  const s = Math.min(window.innerWidth / GW, window.innerHeight / GH);
+  canvas.style.width  = Math.round(GW * s) + 'px';
+  canvas.style.height = Math.round(GH * s) + 'px';
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── Lane palette ────────────────────────────────────────────
+const LC = ['#00eeff','#ff2070','#ffe000','#39ff14'];   // hex colors
+const LR = [[0,238,255],[255,32,112],[255,224,0],[57,255,20]]; // rgb tuples
+
+// ── Layout constants ────────────────────────────────────────
+const LANE_W   = GW / 4;         // 100 px per lane
+const HIT_Y    = 548;            // hit-zone centre y
+const NOTE_R   = 26;             // note circle radius
+const SPAWN_Y  = -42;            // y where notes appear
+const PERF_WIN = 27;             // ± px for PERFECT
+const GOOD_WIN = 54;             // ± px for GOOD
+const TAP_Y    = GH - 108;       // top of tap-button strip
+const TAP_H    = 108;            // height of tap-button strip
+
+// ── Patterns ────────────────────────────────────────────────
+//  seq   = lane sequence (1–4)
+//  reps  = how many times the sequence repeats
+//  speed = px / frame falling speed
+//  gap   = px gap between spawns (gap / speed = spawn interval frames)
+//  name  = shown on-screen when pattern loads
+const BASE_SPEEDS = [
+  3.8,3.8,4.0,4.0,4.3,4.3,
+  4.8,4.8,5.1,5.1,5.4,5.4,
+  5.9,6.2,6.5,7.0,7.4,7.9,8.4,9.0
+];
+
+const PATTERNS = [
+  // ── Beginner ──────────────────────────────────────────────
+  {seq:[1,1,1,1],                        reps:4, speed:3.8, gap:270, name:'WARM UP'},
+  {seq:[2,2,2,2],                        reps:4, speed:3.8, gap:270, name:'STEADY'},
+  {seq:[1,2,1,2],                        reps:4, speed:4.0, gap:255, name:'SWITCH'},
+  {seq:[3,4,3,4],                        reps:4, speed:4.0, gap:255, name:'FAR SIDE'},
+  {seq:[1,2,3,4],                        reps:3, speed:4.3, gap:238, name:'SWEEP →'},
+  {seq:[4,3,2,1],                        reps:3, speed:4.3, gap:238, name:'SWEEP ←'},
+  // ── Intermediate ──────────────────────────────────────────
+  {seq:[1,3,1,3,2,4,2,4],               reps:2, speed:4.8, gap:208, name:'CROSS STEP'},
+  {seq:[1,2,3,2,1,2,3,4],               reps:2, speed:4.8, gap:208, name:'PENDULUM'},
+  {seq:[1,1,2,2,3,3,4,4],               reps:2, speed:5.1, gap:192, name:'STAIRCASE'},
+  {seq:[4,4,3,3,2,2,1,1],               reps:2, speed:5.1, gap:192, name:'DOWNSTAIRS'},
+  {seq:[1,2,1,3,1,4],                    reps:3, speed:5.4, gap:180, name:'ANCHOR'},
+  {seq:[4,3,4,2,4,1],                    reps:3, speed:5.4, gap:180, name:'ANCHOR II'},
+  // ── Advanced ──────────────────────────────────────────────
+  {seq:[1,2,3,4,4,3,2,1],               reps:2, speed:5.9, gap:165, name:'MIRROR'},
+  {seq:[1,3,2,4,1,3,2,4],               reps:2, speed:6.2, gap:155, name:'WEAVE'},
+  {seq:[2,4,1,3,4,2,3,1],               reps:2, speed:6.5, gap:148, name:'SCRAMBLE'},
+  {seq:[1,2,3,4,2,3,4,1,3,4,1,2],       reps:1, speed:7.0, gap:140, name:'CASCADE'},
+  // ── Expert ────────────────────────────────────────────────
+  {seq:[1,3,2,4,1,4,2,3],               reps:2, speed:7.4, gap:132, name:'EXPERT I'},
+  {seq:[4,1,4,2,4,3,1,2,1,3,2,3],       reps:1, speed:7.9, gap:124, name:'EXPERT II'},
+  {seq:[1,2,4,3,1,3,4,2,3,4,2,1],       reps:1, speed:8.4, gap:116, name:'CHAOS'},
+  {seq:[1,2,3,4,3,2,1,4,2,4,1,3,1,4,2,3],reps:1,speed:9.0,gap:108, name:'MASTER'},
+];
+
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+let gState = 'menu'; // menu | playing | transition | gameover
+
+let score=0, combo=0, maxCombo=0, health=100, totalNotes=0, hitNotes=0;
+let highScore = +(localStorage.getItem('ptHS')||0);
+
+let patIdx=0, noteQueue=[], spawnTmr=0, curSpeed=0, curGap=0, patDone=false;
+let activeNotes=[], noteUID=0;
+
+let lFlash=[0,0,0,0], lPressed=[false,false,false,false];
+let particles=[], popups=[];
+let shakeTmr=0, shakeX=0, shakeY=0;
+let comboPulse=0;
+
+let transTmr=0, announceTmr=0, announceName='';
+
+let bgNotes=[], bgTick=0;
+
+// ═══════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════
+const lx     = l => (l-1)*LANE_W + LANE_W/2;
+const lerp   = (a,b,t) => a+(b-a)*t;
+const clamp  = (v,lo,hi) => Math.max(lo,Math.min(hi,v));
+const rgb    = i => LR[i];
+const hexcol = i => LC[i];
+
+// ═══════════════════════════════════════════════════════════
+//  PATTERN ENGINE
+// ═══════════════════════════════════════════════════════════
+function loadPattern(idx) {
+  const p = PATTERNS[idx % PATTERNS.length];
+  noteQueue = [];
+  for (let r=0;r<p.reps;r++) noteQueue.push(...p.seq);
+  curSpeed = p.speed; curGap = p.gap;
+  spawnTmr = 85; patDone = false;
+  announceName = p.name; announceTmr = 105;
+}
+
+function nextPattern() {
+  patIdx++;
+  if (patIdx >= PATTERNS.length) {
+    // Loop — speed bonus applied at start
+    patIdx = 0;
+    PATTERNS.forEach(p => p.speed += 0.5);
+  }
+  transTmr = 75;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  NOTE SPAWNING
+// ═══════════════════════════════════════════════════════════
+function spawnNote(lane) {
+  activeNotes.push({
+    id: noteUID++, lane,
+    y: SPAWN_Y, speed: curSpeed,
+    hit: false, missed: false,
+    opacity: 1.0, scale: 1.0
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INPUT HANDLING
+// ═══════════════════════════════════════════════════════════
+function triggerLane(lane) {
+  const i = lane-1;
+  lFlash[i] = 1.0;
+  lPressed[i] = true;
+  if (gState !== 'playing') return;
+
+  // Find closest unhit note in this lane within window
+  let best=null, bestD=Infinity;
+  for (const n of activeNotes) {
+    if (n.hit||n.missed||n.lane!==lane) continue;
+    const d = Math.abs(n.y - HIT_Y);
+    if (d <= GOOD_WIN+18 && d < bestD) { bestD=d; best=n; }
+  }
+
+  if (best) {
+    best.hit = true;
+    combo++; maxCombo = Math.max(maxCombo,combo);
+    totalNotes++; hitNotes++;
+    comboPulse = Math.min(comboPulse+0.5, 2.5);
+
+    let pts, grade, gc;
+    if (bestD <= PERF_WIN) {
+      grade='PERFECT'; pts=100+combo*5; gc='#ffffff';
+    } else {
+      grade='GOOD';    pts=60+combo*2;  gc=LC[i];
+    }
+    score += pts;
+
+    spawnParticles(lx(lane), HIT_Y, LC[i], 14);
+    if (combo%10===0) spawnMilestone(lane);
+    addPopup(grade, lx(lane), HIT_Y-38, gc);
+  }
+}
+
+function releaseLane(lane) { lPressed[lane-1]=false; }
+
+function checkMissed() {
+  for (const n of activeNotes) {
+    if (n.hit||n.missed) continue;
+    if (n.y > HIT_Y + GOOD_WIN + 18) {
+      n.missed = true;
+      combo = 0;
+      health = Math.max(0, health-20);
+      totalNotes++;
+      shakeTmr = 12;
+      addPopup('MISS', lx(n.lane), HIT_Y-38, '#ff4455');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EFFECTS
+// ═══════════════════════════════════════════════════════════
+function spawnParticles(x,y,color,count) {
+  for (let k=0;k<count;k++) {
+    const a=Math.random()*Math.PI*2, s=1.5+Math.random()*4.5;
+    particles.push({
+      x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s-0.8,
+      color, r:2+Math.random()*3.5,
+      life:1.0, decay:0.024+Math.random()*0.03
+    });
+  }
+}
+
+function spawnMilestone(lane) {
+  for (let k=0;k<22;k++) {
+    const a=Math.random()*Math.PI*2, s=2+Math.random()*6;
+    const i=lane-1;
+    particles.push({
+      x:lx(lane)+(Math.random()-.5)*35, y:HIT_Y,
+      vx:Math.cos(a)*s, vy:Math.sin(a)*s-2.5,
+      color:LC[i], r:3+Math.random()*5,
+      life:1.0, decay:0.018+Math.random()*0.02
+    });
+  }
+}
+
+function addPopup(text,x,y,color) {
+  popups.push({text,x,y,color,life:1.0,scale:1.4,vy:-1.4});
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GAME CONTROL
+// ═══════════════════════════════════════════════════════════
+function startGame() {
+  // Restore default speeds (in case of loop speed-boost)
+  PATTERNS.forEach((p,i) => p.speed = BASE_SPEEDS[i]);
+
+  gState='playing';
+  score=0; combo=0; maxCombo=0; health=100;
+  totalNotes=0; hitNotes=0;
+  patIdx=0; activeNotes=[]; particles=[]; popups=[];
+  shakeTmr=0; comboPulse=0; transTmr=0;
+  lFlash=[0,0,0,0]; lPressed=[false,false,false,false];
+  loadPattern(0);
+}
+
+// ── Keyboard ────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (gState==='menu'||gState==='gameover') {
+    if (e.key===' '||e.key==='Enter') { startGame(); return; }
+  }
+  const k=parseInt(e.key);
+  if (k>=1&&k<=4) triggerLane(k);
+});
+window.addEventListener('keyup', e => {
+  const k=parseInt(e.key);
+  if (k>=1&&k<=4) releaseLane(k);
+});
+
+// ── Touch / Mouse ────────────────────────────────────────────
+function clientToLane(cx) {
+  const rect=canvas.getBoundingClientRect();
+  const gx=(cx-rect.left)*(GW/rect.width);
+  return clamp(Math.floor(gx/LANE_W)+1,1,4);
+}
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (gState==='menu'||gState==='gameover') { startGame(); return; }
+  for (const t of e.changedTouches) triggerLane(clientToLane(t.clientX));
+},{passive:false});
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) releaseLane(clientToLane(t.clientX));
+},{passive:false});
+
+canvas.addEventListener('mousedown', e => {
+  if (gState==='menu'||gState==='gameover') { startGame(); return; }
+  triggerLane(clientToLane(e.clientX));
+});
+canvas.addEventListener('mouseup', e => {
+  releaseLane(clientToLane(e.clientX));
+});
+
+// ═══════════════════════════════════════════════════════════
+//  UPDATE
+// ═══════════════════════════════════════════════════════════
+function update() {
+  updateFX();
+
+  if (gState==='menu') { updateMenu(); return; }
+  if (gState==='gameover') return;
+
+  // ── Transition pause between patterns ───────────────────
+  if (transTmr>0) {
+    transTmr--;
+    if (transTmr===0) loadPattern(patIdx);
+    updateNotes(); checkMissed(); return;
+  }
+
+  // ── Spawn notes from queue ───────────────────────────────
+  if (!patDone) {
+    if (spawnTmr>0) { spawnTmr--; }
+    else if (noteQueue.length>0) {
+      spawnNote(noteQueue.shift());
+      spawnTmr = Math.round(curGap/curSpeed);
+    } else {
+      patDone = true;
+    }
+  }
+
+  // ── Pattern complete? ────────────────────────────────────
+  if (patDone && activeNotes.every(n=>n.hit||n.missed)) {
+    nextPattern();
+  }
+
+  updateNotes();
+  checkMissed();
+
+  if (health<=0) {
+    gState='gameover';
+    if (score>highScore) { highScore=score; localStorage.setItem('ptHS',highScore); }
+  }
+}
+
+function updateNotes() {
+  for (const n of activeNotes) {
+    if (!n.hit&&!n.missed) {
+      n.y += n.speed;
+    } else if (n.hit) {
+      n.scale = lerp(n.scale, 2.2, 0.13);
+      n.opacity = Math.max(0, n.opacity-0.07);
+    } else {
+      n.opacity = Math.max(0, n.opacity-0.06);
+    }
+  }
+  activeNotes = activeNotes.filter(n=>n.opacity>0);
+}
+
+function updateFX() {
+  for (const p of particles) {
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.1; p.life-=p.decay;
+  }
+  particles = particles.filter(p=>p.life>0);
+
+  for (const g of popups) {
+    g.y+=g.vy; g.life-=0.022; g.scale=lerp(g.scale,1.0,0.11);
+  }
+  popups = popups.filter(g=>g.life>0);
+
+  for (let i=0;i<4;i++) lFlash[i]=Math.max(0,lFlash[i]-0.07);
+  comboPulse = Math.max(0,comboPulse-0.016);
+
+  if (shakeTmr>0) {
+    shakeX=(Math.random()-.5)*7; shakeY=(Math.random()-.5)*7; shakeTmr--;
+  } else { shakeX=0; shakeY=0; }
+
+  if (announceTmr>0) announceTmr--;
+}
+
+function updateMenu() {
+  bgTick++;
+  if (bgTick%24===0) bgNotes.push({lane:Math.ceil(Math.random()*4),y:-30,speed:1.8+Math.random()*2.4});
+  for (const n of bgNotes) n.y+=n.speed;
+  bgNotes=bgNotes.filter(n=>n.y<GH+50);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DRAW
+// ═══════════════════════════════════════════════════════════
+function draw() {
+  ctx.save();
+  ctx.translate(shakeX,shakeY);
+
+  // Background
+  ctx.fillStyle='#04040f';
+  ctx.fillRect(-12,-12,GW+24,GH+24);
+
+  drawBgLines();
+  drawLanes();
+  drawHitZone();
+
+  const notes = gState==='menu' ? bgNotes : activeNotes;
+  const noteAlpha = gState==='menu' ? 0.22 : 1.0;
+  for (const n of notes) drawNote(n, noteAlpha);
+
+  for (const p of particles) drawParticle(p);
+  for (const g of popups)    drawPopup(g);
+
+  drawTapArea();
+
+  if (gState==='playing'||gState==='transition') {
+    drawHUD();
+    drawAnnounce();
+  }
+
+  if (gState==='menu')     drawMenu();
+  if (gState==='gameover') drawGameOver();
+
+  ctx.restore();
+}
+
+// ── Background scanlines ─────────────────────────────────────
+function drawBgLines() {
+  ctx.fillStyle='rgba(255,255,255,0.012)';
+  for (let y=0;y<GH;y+=28) ctx.fillRect(0,y,GW,1);
+}
+
+// ── Lanes ────────────────────────────────────────────────────
+function drawLanes() {
+  for (let i=0;i<4;i++) {
+    const x=i*LANE_W;
+    const [r,g,b]=rgb(i); const fl=lFlash[i];
+
+    // Lane bg tint
+    ctx.fillStyle=`rgba(${r},${g},${b},${0.028+fl*0.10})`;
+    ctx.fillRect(x,0,LANE_W,GH);
+
+    // Divider
+    if (i>0) {
+      ctx.strokeStyle=`rgba(${r},${g},${b},0.18)`;
+      ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,GH); ctx.stroke();
+    }
+
+    // Top lane number
+    ctx.font='700 12px Orbitron,monospace';
+    ctx.fillStyle=`rgba(${r},${g},${b},0.28)`;
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(i+1, x+LANE_W/2, 7);
+    ctx.textBaseline='alphabetic';
+  }
+}
+
+// ── Hit zone ─────────────────────────────────────────────────
+function drawHitZone() {
+  // Central glow line
+  const grad=ctx.createLinearGradient(0,HIT_Y,GW,HIT_Y);
+  grad.addColorStop(0,'rgba(255,255,255,0)');
+  grad.addColorStop(0.12,'rgba(255,255,255,0.55)');
+  grad.addColorStop(0.5,'rgba(255,255,255,0.88)');
+  grad.addColorStop(0.88,'rgba(255,255,255,0.55)');
+  grad.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=grad; ctx.fillRect(0,HIT_Y-1.5,GW,3);
+
+  // Per-lane rings
+  for (let i=0;i<4;i++) {
+    const cx=lx(i+1); const [r,g,b]=rgb(i); const fl=lFlash[i];
+    const alpha=0.22+fl*0.78;
+
+    // Glow halo when flashing
+    if (fl>0.08) {
+      ctx.beginPath(); ctx.arc(cx,HIT_Y,NOTE_R+13,0,Math.PI*2);
+      ctx.fillStyle=`rgba(${r},${g},${b},${fl*0.14})`; ctx.fill();
+    }
+
+    // Outer ring
+    ctx.beginPath(); ctx.arc(cx,HIT_Y,NOTE_R+6,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(${r},${g},${b},${alpha})`;
+    ctx.lineWidth=fl>0.1?2.5:1.5;
+    if (fl>0.1) { ctx.shadowColor=LC[i]; ctx.shadowBlur=22*fl; }
+    ctx.stroke(); ctx.shadowBlur=0;
+
+    // Inner dot
+    ctx.beginPath(); ctx.arc(cx,HIT_Y,3.5,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${r},${g},${b},${0.18+fl*0.5})`; ctx.fill();
+  }
+}
+
+// ── Note ─────────────────────────────────────────────────────
+function drawNote(note, baseAlpha=1.0) {
+  const x=lx(note.lane), y=note.y, i=note.lane-1;
+  const [r,g,b]=rgb(i); const col=LC[i];
+  const a=(note.opacity!==undefined?note.opacity:1.0)*baseAlpha;
+  const sc=note.scale||1.0;
+  const nr=NOTE_R*sc;
+
+  ctx.save(); ctx.globalAlpha=a;
+  ctx.shadowColor=col; ctx.shadowBlur=20;
+
+  // Radial gradient fill
+  const ng=ctx.createRadialGradient(x,y-nr*.28,nr*.06,x,y,nr);
+  ng.addColorStop(0,'#ffffff');
+  ng.addColorStop(0.28,col);
+  ng.addColorStop(1,`rgba(${r},${g},${b},0.04)`);
+  ctx.beginPath(); ctx.arc(x,y,nr,0,Math.PI*2);
+  ctx.fillStyle=ng; ctx.fill();
+
+  // Rim
+  ctx.beginPath(); ctx.arc(x,y,nr+2.5,0,Math.PI*2);
+  ctx.strokeStyle=`rgba(${r},${g},${b},0.55)`; ctx.lineWidth=1.5;
+  ctx.stroke(); ctx.shadowBlur=0;
+
+  // Number
+  ctx.font=`900 ${Math.round(nr*.80)}px Orbitron,monospace`;
+  ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowColor='rgba(0,0,0,0.55)'; ctx.shadowBlur=4;
+  ctx.fillText(note.lane, x, y+1.5);
+
+  ctx.restore();
+}
+
+// ── Particle ─────────────────────────────────────────────────
+function drawParticle(p) {
+  ctx.save(); ctx.globalAlpha=p.life*.85;
+  ctx.fillStyle=p.color; ctx.shadowColor=p.color; ctx.shadowBlur=7;
+  ctx.beginPath(); ctx.arc(p.x,p.y,p.r*Math.sqrt(p.life),0,Math.PI*2);
+  ctx.fill(); ctx.restore();
+}
+
+// ── Grade popup ───────────────────────────────────────────────
+function drawPopup(g) {
+  ctx.save(); ctx.globalAlpha=clamp(g.life*2,0,1);
+  ctx.font=`700 ${Math.round(17*g.scale)}px Orbitron,monospace`;
+  ctx.fillStyle=g.color; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowColor=g.color; ctx.shadowBlur=15;
+  ctx.fillText(g.text,g.x,g.y); ctx.restore();
+}
+
+// ── Tap button strip ─────────────────────────────────────────
+function drawTapArea() {
+  for (let i=0;i<4;i++) {
+    const x=i*LANE_W; const [r,g,b]=rgb(i);
+    const fl=lFlash[i]; const pr=lPressed[i];
+    const bx=x+5, by=TAP_Y+5, bw=LANE_W-10, bh=TAP_H-8;
+
+    // Fill
+    const ba=pr?0.30:0.07+fl*0.18;
+    ctx.fillStyle=`rgba(${r},${g},${b},${ba})`;
+    ctx.fillRect(bx,by,bw,bh);
+
+    // Border
+    ctx.strokeStyle=`rgba(${r},${g},${b},${0.38+fl*0.62})`;
+    ctx.lineWidth=pr?2.5:1.5;
+    if (fl>0.1) { ctx.shadowColor=LC[i]; ctx.shadowBlur=18*fl; }
+    ctx.strokeRect(bx,by,bw,bh); ctx.shadowBlur=0;
+
+    // Corner accents
+    const ca=`rgba(${r},${g},${b},${0.5+fl*.5})`;
+    ctx.strokeStyle=ca; ctx.lineWidth=2;
+    const cl=8;
+    [[bx,by],[bx+bw,by],[bx,by+bh],[bx+bw,by+bh]].forEach(([cx2,cy2],idx)=>{
+      const sx=idx%2===0?1:-1, sy=idx<2?1:-1;
+      ctx.beginPath();
+      ctx.moveTo(cx2,cy2+sy*cl); ctx.lineTo(cx2,cy2); ctx.lineTo(cx2+sx*cl,cy2);
+      ctx.stroke();
+    });
+
+    // Label
+    ctx.font=`900 26px Orbitron,monospace`;
+    ctx.fillStyle=`rgba(${r},${g},${b},${0.6+fl*.4})`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    if (fl>0.1) { ctx.shadowColor=LC[i]; ctx.shadowBlur=12*fl; }
+    ctx.fillText(i+1, x+LANE_W/2, TAP_Y+TAP_H/2+2);
+    ctx.shadowBlur=0;
+  }
+}
+
+// ── HUD ───────────────────────────────────────────────────────
+function drawHUD() {
+  // Score — center
+  ctx.textAlign='center';
+  ctx.font='400 9px Orbitron,monospace';
+  ctx.fillStyle='rgba(255,255,255,0.32)';
+  ctx.fillText('SCORE',GW/2,33);
+  ctx.font='700 27px Orbitron,monospace';
+  ctx.fillStyle='#fff';
+  ctx.shadowColor='rgba(255,255,255,0.35)'; ctx.shadowBlur=9;
+  ctx.fillText(score.toLocaleString(),GW/2,58); ctx.shadowBlur=0;
+
+  // Combo — right
+  if (combo>1) {
+    const gi=Math.min(combo/25,1);
+    const cc=combo>=25?'#ffe000':combo>=10?'#ff2070':'#00eeff';
+    ctx.textAlign='right';
+    ctx.font='400 9px Orbitron,monospace';
+    ctx.fillStyle='rgba(255,255,255,0.32)';
+    ctx.fillText('COMBO',GW-10,33);
+    ctx.font=`700 ${19+Math.floor(gi*9)}px Orbitron,monospace`;
+    ctx.fillStyle=cc; ctx.shadowColor=cc;
+    ctx.shadowBlur=14*gi+comboPulse*10;
+    ctx.fillText(`×${combo}`,GW-10,58); ctx.shadowBlur=0;
+  }
+
+  // Health bar — left
+  const bx=10,by=30,bw=76,bh=7;
+  ctx.textAlign='left';
+  ctx.font='400 9px Orbitron,monospace';
+  ctx.fillStyle='rgba(255,255,255,0.32)';
+  ctx.fillText('HP',bx,by-2);
+  ctx.fillStyle='rgba(255,255,255,0.1)';
+  ctx.fillRect(bx,by,bw,bh);
+  const hc=health>60?'#39ff14':health>30?'#ffe000':'#ff2070';
+  ctx.fillStyle=hc; ctx.shadowColor=hc; ctx.shadowBlur=7;
+  ctx.fillRect(bx,by,bw*(health/100),bh); ctx.shadowBlur=0;
+
+  // Stage
+  ctx.font='400 8px Orbitron,monospace';
+  ctx.fillStyle='rgba(255,255,255,0.22)';
+  ctx.fillText(`STG ${patIdx+1}/${PATTERNS.length}`,bx,by+bh+11);
+}
+
+// ── Pattern announce ─────────────────────────────────────────
+function drawAnnounce() {
+  if (announceTmr<=0) return;
+  const raw=announceTmr/105;
+  const a = raw>0.72 ? (1-raw)/0.28 : raw<0.28 ? raw/0.28 : 1;
+
+  ctx.save(); ctx.globalAlpha=a;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+
+  // Pill bg
+  const py=(TAP_Y+80)/2;
+  ctx.fillStyle='rgba(255,255,255,0.04)';
+  ctx.beginPath();
+  ctx.roundRect(GW/2-95,py-22,190,44,8);
+  ctx.fill();
+
+  ctx.font='700 18px Orbitron,monospace';
+  ctx.fillStyle='#fff'; ctx.shadowColor='#fff'; ctx.shadowBlur=22;
+  ctx.fillText(announceName,GW/2,py-3);
+  ctx.shadowBlur=0;
+  ctx.font='400 9px Orbitron,monospace';
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.fillText(`PATTERN ${patIdx+1}`,GW/2,py+14);
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MENU SCREEN
+// ═══════════════════════════════════════════════════════════
+function drawMenu() {
+  // Overlay
+  ctx.fillStyle='rgba(4,4,15,0.78)'; ctx.fillRect(0,0,GW,GH);
+
+  // Title glow orb
+  const og=ctx.createRadialGradient(GW/2,GH*.3,0,GW/2,GH*.3,200);
+  og.addColorStop(0,'rgba(0,238,255,0.09)');
+  og.addColorStop(1,'transparent');
+  ctx.fillStyle=og; ctx.fillRect(0,0,GW,GH);
+
+  ctx.textAlign='center';
+
+  // PATTERN
+  ctx.font='900 38px Orbitron,monospace';
+  ctx.fillStyle='#fff'; ctx.shadowColor='#00eeff'; ctx.shadowBlur=30;
+  ctx.fillText('PATTERN',GW/2,GH*.255);
+
+  // TAP (big cyan)
+  ctx.font='900 64px Orbitron,monospace';
+  ctx.fillStyle='#00eeff'; ctx.shadowColor='#00eeff'; ctx.shadowBlur=55;
+  ctx.fillText('TAP',GW/2,GH*.345); ctx.shadowBlur=0;
+
+  // Tag line
+  ctx.font='400 10px Orbitron,monospace';
+  ctx.fillStyle='rgba(255,255,255,0.4)';
+  ctx.fillText('4 · LANES · PATTERN · REACTION',GW/2,GH*.405);
+
+  // High score
+  if (highScore>0) {
+    ctx.font='700 11px Orbitron,monospace';
+    ctx.fillStyle='rgba(255,224,0,0.8)';
+    ctx.fillText(`BEST  ${highScore.toLocaleString()}`,GW/2,GH*.46);
+  }
+
+  // Instructions
+  ctx.font='400 9.5px Orbitron,monospace';
+  ctx.fillStyle='rgba(255,255,255,0.32)';
+  ctx.fillText('PRESS  1  2  3  4  TO HIT FALLING NOTES',GW/2,GH*.52);
+  ctx.fillText('AS THEY REACH THE GLOWING LINE',GW/2,GH*.547);
+  ctx.fillText('TAP ANYWHERE ON MOBILE  ·  5 MISSES = OVER',GW/2,GH*.574);
+
+  // Lane preview dots
+  for (let i=0;i<4;i++) {
+    const cx=46+i*90, cy=GH*.635;
+    const [r2,g2,b2]=rgb(i);
+    const ng=ctx.createRadialGradient(cx,cy-5,2,cx,cy,18);
+    ng.addColorStop(0,'#fff'); ng.addColorStop(0.3,LC[i]);
+    ng.addColorStop(1,`rgba(${r2},${g2},${b2},0.04)`);
+    ctx.beginPath(); ctx.arc(cx,cy,18,0,Math.PI*2);
+    ctx.fillStyle=ng; ctx.shadowColor=LC[i]; ctx.shadowBlur=14;
+    ctx.fill(); ctx.shadowBlur=0;
+    ctx.font='900 13px Orbitron,monospace';
+    ctx.fillStyle='#fff';
+    ctx.fillText(i+1,cx,cy+4.5);
+  }
+
+  // Pulsing start button
+  const pu=0.82+0.18*Math.sin(Date.now()/360);
+  const bw=220,bh=54,bx=GW/2-110,by=GH*.75;
+  ctx.shadowColor='#00eeff'; ctx.shadowBlur=24*pu;
+  ctx.strokeStyle=`rgba(0,238,255,${.5*pu+.3})`; ctx.lineWidth=2;
+  ctx.strokeRect(bx,by,bw,bh);
+  ctx.fillStyle=`rgba(0,238,255,${.06+.04*pu})`;
+  ctx.fillRect(bx,by,bw,bh); ctx.shadowBlur=0;
+  ctx.font='700 14px Orbitron,monospace';
+  ctx.fillStyle='#00eeff'; ctx.shadowColor='#00eeff'; ctx.shadowBlur=12;
+  ctx.fillText('TAP TO START',GW/2,by+bh/2+5.5); ctx.shadowBlur=0;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GAME OVER SCREEN
+// ═══════════════════════════════════════════════════════════
+function drawGameOver() {
+  ctx.fillStyle='rgba(4,4,15,0.9)'; ctx.fillRect(0,0,GW,GH);
+  ctx.textAlign='center';
+
+  // Title
+  ctx.font='900 38px Orbitron,monospace';
+  ctx.fillStyle='#ff2070'; ctx.shadowColor='#ff2070'; ctx.shadowBlur=32;
+  ctx.fillText('GAME OVER',GW/2,GH*.20); ctx.shadowBlur=0;
+
+  // Grade letter
+  const acc=totalNotes>0?Math.round((hitNotes/totalNotes)*100):0;
+  const grade=acc>=95?'S':acc>=85?'A':acc>=70?'B':acc>=55?'C':'D';
+  const GC={S:'#ffe000',A:'#39ff14',B:'#00eeff',C:'#ff2070',D:'#888888'};
+  ctx.font='900 70px Orbitron,monospace';
+  ctx.fillStyle=GC[grade]; ctx.shadowColor=GC[grade]; ctx.shadowBlur=40;
+  ctx.fillText(grade,GW/2,GH*.34); ctx.shadowBlur=0;
+
+  // Stats grid
+  const stats=[
+    ['SCORE',      score.toLocaleString()],
+    ['MAX COMBO',  `×${maxCombo}`],
+    ['ACCURACY',   `${acc}%`],
+    ['STAGE',      `${patIdx+1} / ${PATTERNS.length}`],
+  ];
+  let sy=GH*.42;
+  for (const [lbl,val] of stats) {
+    ctx.font='400 9px Orbitron,monospace';
+    ctx.fillStyle='rgba(255,255,255,0.38)'; ctx.fillText(lbl,GW/2,sy);
+    ctx.font='700 22px Orbitron,monospace';
+    ctx.fillStyle='#fff'; ctx.shadowColor='rgba(255,255,255,0.22)'; ctx.shadowBlur=6;
+    ctx.fillText(val,GW/2,sy+23); ctx.shadowBlur=0;
+    sy+=50;
+  }
+
+  // New high score banner
+  if (score>0 && score>=highScore) {
+    ctx.font='700 12px Orbitron,monospace';
+    ctx.fillStyle='#ffe000'; ctx.shadowColor='#ffe000'; ctx.shadowBlur=20;
+    ctx.fillText('★  NEW BEST SCORE  ★',GW/2,sy+6); ctx.shadowBlur=0;
+  }
+
+  // Restart button
+  const pu=0.82+0.18*Math.sin(Date.now()/360);
+  const bw=220,bh=54,bx=GW/2-110,by=GH*.855;
+  ctx.shadowColor='#ff2070'; ctx.shadowBlur=20*pu;
+  ctx.strokeStyle=`rgba(255,32,112,${.5*pu+.3})`; ctx.lineWidth=2;
+  ctx.strokeRect(bx,by,bw,bh);
+  ctx.fillStyle=`rgba(255,32,112,${.06+.04*pu})`;
+  ctx.fillRect(bx,by,bw,bh); ctx.shadowBlur=0;
+  ctx.font='700 14px Orbitron,monospace';
+  ctx.fillStyle='#ff2070'; ctx.shadowColor='#ff2070'; ctx.shadowBlur=12;
+  ctx.fillText('PLAY AGAIN',GW/2,by+bh/2+5.5); ctx.shadowBlur=0;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════════════════════
+(function loop() {
+  update(); draw();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

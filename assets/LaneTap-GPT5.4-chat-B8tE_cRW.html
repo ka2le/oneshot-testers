@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>4-Lane Pattern Tap</title>
+  <style>
+    :root {
+      --bg-1: #0a0b16;
+      --bg-2: #13182b;
+      --panel: rgba(18, 24, 42, 0.78);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --text: #edf2ff;
+      --muted: #94a3c4;
+      --danger: #ff5478;
+      --success: #64f2b1;
+      --accent-1: #67a6ff;
+      --accent-2: #9d73ff;
+      --accent-3: #ff7fd6;
+      --accent-4: #ffd166;
+      --glow: rgba(103, 166, 255, 0.32);
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.38);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(103,166,255,0.20), transparent 24%),
+        radial-gradient(circle at 80% 25%, rgba(157,115,255,0.20), transparent 24%),
+        radial-gradient(circle at 50% 90%, rgba(255,127,214,0.15), transparent 30%),
+        linear-gradient(180deg, var(--bg-2), var(--bg-1));
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.05), transparent 18%),
+        repeating-linear-gradient(
+          90deg,
+          rgba(255,255,255,0.02) 0 1px,
+          transparent 1px 70px
+        );
+      mix-blend-mode: screen;
+      opacity: 0.45;
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    #game-shell {
+      position: relative;
+      width: min(100%, 520px);
+      height: min(100%, 980px);
+      min-height: 640px;
+      border-radius: 30px;
+      overflow: hidden;
+      border: 1px solid var(--panel-border);
+      background: linear-gradient(180deg, rgba(16, 20, 37, 0.92), rgba(9, 12, 25, 0.96));
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+      backdrop-filter: blur(18px);
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .hud {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .topbar {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      top: 14px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      z-index: 3;
+    }
+
+    .glass {
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(10, 14, 27, 0.58);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 24px rgba(0,0,0,0.22);
+      backdrop-filter: blur(12px);
+    }
+
+    .score-panel {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 14px;
+      border-radius: 20px;
+      min-width: 0;
+    }
+
+    .score-stack {
+      min-width: 0;
+    }
+
+    .label {
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .value {
+      font-size: clamp(22px, 3vw, 28px);
+      font-weight: 800;
+      line-height: 1;
+      margin-top: 4px;
+      text-shadow: 0 0 22px rgba(255,255,255,0.14);
+    }
+
+    .mini {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .mini .value {
+      font-size: 18px;
+      margin-top: 0;
+    }
+
+    .health-card {
+      padding: 12px 14px;
+      border-radius: 20px;
+      min-width: 136px;
+    }
+
+    .health-track {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+      margin-top: 8px;
+      position: relative;
+    }
+
+    .health-fill {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #ff5478, #ff8f70, #ffd166, #64f2b1);
+      box-shadow: 0 0 18px rgba(255, 132, 141, 0.35);
+      transform-origin: left center;
+    }
+
+    .feedback-wrap {
+      position: absolute;
+      top: 96px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      z-index: 3;
+      pointer-events: none;
+      min-width: 180px;
+    }
+
+    .judgement {
+      font-size: clamp(22px, 5vw, 34px);
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0;
+      transform: translateY(12px) scale(0.92);
+      transition: opacity 120ms ease, transform 120ms ease;
+      text-shadow: 0 0 24px currentColor;
+    }
+
+    .judgement.show {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .pattern-badge {
+      margin-top: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(7, 10, 20, 0.44);
+      border: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(8px);
+      opacity: 0.95;
+    }
+
+    .bottom-ui {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 18px;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .lane-buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      pointer-events: auto;
+    }
+
+    .lane-btn {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      min-height: 64px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
+      color: var(--text);
+      font-size: 22px;
+      font-weight: 900;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 26px rgba(0,0,0,0.24);
+      transition: transform 70ms ease, box-shadow 70ms ease, filter 70ms ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .lane-btn::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.24), transparent 44%);
+      opacity: 0.55;
+      pointer-events: none;
+    }
+
+    .lane-btn:active,
+    .lane-btn.active {
+      transform: translateY(2px) scale(0.985);
+      filter: brightness(1.16);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10), 0 0 24px rgba(103, 166, 255, 0.28);
+    }
+
+    .hint-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 18px;
+      font-size: 12px;
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+      background:
+        radial-gradient(circle at 50% 15%, rgba(103, 166, 255, 0.18), transparent 30%),
+        linear-gradient(180deg, rgba(7, 10, 20, 0.62), rgba(6, 8, 18, 0.90));
+      backdrop-filter: blur(8px);
+      transition: opacity 180ms ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .modal {
+      width: min(100%, 420px);
+      padding: 24px;
+      border-radius: 28px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: linear-gradient(180deg, rgba(18, 25, 44, 0.92), rgba(11, 15, 28, 0.96));
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.05);
+      text-align: center;
+    }
+
+    .eyebrow {
+      color: #a7c7ff;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    h1, h2 {
+      margin: 8px 0 10px;
+      line-height: 1;
+    }
+
+    h1 {
+      font-size: clamp(34px, 8vw, 52px);
+      letter-spacing: -0.04em;
+    }
+
+    h2 {
+      font-size: clamp(28px, 7vw, 40px);
+      letter-spacing: -0.04em;
+    }
+
+    .subtitle {
+      margin: 0 auto;
+      max-width: 31ch;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .features {
+      margin: 18px 0 0;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      text-align: left;
+    }
+
+    .feature {
+      padding: 12px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .feature strong {
+      display: block;
+      color: var(--text);
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .cta-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .cta {
+      appearance: none;
+      border: none;
+      border-radius: 18px;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      flex: 1;
+      color: white;
+      background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+      box-shadow: 0 18px 30px rgba(77, 110, 255, 0.28);
+      transition: transform 80ms ease, filter 80ms ease, box-shadow 80ms ease;
+    }
+
+    .cta.secondary {
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    .cta:active {
+      transform: translateY(2px) scale(0.992);
+      filter: brightness(1.06);
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .stat-box {
+      padding: 12px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .stat-box .k {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .stat-box .v {
+      font-size: 20px;
+      font-weight: 900;
+      margin-top: 5px;
+    }
+
+    .toast-miss {
+      animation: screenFlash 180ms ease;
+    }
+
+    @keyframes screenFlash {
+      0% { box-shadow: inset 0 0 0 999px rgba(255,84,120,0.00); }
+      35% { box-shadow: inset 0 0 0 999px rgba(255,84,120,0.10); }
+      100% { box-shadow: inset 0 0 0 999px rgba(255,84,120,0.00); }
+    }
+
+    @media (max-width: 560px) {
+      #app { padding: 0; }
+      #game-shell {
+        width: 100%;
+        height: 100%;
+        min-height: 100%;
+        border-radius: 0;
+      }
+      .topbar, .bottom-ui { left: 12px; right: 12px; }
+      .lane-btn { min-height: 58px; border-radius: 18px; }
+      .modal { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="game-shell">
+      <canvas id="game"></canvas>
+
+      <div class="hud">
+        <div class="topbar">
+          <div class="score-panel glass">
+            <div class="score-stack">
+              <div class="label">Score</div>
+              <div class="value" id="scoreValue">0</div>
+            </div>
+            <div class="mini">
+              <div>
+                <div class="label">Combo</div>
+                <div class="value" id="comboValue">0x</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="health-card glass">
+            <div class="label">Focus</div>
+            <div class="health-track"><div class="health-fill" id="healthFill"></div></div>
+          </div>
+        </div>
+
+        <div class="feedback-wrap">
+          <div class="judgement" id="judgementText">Perfect</div>
+          <div class="pattern-badge" id="patternBadge">Pattern · 1 2 1 2</div>
+        </div>
+
+        <div class="bottom-ui">
+          <div class="hint-bar glass">
+            <span id="speedText">Speed x1.00</span>
+            <span>Tap keys or buttons 1–4</span>
+            <span id="stageText">Stage 1</span>
+          </div>
+          <div class="lane-buttons">
+            <button class="lane-btn" data-lane="1">1</button>
+            <button class="lane-btn" data-lane="2">2</button>
+            <button class="lane-btn" data-lane="3">3</button>
+            <button class="lane-btn" data-lane="4">4</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overlay" id="startOverlay">
+        <div class="modal">
+          <div class="eyebrow">Pattern Reaction Game</div>
+          <h1>4-Lane<br />Pattern Tap</h1>
+          <p class="subtitle">Learn repeating note patterns, react at the hit line, build insane combos, and survive the speed ramp.</p>
+          <div class="features">
+            <div class="feature"><strong>Pattern mastery</strong>Sequences repeat enough to learn, then twist just when you feel safe.</div>
+            <div class="feature"><strong>Mobile friendly</strong>Play with keyboard or on-screen buttons, with punchy visual feedback.</div>
+            <div class="feature"><strong>Addictive flow</strong>Combo boosts, health pressure, clean hits, and rising intensity.</div>
+            <div class="feature"><strong>Single-file build</strong>Everything is self-contained in one HTML file.</div>
+          </div>
+          <div class="cta-row">
+            <button class="cta" id="startBtn">Start Run</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overlay hidden" id="gameOverOverlay">
+        <div class="modal">
+          <div class="eyebrow">Run Complete</div>
+          <h2 id="gameOverTitle">Game Over</h2>
+          <p class="subtitle" id="gameOverSubtitle">You lost the rhythm. Recharge and go again.</p>
+          <div class="stats-row">
+            <div class="stat-box"><div class="k">Score</div><div class="v" id="finalScore">0</div></div>
+            <div class="stat-box"><div class="k">Best</div><div class="v" id="bestScore">0</div></div>
+            <div class="stat-box"><div class="k">Max Combo</div><div class="v" id="maxCombo">0x</div></div>
+          </div>
+          <div class="cta-row">
+            <button class="cta" id="restartBtn">Play Again</button>
+            <button class="cta secondary" id="menuBtn">Menu</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const shell = document.getElementById('game-shell');
+
+      const scoreValue = document.getElementById('scoreValue');
+      const comboValue = document.getElementById('comboValue');
+      const healthFill = document.getElementById('healthFill');
+      const judgementText = document.getElementById('judgementText');
+      const patternBadge = document.getElementById('patternBadge');
+      const speedText = document.getElementById('speedText');
+      const stageText = document.getElementById('stageText');
+
+      const startOverlay = document.getElementById('startOverlay');
+      const gameOverOverlay = document.getElementById('gameOverOverlay');
+      const startBtn = document.getElementById('startBtn');
+      const restartBtn = document.getElementById('restartBtn');
+      const menuBtn = document.getElementById('menuBtn');
+      const finalScore = document.getElementById('finalScore');
+      const bestScore = document.getElementById('bestScore');
+      const maxComboEl = document.getElementById('maxCombo');
+      const gameOverTitle = document.getElementById('gameOverTitle');
+      const gameOverSubtitle = document.getElementById('gameOverSubtitle');
+      const laneButtons = [...document.querySelectorAll('.lane-btn')];
+
+      const STORAGE_KEY = 'four-lane-pattern-tap-best';
+      const DPR_MAX = 2;
+      const LANE_COUNT = 4;
+      const HIT_WINDOW_PERFECT = 0.07;
+      const HIT_WINDOW_GOOD = 0.14;
+      const MISS_WINDOW = 0.18;
+      const BASE_TRAVEL_TIME = 2.2;
+      const HIT_ZONE_SCREEN = 0.84;
+      const SPAWN_Y = -0.12;
+
+      const laneColors = [
+        { main: '#67a6ff', soft: 'rgba(103,166,255,0.18)' },
+        { main: '#9d73ff', soft: 'rgba(157,115,255,0.18)' },
+        { main: '#ff7fd6', soft: 'rgba(255,127,214,0.18)' },
+        { main: '#ffd166', soft: 'rgba(255,209,102,0.18)' },
+      ];
+
+      const stageBlueprints = [
+        {
+          name: 'Intro Pulse',
+          repeat: 4,
+          spacing: 0.84,
+          patterns: [
+            [1,1,1,1],
+            [1,2,1,2],
+            [1,2,3,4],
+          ],
+        },
+        {
+          name: 'Twin Drift',
+          repeat: 4,
+          spacing: 0.72,
+          patterns: [
+            [1,1,2,2,1],
+            [1,3,2,4],
+            [2,2,3,1,4],
+          ],
+        },
+        {
+          name: 'Mirror Twist',
+          repeat: 5,
+          spacing: 0.62,
+          patterns: [
+            [1,2,1,3,1,4],
+            [4,3,2,1,2,3,4],
+            [2,4,2,3,1,3],
+          ],
+        },
+        {
+          name: 'Focus Rush',
+          repeat: 5,
+          spacing: 0.54,
+          patterns: [
+            [1,4,2,4,1,3,2,3],
+            [2,1,3,2,4,3,1],
+            [4,2,4,1,3,1,2,3],
+          ],
+        },
+        {
+          name: 'Neon Storm',
+          repeat: 6,
+          spacing: 0.48,
+          patterns: [
+            [1,2,4,2,1,3,4,3],
+            [4,3,1,2,3,4,2,1],
+            [1,3,2,4,3,1,4,2,1],
+          ],
+        },
+      ];
+
+      const state = {
+        running: false,
+        ended: false,
+        startedAt: 0,
+        lastFrame: 0,
+        time: 0,
+        score: 0,
+        combo: 0,
+        maxCombo: 0,
+        health: 100,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        notes: [],
+        particles: [],
+        flashes: Array.from({ length: LANE_COUNT }, () => 0),
+        judgements: [],
+        schedule: [],
+        spawnIndex: 0,
+        travelTime: BASE_TRAVEL_TIME,
+        stageIndex: 0,
+        currentPatternText: '1 2 1 2',
+        shake: 0,
+      };
+
+      function resize() {
+        const rect = shell.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, DPR_MAX);
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function buildSchedule() {
+        const schedule = [];
+        let stageStart = 1.2;
+
+        stageBlueprints.forEach((stage, stageIndex) => {
+          for (let p = 0; p < stage.patterns.length; p++) {
+            const base = stage.patterns[p];
+            const variations = [base];
+            if (stageIndex >= 2) variations.push(mutatePattern(base, stageIndex));
+
+            variations.forEach((pattern, vIndex) => {
+              const loops = stage.repeat + vIndex;
+              for (let loop = 0; loop < loops; loop++) {
+                const densityFactor = Math.max(0.82, 1 - (stageIndex * 0.035) - (loop * 0.01));
+                const spacing = stage.spacing * densityFactor;
+                for (let i = 0; i < pattern.length; i++) {
+                  const lane = pattern[i];
+                  schedule.push({
+                    time: stageStart,
+                    lane,
+                    stage: stageIndex,
+                    patternName: stage.name,
+                    patternText: pattern.join(' '),
+                  });
+                  stageStart += spacing;
+                }
+                stageStart += Math.max(0.14, spacing * 0.45);
+              }
+              stageStart += 0.35;
+            });
+          }
+          stageStart += 0.55;
+        });
+
+        return schedule;
+      }
+
+      function mutatePattern(pattern, seed) {
+        const copy = pattern.slice();
+        if (copy.length < 4) return copy;
+        const pivot = (seed * 2 + copy.length) % copy.length;
+        copy[pivot] = ((copy[pivot] + seed) % 4) + 1;
+        if (copy.length > 5) {
+          const other = (pivot + 2) % copy.length;
+          copy[other] = ((copy[other] + seed + 1) % 4) + 1;
+        }
+        return copy;
+      }
+
+      function resetGame() {
+        state.running = false;
+        state.ended = false;
+        state.startedAt = 0;
+        state.lastFrame = 0;
+        state.time = 0;
+        state.score = 0;
+        state.combo = 0;
+        state.maxCombo = 0;
+        state.health = 100;
+        state.notes = [];
+        state.particles = [];
+        state.flashes = Array.from({ length: LANE_COUNT }, () => 0);
+        state.judgements = [];
+        state.schedule = buildSchedule();
+        state.spawnIndex = 0;
+        state.travelTime = BASE_TRAVEL_TIME;
+        state.stageIndex = 0;
+        state.currentPatternText = state.schedule[0]?.patternText || '1 2 1 2';
+        state.shake = 0;
+        updateHUD();
+      }
+
+      function startGame() {
+        resetGame();
+        state.running = true;
+        state.startedAt = performance.now();
+        state.lastFrame = state.startedAt;
+        startOverlay.classList.add('hidden');
+        gameOverOverlay.classList.add('hidden');
+        requestAnimationFrame(loop);
+      }
+
+      function endGame(completed = false) {
+        state.running = false;
+        state.ended = true;
+        finalScore.textContent = Math.floor(state.score);
+        state.best = Math.max(state.best, Math.floor(state.score));
+        localStorage.setItem(STORAGE_KEY, String(state.best));
+        bestScore.textContent = state.best;
+        maxComboEl.textContent = state.maxCombo + 'x';
+        gameOverTitle.textContent = completed ? 'Pattern Mastered' : 'Game Over';
+        gameOverSubtitle.textContent = completed
+          ? 'You cleared every stage and owned the pattern flow.'
+          : 'Your focus broke before the pattern did. Run it back.';
+        gameOverOverlay.classList.remove('hidden');
+      }
+
+      function updateHUD() {
+        scoreValue.textContent = Math.floor(state.score);
+        comboValue.textContent = state.combo + 'x';
+        healthFill.style.transform = `scaleX(${Math.max(0, state.health) / 100})`;
+        speedText.textContent = `Speed x${(BASE_TRAVEL_TIME / state.travelTime).toFixed(2)}`;
+        stageText.textContent = `Stage ${state.stageIndex + 1}`;
+        patternBadge.textContent = `Pattern · ${state.currentPatternText}`;
+      }
+
+      function showJudgement(text, color) {
+        judgementText.textContent = text;
+        judgementText.style.color = color;
+        judgementText.classList.add('show');
+        clearTimeout(showJudgement.tid);
+        showJudgement.tid = setTimeout(() => judgementText.classList.remove('show'), 180);
+      }
+
+      function flashLane(lane, strength = 1) {
+        state.flashes[lane - 1] = Math.max(state.flashes[lane - 1], 0.25 * strength + 0.12);
+        const btn = laneButtons[lane - 1];
+        btn.classList.add('active');
+        clearTimeout(btn._tid);
+        btn._tid = setTimeout(() => btn.classList.remove('active'), 80);
+      }
+
+      function makeParticles(x, y, color, amount = 10) {
+        for (let i = 0; i < amount; i++) {
+          const angle = (Math.PI * 2 * i) / amount + Math.random() * 0.4;
+          const speed = 60 + Math.random() * 140;
+          state.particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 20,
+            life: 0.55 + Math.random() * 0.25,
+            t: 0,
+            size: 2 + Math.random() * 5,
+            color,
+          });
+        }
+      }
+
+      function penalize(lane, amount = 12, text = 'Miss') {
+        state.health = Math.max(0, state.health - amount);
+        state.combo = 0;
+        state.shake = Math.min(20, state.shake + 6);
+        shell.classList.remove('toast-miss');
+        void shell.offsetWidth;
+        shell.classList.add('toast-miss');
+        showJudgement(text, '#ff6d8c');
+        if (lane) flashLane(lane, 0.8);
+        updateHUD();
+        if (state.health <= 0) endGame(false);
+      }
+
+      function judgeTiming(diff) {
+        if (diff <= HIT_WINDOW_PERFECT) return 'perfect';
+        if (diff <= HIT_WINDOW_GOOD) return 'good';
+        return null;
+      }
+
+      function handleLaneInput(lane) {
+        if (!state.running || state.ended) return;
+        flashLane(lane, 1.2);
+
+        const candidates = state.notes
+          .filter(note => note.lane === lane && !note.hit && !note.missed)
+          .sort((a, b) => Math.abs(a.hitTime - state.time) - Math.abs(b.hitTime - state.time));
+
+        const note = candidates[0];
+        if (!note) {
+          penalize(lane, 7, 'Empty');
+          return;
+        }
+
+        const diff = Math.abs(note.hitTime - state.time);
+        const result = judgeTiming(diff);
+
+        if (!result) {
+          penalize(lane, 8, state.time < note.hitTime ? 'Early' : 'Late');
+          return;
+        }
+
+        note.hit = true;
+        state.combo += 1;
+        state.maxCombo = Math.max(state.maxCombo, state.combo);
+
+        const comboBonus = 1 + Math.min(2.5, state.combo * 0.03);
+        if (result === 'perfect') {
+          state.score += 120 * comboBonus;
+          state.health = Math.min(100, state.health + 1.2);
+          showJudgement('Perfect', '#64f2b1');
+        } else {
+          state.score += 75 * comboBonus;
+          state.health = Math.min(100, state.health + 0.6);
+          showJudgement('Good', '#8cc8ff');
+        }
+
+        const dims = getDims();
+        const laneX = dims.laneXs[lane - 1] + dims.laneWidth / 2;
+        const hitY = dims.hitY;
+        makeParticles(laneX, hitY, laneColors[lane - 1].main, result === 'perfect' ? 14 : 9);
+        updateHUD();
+      }
+
+      function getDims() {
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        const sidePad = Math.max(18, w * 0.045);
+        const laneGap = Math.max(8, w * 0.018);
+        const fieldTop = 96;
+        const fieldBottom = h - 138;
+        const laneWidth = (w - sidePad * 2 - laneGap * (LANE_COUNT - 1)) / LANE_COUNT;
+        const laneXs = Array.from({ length: LANE_COUNT }, (_, i) => sidePad + i * (laneWidth + laneGap));
+        const hitY = h * HIT_ZONE_SCREEN;
+        return { w, h, sidePad, laneGap, fieldTop, fieldBottom, laneWidth, laneXs, hitY };
+      }
+
+      function spawnScheduledNotes() {
+        while (state.spawnIndex < state.schedule.length) {
+          const item = state.schedule[state.spawnIndex];
+          if (item.time - state.travelTime > state.time) break;
+
+          state.notes.push({
+            lane: item.lane,
+            stage: item.stage,
+            spawnTime: item.time - state.travelTime,
+            hitTime: item.time,
+            hit: false,
+            missed: false,
+            patternText: item.patternText,
+            patternName: item.patternName,
+          });
+
+          if (item.stage !== state.stageIndex) {
+            state.stageIndex = item.stage;
+          }
+          state.currentPatternText = item.patternText;
+          state.spawnIndex += 1;
+        }
+      }
+
+      function update(dt) {
+        state.time = (performance.now() - state.startedAt) / 1000;
+        state.travelTime = Math.max(0.88, BASE_TRAVEL_TIME - state.time * 0.02);
+
+        spawnScheduledNotes();
+
+        for (const note of state.notes) {
+          if (!note.hit && !note.missed && state.time - note.hitTime > MISS_WINDOW) {
+            note.missed = true;
+            penalize(note.lane, 12, 'Miss');
+          }
+        }
+
+        state.notes = state.notes.filter(note => state.time - note.hitTime < 0.55 && !note.hit || (note.hit && state.time - note.hitTime < 0.18));
+
+        state.flashes = state.flashes.map(v => Math.max(0, v - dt * 2.8));
+        state.shake = Math.max(0, state.shake - dt * 30);
+
+        for (const p of state.particles) {
+          p.t += dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vy += 340 * dt;
+        }
+        state.particles = state.particles.filter(p => p.t < p.life);
+
+        updateHUD();
+
+        if (state.spawnIndex >= state.schedule.length && state.notes.length === 0 && !state.ended) {
+          endGame(true);
+        }
+      }
+
+      function roundedRect(x, y, w, h, r) {
+        const rr = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr);
+        ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.closePath();
+      }
+
+      function drawBackground(dims) {
+        const g = ctx.createLinearGradient(0, 0, 0, dims.h);
+        g.addColorStop(0, '#13192d');
+        g.addColorStop(1, '#090c18');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, dims.w, dims.h);
+
+        for (let i = 0; i < LANE_COUNT; i++) {
+          const x = dims.laneXs[i];
+          const flash = state.flashes[i];
+          const laneGradient = ctx.createLinearGradient(0, dims.fieldTop, 0, dims.fieldBottom);
+          laneGradient.addColorStop(0, `rgba(255,255,255,${0.03 + flash * 0.12})`);
+          laneGradient.addColorStop(1, laneColors[i].soft.replace('0.18', String(0.08 + flash * 0.18)));
+          roundedRect(x, dims.fieldTop, dims.laneWidth, dims.fieldBottom - dims.fieldTop, 24);
+          ctx.fillStyle = laneGradient;
+          ctx.fill();
+
+          ctx.lineWidth = 1.4;
+          ctx.strokeStyle = `rgba(255,255,255,${0.08 + flash * 0.22})`;
+          ctx.stroke();
+
+          const laneTopGlow = ctx.createLinearGradient(0, dims.fieldTop, 0, dims.fieldTop + 90);
+          laneTopGlow.addColorStop(0, laneColors[i].soft);
+          laneTopGlow.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.fillStyle = laneTopGlow;
+          roundedRect(x + 1, dims.fieldTop + 1, dims.laneWidth - 2, 90, 22);
+          ctx.fill();
+        }
+
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        for (let y = dims.fieldTop + 30; y < dims.fieldBottom; y += 56) {
+          ctx.fillRect(dims.sidePad, y, dims.w - dims.sidePad * 2, 1);
+        }
+        ctx.restore();
+      }
+
+      function drawHitZone(dims) {
+        const zoneH = 26;
+        const y = dims.hitY - zoneH / 2;
+        const zoneGlow = ctx.createLinearGradient(0, y, 0, y + zoneH);
+        zoneGlow.addColorStop(0, 'rgba(255,255,255,0.02)');
+        zoneGlow.addColorStop(0.5, 'rgba(103,166,255,0.22)');
+        zoneGlow.addColorStop(1, 'rgba(255,255,255,0.02)');
+        ctx.fillStyle = zoneGlow;
+        roundedRect(dims.sidePad - 6, y, dims.w - (dims.sidePad - 6) * 2, zoneH, 18);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(182, 221, 255, 0.85)';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(dims.sidePad - 6, dims.hitY);
+        ctx.lineTo(dims.w - dims.sidePad + 6, dims.hitY);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.font = '700 12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('HIT LINE', dims.w / 2, dims.hitY - 12);
+      }
+
+      function drawNotes(dims) {
+        for (const note of state.notes) {
+          const progress = (state.time - note.spawnTime) / (note.hitTime - note.spawnTime);
+          const eased = Math.max(0, Math.min(1.18, progress));
+          const laneIndex = note.lane - 1;
+          const x = dims.laneXs[laneIndex] + 8;
+          const y = dims.fieldTop + (dims.hitY - dims.fieldTop) * eased;
+          const w = dims.laneWidth - 16;
+          const h = Math.max(42, dims.laneWidth * 0.68);
+          const color = laneColors[laneIndex].main;
+
+          const near = 1 - Math.min(1, Math.abs(y - dims.hitY) / 220);
+          const scale = note.hit ? 0.84 : 1 + near * 0.06;
+          const alpha = note.hit ? Math.max(0, 1 - (state.time - note.hitTime) * 8) : 1;
+
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.translate(x + w / 2, y);
+          ctx.scale(scale, scale);
+
+          const noteGradient = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+          noteGradient.addColorStop(0, 'rgba(255,255,255,0.95)');
+          noteGradient.addColorStop(0.18, color);
+          noteGradient.addColorStop(1, 'rgba(8,12,26,0.98)');
+
+          ctx.shadowBlur = 30;
+          ctx.shadowColor = color;
+          roundedRect(-w / 2, -h / 2, w, h, 18);
+          ctx.fillStyle = noteGradient;
+          ctx.fill();
+
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = 'rgba(255,255,255,0.42)';
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `900 ${Math.max(24, w * 0.28)}px Inter, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(note.lane), 0, 1);
+
+          ctx.restore();
+        }
+      }
+
+      function drawLaneLabels(dims) {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (let i = 0; i < LANE_COUNT; i++) {
+          const x = dims.laneXs[i] + dims.laneWidth / 2;
+          const y = dims.fieldBottom - 38;
+          const flash = state.flashes[i];
+          ctx.save();
+          ctx.shadowBlur = 22;
+          ctx.shadowColor = laneColors[i].main;
+          ctx.fillStyle = `rgba(255,255,255,${0.18 + flash * 0.45})`;
+          roundedRect(x - 22, y - 20, 44, 40, 14);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = laneColors[i].main;
+          ctx.font = '900 20px Inter, sans-serif';
+          ctx.fillText(String(i + 1), x, y + 1);
+          ctx.restore();
+        }
+      }
+
+      function drawParticles() {
+        for (const p of state.particles) {
+          const life = 1 - p.t / p.life;
+          ctx.save();
+          ctx.globalAlpha = life;
+          ctx.fillStyle = p.color;
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * life, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      function drawStageBanner(dims) {
+        const stage = stageBlueprints[state.stageIndex] || stageBlueprints[stageBlueprints.length - 1];
+        const text = stage ? stage.name : 'Final Run';
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        roundedRect(dims.w / 2 - 82, 72, 164, 28, 14);
+        ctx.fill();
+        ctx.fillStyle = '#e7eeff';
+        ctx.textAlign = 'center';
+        ctx.font = '800 12px Inter, sans-serif';
+        ctx.fillText(text, dims.w / 2, 90);
+        ctx.restore();
+      }
+
+      function render() {
+        const dims = getDims();
+        ctx.clearRect(0, 0, dims.w, dims.h);
+
+        const sx = state.shake > 0 ? (Math.random() - 0.5) * state.shake : 0;
+        const sy = state.shake > 0 ? (Math.random() - 0.5) * state.shake * 0.7 : 0;
+        ctx.save();
+        ctx.translate(sx, sy);
+        drawBackground(dims);
+        drawHitZone(dims);
+        drawNotes(dims);
+        drawLaneLabels(dims);
+        drawParticles();
+        drawStageBanner(dims);
+        ctx.restore();
+      }
+
+      function loop(now) {
+        if (!state.running) {
+          render();
+          return;
+        }
+        const dt = Math.min(0.032, (now - state.lastFrame) / 1000 || 0.016);
+        state.lastFrame = now;
+        update(dt);
+        render();
+        if (state.running) requestAnimationFrame(loop);
+      }
+
+      function pressFromEvent(lane) {
+        const value = Number(lane);
+        if (value >= 1 && value <= 4) handleLaneInput(value);
+      }
+
+      window.addEventListener('resize', resize);
+      resize();
+      resetGame();
+      render();
+      bestScore.textContent = state.best;
+
+      document.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        if (['1','2','3','4'].includes(e.key)) {
+          e.preventDefault();
+          pressFromEvent(e.key);
+        }
+        if (e.key.toLowerCase() === 'r' && state.ended) startGame();
+        if (e.key === 'Enter' && !state.running && startOverlay && !startOverlay.classList.contains('hidden')) startGame();
+      }, { passive: false });
+
+      laneButtons.forEach(btn => {
+        const act = (e) => {
+          e.preventDefault();
+          pressFromEvent(btn.dataset.lane);
+        };
+        btn.addEventListener('pointerdown', act, { passive: false });
+      });
+
+      startBtn.addEventListener('click', startGame);
+      restartBtn.addEventListener('click', startGame);
+      menuBtn.addEventListener('click', () => {
+        gameOverOverlay.classList.add('hidden');
+        startOverlay.classList.remove('hidden');
+        resetGame();
+        render();
+      });
+    })();
+  </script>
+</body>
+</html>
