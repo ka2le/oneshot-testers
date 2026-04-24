@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>4-Lane Pattern Tap</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 100%; height: 100%;
+  background: #0a0a1a;
+  overflow: hidden;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#gameContainer {
+  position: relative;
+  width: 100%; height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+canvas {
+  display: block;
+  background: #0d0d24;
+}
+#uiOverlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+#topBar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: linear-gradient(to bottom, rgba(10,10,30,0.9), transparent);
+  pointer-events: none;
+}
+#scoreDisplay {
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(100,200,255,0.5);
+}
+#comboDisplay {
+  color: #ffcc00;
+  font-size: 18px;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(255,200,0,0.5);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+#comboDisplay.active { opacity: 1; }
+#healthBar {
+  display: flex;
+  gap: 4px;
+}
+.heart {
+  width: 18px; height: 18px;
+  background: #ff4466;
+  clip-path: polygon(50% 12%, 100% 35%, 85% 100%, 15% 100%, 0% 35%);
+  transition: all 0.3s;
+  box-shadow: 0 0 6px rgba(255,68,102,0.4);
+}
+.heart.lost {
+  background: #333;
+  box-shadow: none;
+  opacity: 0.4;
+}
+#levelDisplay {
+  color: #aaa;
+  font-size: 14px;
+  font-weight: 500;
+}
+#feedbackText {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 32px;
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 0 20px currentColor;
+  transition: none;
+}
+#patternHint {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255,255,255,0.3);
+  font-size: 13px;
+  letter-spacing: 6px;
+  pointer-events: none;
+  text-align: center;
+}
+#startScreen, #gameOverScreen {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(10,10,30,0.95);
+  z-index: 100;
+  pointer-events: all;
+}
+#startScreen h1 {
+  font-size: 48px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #00d4ff, #ff66aa, #ffcc00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 10px;
+}
+#startScreen .subtitle {
+  color: #888;
+  font-size: 16px;
+  margin-bottom: 40px;
+}
+.btn {
+  padding: 16px 48px;
+  font-size: 20px;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(102,126,234,0.4);
+  transition: transform 0.15s, box-shadow 0.15s;
+  pointer-events: all;
+}
+.btn:hover { transform: scale(1.05); box-shadow: 0 6px 30px rgba(102,126,234,0.6); }
+.btn:active { transform: scale(0.97); }
+.instructions {
+  margin-top: 30px;
+  color: #666;
+  font-size: 13px;
+  text-align: center;
+  line-height: 2;
+}
+.instructions kbd {
+  display: inline-block;
+  background: #222;
+  color: #ddd;
+  padding: 2px 10px;
+  border-radius: 5px;
+  font-family: monospace;
+  font-size: 15px;
+  border: 1px solid #444;
+  margin: 0 2px;
+}
+#gameOverScreen h2 {
+  font-size: 40px;
+  font-weight: 800;
+  color: #ff4466;
+  margin-bottom: 10px;
+}
+#finalScore {
+  font-size: 24px;
+  color: #fff;
+  margin-bottom: 5px;
+}
+#finalStats {
+  color: #888;
+  font-size: 14px;
+  margin-bottom: 30px;
+}
+#mobileKeys {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  display: none;
+  height: 80px;
+  z-index: 50;
+  pointer-events: all;
+}
+.mobile-key {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 28px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.7);
+  border-top: 2px solid rgba(255,255,255,0.08);
+  transition: background 0.08s;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-key:active {
+  background: rgba(255,255,255,0.12);
+}
+.mobile-key.lane-1 { border-bottom: 3px solid #44ff88; color: #44ff88; }
+.mobile-key.lane-2 { border-bottom: 3px solid #44aaff; color: #44aaff; }
+.mobile-key.lane-3 { border-bottom: 3px solid #ffaa44; color: #ffaa44; }
+.mobile-key.lane-4 { border-bottom: 3px solid #ff66aa; color: #ff66aa; }
+
+@media (pointer: coarse) {
+  #mobileKeys { display: flex; }
+}
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="gameCanvas"></canvas>
+  <div id="uiOverlay">
+    <div id="topBar">
+      <div>
+        <div id="scoreDisplay">Score: 0</div>
+        <div id="levelDisplay">Pattern 1 / Speed 1</div>
+      </div>
+      <div id="comboDisplay">🔥 Combo x0</div>
+      <div id="healthBar"></div>
+    </div>
+    <div id="feedbackText"></div>
+    <div id="patternHint"></div>
+  </div>
+  <div id="mobileKeys">
+    <div class="mobile-key lane-1" data-key="1">1</div>
+    <div class="mobile-key lane-2" data-key="2">2</div>
+    <div class="mobile-key lane-3" data-key="3">3</div>
+    <div class="mobile-key lane-4" data-key="4">4</div>
+  </div>
+  <div id="startScreen">
+    <h1>4-LANE PATTERN</h1>
+    <div class="subtitle">Tap the rhythm. Master the pattern.</div>
+    <button class="btn" id="startBtn">START</button>
+    <div class="instructions">
+      Press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> when notes hit the line<br>
+      Use your phone? Tap the colored buttons below
+    </div>
+  </div>
+  <div id="gameOverScreen" style="display:none">
+    <h2>GAME OVER</h2>
+    <div id="finalScore"></div>
+    <div id="finalStats"></div>
+    <button class="btn" id="restartBtn">TRY AGAIN</button>
+  </div>
+</div>
+
+<script>
+// ============ CONFIGURATION ============
+const CONFIG = {
+  LANE_COUNT: 4,
+  HEALTH_MAX: 6,
+  PERFECT_WINDOW: 35,
+  GOOD_WINDOW: 70,
+  MISS_WINDOW: 120,
+  BASE_SPEED: 180,
+  SPEED_INCREMENT: 20,
+  SPAWN_INTERVAL_BASE: 700,
+  SPAWN_INTERVAL_MIN: 250,
+  NOTE_RADIUS: 28,
+  HIT_Y_OFFSET: 0.82,
+  COMBO_MULTIPLIER_START: 10,
+  COMBO_MULTIPLIER_PER: 2,
+  MAX_COMBO_MULT: 8,
+  PARTICLE_COUNT: 12,
+  PARTICLE_COUNT_PERFECT: 20,
+};
+
+const LANE_COLORS = ['#44ff88', '#44aaff', '#ffaa44', '#ff66aa'];
+const LANE_COLORS_DIM = ['#1a5533', '#1a3355', '#55331a', '#551a33'];
+const LANE_GLOW = ['rgba(68,255,136,', 'rgba(68,170,255,', 'rgba(255,170,68,', 'rgba(255,102,170,'];
+
+// ============ PATTERNS ============
+const PATTERNS = [
+  // Level 1 - Basic
+  [1,1,1,1],
+  [2,2,2,2],
+  [3,3,3,3],
+  [4,4,4,4],
+  // Level 2 - Alternating
+  [1,2,1,2],
+  [3,4,3,4],
+  [2,3,2,3],
+  // Level 3 - Simple sequences
+  [1,2,3,4],
+  [4,3,2,1],
+  [1,1,2,2],
+  [3,3,4,4],
+  // Level 4 - Mixed
+  [1,3,2,4],
+  [2,4,1,3],
+  [1,2,2,1],
+  [3,4,4,3],
+  // Level 5 - Longer
+  [1,2,3,2,1],
+  [4,3,2,3,4],
+  [1,3,1,3,1],
+  [2,4,2,4,2],
+  // Level 6 - Complex
+  [1,2,3,4,3,2],
+  [4,3,2,1,2,3],
+  [1,1,2,3,2,1],
+  [3,3,4,1,4,3],
+  // Level 7 - Fast patterns
+  [1,3,2,4,1,3],
+  [2,4,3,1,4,2],
+  [1,4,2,3,1,4],
+  [2,3,4,1,2,3],
+  // Level 8 - Very complex
+  [1,2,1,3,1,4],
+  [4,3,4,2,4,1],
+  [1,3,2,4,3,1],
+  [2,4,3,1,3,2],
+  // Level 9 - Speed patterns
+  [1,1,2,2,3,3,4,4],
+  [4,4,3,3,2,2,1,1],
+  [1,3,2,4,4,2,3,1],
+  [2,4,1,3,1,3,2,4],
+  // Level 10 - Ultimate
+  [1,2,3,4,1,3,2,4,1,2],
+  [4,3,2,1,4,2,3,1,4,3],
+  [1,4,3,2,1,4,2,3,1,4],
+];
+
+// ============ GAME STATE ============
+let canvas, ctx;
+let W, H, laneWidth, hitY, noteSpeed, spawnInterval;
+let gameState = 'menu'; // menu, playing, over
+let score, health, combo, maxCombo, level, speedLevel;
+let notes, particles, laneFlashes, shakeTimer, shakeIntensity;
+let spawnTimer, currentPattern, patternIndex, patternRepeat, notesSpawned, patternNotes;
+let lastTime, perfectCount, goodCount, missCount;
+let canvasWidth, canvasHeight;
+let noteSpawnQueue = [];
+let gameStartTime;
+
+// ============ INITIALIZATION ============
+function init() {
+   canvas = document.getElementById('gameCanvas');
+  ctx = canvas.getContext('2d');
+  resize();
+  window.addEventListener('resize', resize);
+
+  notes = [];
+  particles = [];
+  laneFlashes = [{pressed:false,up:false,alpha:0},{pressed:false,up:false,alpha:0},{pressed:false,up:false,alpha:0},{pressed:false,up:false,alpha:0}];
+  combo = 0;
+
+  // Keyboard input
+  document.addEventListener('keydown', handleKeyDown);
+  document.addEventListener('keyup', handleKeyUp);
+
+  // Mobile touch
+  setupMobileKeys();
+
+  // Health bar
+  buildHealthBar();
+
+  // Buttons
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('restartBtn').addEventListener('click', startGame);
+
+  // Initial render
+  render();
+}
+
+function resize() {
+  const container = document.getElementById('gameContainer');
+  const rect = container.getBoundingClientRect();
+  canvas.width = rect.width * window.devicePixelRatio;
+  canvas.height = rect.height * window.devicePixelRatio;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+
+  W = rect.width;
+  H = rect.height;
+  canvasWidth = W;
+  canvasHeight = H;
+  laneWidth = W / CONFIG.LANE_COUNT;
+  hitY = H * CONFIG.HIT_Y_OFFSET;
+}
+
+function buildHealthBar() {
+  const bar = document.getElementById('healthBar');
+  bar.innerHTML = '';
+  for (let i = 0; i < CONFIG.HEALTH_MAX; i++) {
+    const heart = document.createElement('div');
+    heart.className = 'heart';
+    heart.id = 'heart-' + i;
+    bar.appendChild(heart);
+  }
+}
+
+function updateHealthBar() {
+  for (let i = 0; i < CONFIG.HEALTH_MAX; i++) {
+    const heart = document.getElementById('heart-' + i);
+    if (i < health) {
+      heart.classList.remove('lost');
+    } else {
+      heart.classList.add('lost');
+    }
+  }
+}
+
+// ============ MOBILE INPUT ============
+function setupMobileKeys() {
+  const keys = document.querySelectorAll('.mobile-key');
+  keys.forEach(key => {
+    const laneNum = parseInt(key.dataset.key);
+    key.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      handleInput(laneNum);
+    });
+    key.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      handleInput(laneNum);
+    });
+  });
+}
+
+// ============ KEYBOARD INPUT ============
+function handleKeyDown(e) {
+  if (gameState !== 'playing') return;
+  const key = e.key;
+  if (key >= '1' && key <= '4') {
+    handleInput(parseInt(key));
+  }
+}
+
+function handleKeyUp(e) {
+  const key = e.key;
+  if (key >= '1' && key <= '4') {
+    const laneIdx = parseInt(key) - 1;
+    laneFlashes[laneIdx].up = true;
+  }
+}
+
+function handleInput(laneNum) {
+  if (gameState !== 'playing') return;
+  const laneIdx = laneNum - 1;
+  laneFlashes[laneIdx].pressed = true;
+
+  // Find the closest note in this lane to the hit zone
+  let bestNote = null;
+  let bestDist = Infinity;
+
+  for (let note of notes) {
+    if (note.lane !== laneIdx) continue;
+    const dist = Math.abs(note.y - hitY);
+    if (dist < bestDist && dist <= CONFIG.MISS_WINDOW) {
+      bestDist = dist;
+      bestNote = note;
+    }
+  }
+
+  if (bestNote) {
+    // Remove the note
+    const noteIdx = notes.indexOf(bestNote);
+    notes.splice(noteIdx, 1);
+
+    if (bestDist <= CONFIG.PERFECT_WINDOW) {
+      // Perfect hit
+      score += 100 + combo * CONFIG.COMBO_MULTIPLIER_PER;
+      combo++;
+      perfectCount++;
+      showFeedback('PERFECT', LANE_COLORS[laneIdx]);
+      spawnParticles(bestNote.x, hitY, LANE_COLORS[laneIdx], CONFIG.PARTICLE_COUNT_PERFECT);
+    } else {
+      // Good hit
+      score += 50 + combo * CONFIG.COMBO_MULTIPLIER_PER;
+      combo++;
+      goodCount++;
+      showFeedback('GOOD', LANE_COLORS[laneIdx]);
+      spawnParticles(bestNote.x, hitY, LANE_COLORS[laneIdx], CONFIG.PARTICLE_COUNT);
+    }
+
+    if (combo > maxCombo) maxCombo = combo;
+    updateComboDisplay();
+  } else {
+    // Pressed but no note nearby - miss
+    // Only penalize if there's actually no note at all in the lane
+    let anyNoteInLane = notes.some(n => n.lane === laneIdx && Math.abs(n.y - hitY) < CONFIG.MISS_WINDOW);
+    if (!anyNoteInLane) {
+      // No note in range, but player pressed - this is a false press, mild penalty
+      combo = 0;
+      updateComboDisplay();
+      showFeedback('MISS', '#ff4444');
+      triggerShake(3, 0.1);
+    }
+  }
+}
+
+// ============ GAME FLOW ============
+function startGame() {
+  gameState = 'playing';
+  score = 0;
+  health = CONFIG.HEALTH_MAX;
+  combo = 0;
+  maxCombo = 0;
+  level = 0;
+  speedLevel = 0;
+  notes = [];
+  particles = [];
+  laneFlashes = [{pressed:false,up:false},{pressed:false,up:false},{pressed:false,up:false},{pressed:false,up:false}];
+  shakeTimer = 0;
+  shakeIntensity = 0;
+  spawnTimer = 0;
+  patternRepeat = 0;
+  notesSpawned = 0;
+  patternNotes = [];
+  perfectCount = 0;
+  goodCount = 0;
+  missCount = 0;
+  gameStartTime = performance.now();
+
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('gameOverScreen').style.display = 'none';
+
+  nextPattern();
+  updateHealthBar();
+  updateScoreDisplay();
+  updateComboDisplay();
+  document.getElementById('levelDisplay').textContent = 'Pattern 1 / Speed 1';
+
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function nextPattern() {
+  if (patternRepeat < 2) {
+    // Repeat the same pattern
+    patternNotes = PATTERNS[patternIndex].slice();
+  } else {
+    patternIndex = (patternIndex + 1) % PATTERNS.length;
+    patternRepeat = 0;
+    patternNotes = PATTERNS[patternIndex].slice();
+  }
+  notesSpawned = 0;
+  spawnTimer = 0;
+  noteSpawnQueue = [];
+
+  // Build spawn queue: for each number in pattern, schedule a spawn
+  for (let i = 0; i < patternNotes.length; i++) {
+    noteSpawnQueue.push({
+      lane: patternNotes[i] - 1,
+      time: i * spawnInterval
+    });
+  }
+
+  document.getElementById('patternHint').textContent =
+    patternNotes.map(n => n).join('  ');
+}
+
+function endGame() {
+  gameState = 'over';
+  document.getElementById('gameOverScreen').style.display = 'flex';
+  document.getElementById('finalScore').textContent = 'Score: ' + score;
+  document.getElementById('finalStats').textContent =
+    `Perfect: ${perfectCount} | Good: ${goodCount} | Miss: ${missCount} | Max Combo: ${maxCombo}`;
+}
+
+// ============ DIFFICULTY SCALING ============
+function updateDifficulty() {
+  // Increase speed based on score
+  const newSpeedLevel = Math.min(Math.floor(score / 800), PATTERNS.length);
+  if (newSpeedLevel > speedLevel) {
+    speedLevel = newSpeedLevel;
+    noteSpeed = CONFIG.BASE_SPEED + speedLevel * CONFIG.SPEED_INCREMENT;
+    spawnInterval = Math.max(
+      CONFIG.SPAWN_INTERVAL_MIN,
+      CONFIG.SPAWN_INTERVAL_BASE - speedLevel * 40
+    );
+  }
+  document.getElementById('levelDisplay').textContent =
+    `Pattern ${patternIndex + 1} / Speed ${speedLevel + 1}`;
+
+  // Advance pattern every N consecutive hits
+  const hitsNeeded = 8 + Math.min(level * 3, 20);
+  if (notesSpawned >= patternNotes.length * (patternRepeat + 1) + 3) {
+    patternRepeat++;
+    if (patternRepeat >= 3) {
+      patternRepeat = 0;
+      level++;
+    }
+    if (patternRepeat === 0) {
+      patternIndex = (patternIndex + 1) % PATTERNS.length;
+      patternNotes = PATTERNS[patternIndex].slice();
+    }
+    notesSpawned = 0;
+    spawnTimer = 0;
+    noteSpawnQueue = [];
+    for (let i = 0; i < patternNotes.length; i++) {
+      noteSpawnQueue.push({ lane: patternNotes[i] - 1, time: i * spawnInterval });
+    }
+    document.getElementById('patternHint').textContent =
+      patternNotes.map(n => n).join('  ');
+  }
+}
+
+// ============ SPAWNING ============
+function spawnNotes(dt) {
+  spawnTimer += dt * 1000;
+
+  while (noteSpawnQueue.length > 0 && spawnTimer >= noteSpawnQueue[0].time) {
+    const spawn = noteSpawnQueue.shift();
+    notes.push({
+      lane: spawn.lane,
+      x: spawn.lane * laneWidth + laneWidth / 2,
+      y: -CONFIG.NOTE_RADIUS,
+      radius: CONFIG.NOTE_RADIUS,
+      hit: false,
+      missed: false,
+      alpha: 1,
+    });
+    notesSpawned++;
+  }
+}
+
+// ============ UPDATE ============
+function update(dt) {
+  // Move notes
+  for (let note of notes) {
+    note.y += noteSpeed * dt;
+
+    // Check if missed (passed hit zone)
+    if (!note.hit && !note.missed && note.y > hitY + CONFIG.MISS_WINDOW) {
+      note.missed = true;
+      health--;
+      combo = 0;
+      missCount++;
+      updateComboDisplay();
+      updateHealthBar();
+      showFeedback('MISS', '#ff4444');
+      triggerShake(5, 0.15);
+
+      if (health <= 0) {
+        endGame();
+        return;
+      }
+    }
+
+    // Fade out missed notes
+    if (note.missed) {
+      note.alpha -= dt * 3;
+    }
+  }
+
+  // Remove dead notes
+  notes = notes.filter(n => n.y < H + 50 && n.alpha > 0);
+
+  // Spawn
+  spawnNotes(dt);
+
+  // Difficulty
+  updateDifficulty();
+
+  // Particles
+  for (let p of particles) {
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 300 * dt; // gravity
+    p.life -= dt;
+    p.alpha = Math.max(0, p.life / p.maxLife);
+  }
+  particles = particles.filter(p => p.life > 0);
+
+  // Lane flashes
+  for (let f of laneFlashes) {
+    if (f.pressed) {
+      f.up = true;
+      f.pressed = false;
+    }
+    if (f.up) {
+      f.alpha = (f.alpha || 1) - dt * 4;
+      if (f.alpha <= 0) {
+        f.alpha = 0;
+        f.up = false;
+      }
+    }
+  }
+
+  // Screen shake
+  if (shakeTimer > 0) {
+    shakeTimer -= dt;
+  }
+}
+
+// ============ RENDERING ============
+function render() {
+  ctx.save();
+
+  // Screen shake
+  if (shakeTimer > 0) {
+    const sx = (Math.random() - 0.5) * shakeIntensity * 10;
+    const sy = (Math.random() - 0.5) * shakeIntensity * 10;
+    ctx.translate(sx, sy);
+  }
+
+  // Background
+  ctx.fillStyle = '#0d0d24';
+  ctx.fillRect(0, 0, W, H);
+
+  // Draw lanes
+  for (let i = 0; i < CONFIG.LANE_COUNT; i++) {
+    const x = i * laneWidth;
+
+    // Lane background
+    ctx.fillStyle = LANE_COLORS_DIM[i] + '15';
+    ctx.fillRect(x, 0, laneWidth, H);
+
+    // Lane divider
+    if (i > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+
+    // Lane flash effect
+    if (laneFlashes[i].alpha > 0) {
+      const grad = ctx.createRadialGradient(
+        x + laneWidth / 2, hitY, 0,
+        x + laneWidth / 2, hitY, laneWidth
+      );
+      grad.addColorStop(0, LANE_GLOW[i] + (laneFlashes[i].alpha * 0.4) + ')');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x, 0, laneWidth, H);
+    }
+
+    // Lane number at bottom
+    ctx.fillStyle = LANE_COLORS[i] + '40';
+    ctx.font = 'bold 18px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(i + 1, x + laneWidth / 2, H - 10);
+  }
+
+  // Hit zone
+  const hitGrad = ctx.createLinearGradient(0, hitY - 20, 0, hitY + 20);
+  hitGrad.addColorStop(0, 'transparent');
+  hitGrad.addColorStop(0.5, 'rgba(255,255,255,0.15)');
+  hitGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = hitGrad;
+  ctx.fillRect(0, hitY - 20, W, 40);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, hitY);
+  ctx.lineTo(W, hitY);
+  ctx.stroke();
+
+  // Glow on hit zone
+  const glowGrad = ctx.createLinearGradient(0, hitY - 5, 0, hitY + 5);
+  glowGrad.addColorStop(0, 'transparent');
+  glowGrad.addColorStop(0.5, 'rgba(255,255,255,0.1)');
+  glowGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = glowGrad;
+  ctx.fillRect(0, hitY - 5, W, 10);
+
+  // Target zone indicators on hit line
+  for (let i = 0; i < CONFIG.LANE_COUNT; i++) {
+    const cx = i * laneWidth + laneWidth / 2;
+    ctx.strokeStyle = LANE_COLORS[i] + '30';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, hitY, CONFIG.NOTE_RADIUS, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Draw notes
+  for (let note of notes) {
+    if (note.alpha <= 0) continue;
+    ctx.globalAlpha = note.alpha;
+
+    const x = note.x;
+    const y = note.y;
+    const r = note.radius;
+
+    // Glow
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, r * 2);
+    glow.addColorStop(0, LANE_GLOW[note.lane] + '0.3)');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fillRect(x - r * 2, y - r * 2, r * 4, r * 4);
+
+    // Note body
+    ctx.fillStyle = LANE_COLORS[note.lane] + 'cc';
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner highlight
+    const innerGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 0, x, y, r);
+    innerGrad.addColorStop(0, 'rgba(255,255,255,0.3)');
+    innerGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = innerGrad;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = LANE_COLORS[note.lane];
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Number
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(note.lane + 1, x, y);
+
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw particles
+  for (let p of particles) {
+    ctx.globalAlpha = p.alpha;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.alpha, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Combo fire effect
+  if (combo >= 10) {
+    const fireAlpha = Math.min((combo - 10) / 20, 0.3);
+    const fireGrad = ctx.createLinearGradient(0, H, 0, H - 100);
+    fireGrad.addColorStop(0, `rgba(255,100,0,${fireAlpha})`);
+    fireGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = fireGrad;
+    ctx.fillRect(0, H - 100, W, 100);
+  }
+
+  ctx.restore();
+}
+
+// ============ PARTICLES ============
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 100 + Math.random() * 300;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 100,
+      size: 2 + Math.random() * 4,
+      color: color,
+      life: 0.4 + Math.random() * 0.4,
+      maxLife: 0.8,
+      alpha: 1,
+    });
+  }
+}
+
+// ============ SCREEN SHAKE ============
+function triggerShake(intensity, duration) {
+  shakeIntensity = intensity;
+  shakeTimer = duration;
+}
+
+// ============ UI UPDATES ============
+function updateScoreDisplay() {
+  document.getElementById('scoreDisplay').textContent = 'Score: ' + score.toLocaleString();
+}
+
+function updateComboDisplay() {
+  const el = document.getElementById('comboDisplay');
+  if (combo >= 3) {
+    el.textContent = '🔥 Combo x' + combo;
+    el.classList.add('active');
+  } else {
+    el.classList.remove('active');
+  }
+}
+
+function showFeedback(text, color) {
+  const el = document.getElementById('feedbackText');
+  el.textContent = text;
+  el.style.color = color;
+  el.style.opacity = 1;
+  el.style.transform = 'translate(-50%, -50%) scale(1.3)';
+
+  // Animate
+  let start = performance.now();
+  function animFeedback(now) {
+    const elapsed = (now - start) / 1000;
+    if (elapsed > 0.6) {
+      el.style.opacity = 0;
+      el.style.transform = 'translate(-50%, -50%) scale(0.8)';
+      return;
+    }
+    const t = elapsed / 0.6;
+    el.style.opacity = 1 - t;
+    el.style.transform = `translate(-50%, ${-50 - t * 30}%) scale(${1.3 - t * 0.5})`;
+    requestAnimationFrame(animFeedback);
+  }
+  requestAnimationFrame(animFeedback);
+}
+
+// ============ GAME LOOP ============
+function gameLoop(timestamp) {
+  if (gameState !== 'playing') return;
+
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime = timestamp;
+
+  update(dt);
+  updateScoreDisplay();
+  render();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ============ IDLE RENDER (menu background) ============
+function menuRender(timestamp) {
+  if (gameState !== 'menu') return;
+
+  const dt = Math.min((timestamp - (lastTime || timestamp)) / 1000, 0.05);
+  lastTime = timestamp;
+
+  // Animate some decorative notes falling
+  ctx.save();
+  ctx.fillStyle = '#0d0d24';
+  ctx.fillRect(0, 0, W, H);
+
+  for (let i = 0; i < CONFIG.LANE_COUNT; i++) {
+    const x = i * laneWidth + laneWidth / 2;
+    ctx.strokeStyle = LANE_COLORS_DIM[i] + '30';
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+
+    // Slow falling decorative numbers
+    const t = timestamp / 3000;
+    const y = ((t * (i + 1) * 80) % (H + 60)) - 30;
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = LANE_COLORS[i];
+    ctx.beginPath();
+    ctx.arc(x, y, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+  requestAnimationFrame(menuRender);
+}
+
+// ============ START ============
+window.addEventListener('load', () => {
+  init();
+  lastTime = performance.now();
+  requestAnimationFrame(menuRender);
+});
+</script>
+</body>
+</html>

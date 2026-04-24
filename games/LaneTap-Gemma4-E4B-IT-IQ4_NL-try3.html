@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4-Lane Pattern Tap</title>
+    <style>
+        body {
+            background-color: #121212;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Arial Black', sans-serif;
+            color: white;
+            user-select: none;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+            border-radius: 15px;
+            background-color: #0d0d0d;
+            border: 4px solid #333;
+        }
+        canvas {
+            display: block;
+        }
+        #ui-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.2em;
+            padding: 0 10px;
+            z-index: 10;
+        }
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            color: #00ffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 20;
+            transition: opacity 0.5s;
+        }
+        .hidden {
+            display: none !important;
+        }
+        button {
+            padding: 15px 30px;
+            margin-top: 20px;
+            font-size: 1.5em;
+            background-color: #00ffff;
+            color: #121212;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            box-shadow: 0 0 15px #00ffff;
+        }
+        button:hover {
+            background-color: #33ffff;
+            transform: scale(1.05);
+        }
+        .key-guide {
+            margin-top: 30px;
+            font-size: 1.1em;
+            color: #ccc;
+        }
+        .key-guide span {
+            display: inline-block;
+            padding: 5px 10px;
+            margin: 0 10px;
+            background: #222;
+            border: 2px solid #00ffff;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- UI Overlay -->
+        <div id="ui-overlay">
+            <div>Score: <span id="score-display">0</span></div>
+            <div>Health: <span id="health-display">♥ ♥ ♥ ♥</span></div>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="start-screen">
+            <h1>4-Lane Pattern Tap</h1>
+            <p>Master the rhythm. Recognize the patterns. Stay focused.</p>
+            <div class="key-guide">
+                Use keyboard keys <span>1</span>, <span>2</span>, <span>3</span>, and <span>4</span> to hit the notes.
+            </div>
+            <button onclick="startGame()">Start Game</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over-screen" class="hidden">
+            <h1>GAME OVER</h1>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <p>You were defeated by the pattern!</p>
+            <button onclick="resetGame()">Try Again</button>
+        </div>
+    </div>
+
+    <script>
+        // --- SETUP & CONFIGURATION ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score-display');
+        const healthDisplay = document.getElementById('health-display');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        // Adjust dimensions based on a good mobile/desktop ratio
+        const GAME_WIDTH = 800;
+        const GAME_HEIGHT = 600;
+        canvas.width = GAME_WIDTH;
+        canvas.height = GAME_HEIGHT;
+
+        const HIT_LINE_Y = GAME_HEIGHT - 80;
+        const LANE_COUNT = 4;
+        const LANE_WIDTH = GAME_WIDTH / LANE_COUNT;
+        const NOTE_SPEED_BASE = 3; // Pixels per frame base speed
+        const PERFECT_WINDOW = 15; // Timing tolerance for 'Perfect'
+        const GOOD_WINDOW = 40; // Timing tolerance for 'Good'
+
+        // --- GAME STATE ---
+        let gameState = 'initial'; // initial, playing, paused, gameover
+        let score = 0;
+        let health = 4;
+        let notes = [];
+        let lastSpawnTime = 0;
+        let animationFrameId = null;
+        
+        // Difficulty & Progression
+        let baseSpeed = NOTE_SPEED_BASE;
+        let currentPatternIndex = 0;
+        let patternRepetitions = 0;
+        let currentPatternSequence = [];
+
+        // Pattern Library (Numbers correspond to lanes 1, 2, 3, 4)
+        const PATTERNS = [
+            // Beginner Patterns (Simple Repetition)
+            [1, 1, 1, 1, 1, 1, 1, 1], // 1-only
+            [2, 2, 2, 2, 2, 2, 2, 2], // 2-only
+            [1, 2, 1, 2, 1, 2, 1, 2], // Alternating 1-2
+            [1, 2, 3, 4, 1, 2, 3, 4], // Full sequence sweep
+
+            // Intermediate Patterns (Slightly longer, more complex)
+            [1, 1, 2, 2, 1, 2, 2, 1], 
+            [1, 3, 2, 4, 1, 3, 2, 4],
+            [2, 2, 3, 1, 4, 4, 3, 1],
+            [1, 2, 1, 3, 1, 4, 2, 3],
+
+            // Advanced Patterns (Longer, varied, higher density)
+            [1, 2, 1, 3, 1, 4, 2, 3, 4, 1, 2, 3, 4],
+            [4, 3, 2, 1, 2, 3, 4, 1, 3, 2, 4, 1, 2, 3, 4],
+            [1, 4, 2, 3, 1, 4, 2, 3, 1, 4, 2, 3, 1, 4, 2, 3]
+        ];
+        
+        // --- GAME LOGIC FUNCTIONS ---
+
+        /**
+         * Resets all game state variables and UI.
+         */
+        function resetGame() {
+            score = 0;
+            health = 4;
+            notes = [];
+            baseSpeed = NOTE_SPEED_BASE;
+            currentPatternIndex = 0;
+            patternRepetitions = 0;
+            currentPatternSequence = [];
+            
+            // UI reset
+            scoreDisplay.textContent = 0;
+            healthDisplay.textContent = '♥ ♥ ♥ ♥';
+            gameOverScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+            
+            gameState = 'initial';
+            cancelAnimationFrame(animationFrameId);
+        }
+
+        /**
+         * Starts the main game loop.
+         */
+        function startGame() {
+            // Initialize the first pattern
+            currentPatternSequence = PATTERNS[0].slice(); 
+            gameState = 'playing';
+            startScreen.classList.add('hidden');
+            
+            // Start the loop
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        /**
+         * Handles the core game loop using requestAnimationFrame.
+         * @param {number} timestamp - The current timestamp provided by rAF.
+         */
+        function gameLoop(timestamp) {
+            if (gameState !== 'playing') {
+                return;
+            }
+
+            // 1. Update Notes
+            updateNotes();
+
+            // 2. Check for Misses
+            checkMisses();
+
+            // 3. Handle Pattern Progression
+            handlePatternProgression(timestamp);
+
+            // 4. Drawing
+            drawGame();
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        /**
+         * Updates the vertical position of all falling notes.
+         * @param {number} speed - The current effective note speed.
+         */
+        function updateNotes() {
+            const speed = baseSpeed;
+            
+            notes.forEach(note => {
+                note.y += speed;
+            });
+
+            // Filter out notes that have moved past the hit line
+            notes = notes.filter(note => note.y < HIT_LINE_Y + 50);
+        }
+        
+        /**
+         * Checks if any notes have fallen past the hit line without being hit.
+         */
+        function checkMisses() {
+            for (let i = 0; i < notes.length; i++) {
+                const note = notes[i];
+                // If the note has passed the hit line
+                if (note.y >= HIT_LINE_Y + 50) {
+                    // A miss occurs
+                    handleMiss();
+                    // Remove the missed note
+                    notes.splice(i, 1);
+                    i--; // Adjust loop index
+                }
+            }
+        }
+
+        /**
+         * Handles the logic when the player misses a note.
+         */
+        function handleMiss() {
+            health--;
+            updateUI();
+            
+            // Visual feedback on miss (quick screen shake/flash could be added here)
+
+            if (health <= 0) {
+                endGame();
+            }
+        }
+        
+        /**
+         * Handles scoring and feedback upon a successful hit.
+         * @param {number} timingError - The difference between target time and actual time (in pixels).
+         */
+        function handleHit(timingError) {
+            let points = 10;
+            let feedback = 'Good';
+            
+            // Calculate score based on timing
+            if (Math.abs(timingError) <= PERFECT_WINDOW) {
+                points = 50;
+                feedback = 'PERFECT';
+            } else if (Math.abs(timingError) <= GOOD_WINDOW) {
+                points = 25;
+                feedback = 'GOOD';
+            } else {
+                // Should not happen if we only call this upon near-perfect timing
+                points = 0; 
+            }
+
+            score += points;
+            updateUI();
+
+            // Visual feedback (a short flash or scaling effect)
+            triggerHitFeedback(feedback);
+        }
+        
+        /**
+         * Manages the transition between patterns and increases difficulty.
+         * @param {number} timestamp - Current timestamp.
+         */
+        function handlePatternProgression(timestamp) {
+            // Check if the current pattern cycle is complete (repetition count)
+            if (notes.length >= currentPatternSequence.length * patternRepetitions) {
+                
+                // If we completed a full repetition cycle
+                if (notes.length === currentPatternSequence.length * patternRepetitions) {
+                    
+                    patternRepetitions++;
+                    score += 100 * patternRepetitions; // Bonus for mastery
+                    
+                    // Difficulty Scaling: Increase speed every 3 repetitions
+                    if (patternRepetitions % 3 === 0) {
+                        baseSpeed += 0.5;
+                        console.log("Speed increased!", baseSpeed);
+                    }
+
+                    // Check for next pattern
+                    let nextIndex = currentPatternIndex + 1;
+                    if (nextIndex >= PATTERNS.length) {
+                        // All patterns complete - Win Condition
+                        endGame(true); 
+                        return;
+                    }
+
+                    currentPatternIndex = nextIndex;
+                    currentPatternSequence = PATTERNS[nextIndex].slice();
+                    
+                    // Reset the note count for the new sequence
+                    notes = []; 
+                }
+            }
+
+            // Spawn new notes based on the sequence
+            if (timestamp - lastSpawnTime > 1000 / (1 + Math.min(patternRepetitions / 5, 4)) ) {
+                // Spawn notes based on the current pattern sequence
+                
+                // We only spawn a note if the sequence hasn't finished
+                if (currentPatternSequence.length > 0) {
+                    const nextNumber = currentPatternSequence.shift();
+                    const laneIndex = nextNumber - 1; // 0-indexed
+                    
+                    // Calculate the starting X position for the note
+                    const x = LANE_WIDTH * laneIndex + LANE_WIDTH / 2;
+                    
+                    // Add the new note
+                    notes.push({
+                        x: x,
+                        y: -40, // Start above the screen
+                        lane: laneIndex,
+                        value: nextNumber,
+                        spawnTime: timestamp
+                    });
+                    lastSpawnTime = timestamp;
+                }
+            }
+        }
+
+
+        // --- INPUT HANDLING ---
+
+        function handleInput(key) {
+            const laneIndex = parseInt(key) - 1;
+            if (isNaN(laneIndex) || laneIndex < 0 || laneIndex >= LANE_COUNT) return;
+
+            // Check if a note is currently in the hit zone of this lane
+            const targetNote = notes.find(note => 
+                note.lane === laneIndex && 
+                note.y >= HIT_LINE_Y - 20 && note.y <= HIT_LINE_Y + 20
+            );
+
+            if (targetNote) {
+                // Calculate timing error: distance from the note's current Y to the target Y
+                const timingError = targetNote.y - HIT_LINE_Y;
+                
+                // Hit the note
+                handleHit(timingError);
+
+                // Remove the hit note
+                notes = notes.filter(note => note !== targetNote);
+            }
+        }
+        
+        // Event listeners for keyboard input
+        document.addEventListener('keydown', (event) => {
+            // Only respond to 1-4 keys and if the game is running
+            if (gameState === 'playing' && ['1', '2', '3', '4'].includes(event.key)) {
+                handleInput(event.key);
+            }
+        });
+
+
+        // --- DRAWING FUNCTIONS ---
+
+        /**
+         * Draws all components of the game state.
+         */
+        function drawGame() {
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            // Draw Background (implied by canvas clearRect)
+
+            // Draw Lanes
+            drawLanes();
+            
+            // Draw Hit Zone
+            drawHitZone();
+
+            // Draw Notes
+            notes.forEach(note => {
+                drawNote(note);
+            });
+        }
+
+        /**
+         * Draws the four vertical lanes and lane numbers.
+         */
+        function drawLanes() {
+            ctx.font = 'bold 40px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#333';
+
+            for (let i = 0; i < LANE_COUNT; i++) {
+                const xCenter = (i * LANE_WIDTH) + (LANE_WIDTH / 2);
+                
+                // Lane Background (subtle)
+                ctx.fillStyle = `rgba(0, 255, 255, ${0.05 * (i + 1)})`;
+                ctx.fillRect(i * LANE_WIDTH, 0, LANE_WIDTH, GAME_HEIGHT);
+
+                // Lane Number
+                ctx.fillText(i + 1, xCenter, 50);
+            }
+        }
+
+        /**
+         * Draws the target hit line.
+         */
+        function drawHitZone() {
+            // Background glow
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+            ctx.fillRect(0, HIT_LINE_Y - 15, GAME_WIDTH, 30);
+
+            // Main line
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(0, HIT_LINE_Y - 2, GAME_WIDTH, 4);
+        }
+        
+        /**
+         * Draws a single falling note.
+         */
+        function drawNote(note) {
+            ctx.beginPath();
+            ctx.arc(note.x, note.y, 25, 0, Math.PI * 2);
+            ctx.fillStyle = '#ff00ff'; // Purple glow for note
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+
+            // Draw the number inside the note
+            ctx.fillStyle = '#121212';
+            ctx.font = 'bold 30px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(note.value, note.x, note.y);
+        }
+        
+        /**
+         * Provides visual flash feedback on successful hits.
+         * @param {string} type - 'PERFECT' or 'GOOD'.
+         */
+        function triggerHitFeedback(type) {
+            const flashColor = type === 'PERFECT' ? '#ffea00' : '#00ff00';
+            
+            // Temporary overlay flash
+            ctx.fillStyle = flashColor;
+            ctx.globalAlpha = 0.5;
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            ctx.globalAlpha = 1.0;
+
+            // A quick way to make it look like a flash is to redraw the scene
+            // and then wait a few frames, but for simplicity, we just trigger a visual change
+            setTimeout(() => {
+                // Force a redraw to reset the flash
+                requestAnimationFrame(gameLoop); 
+            }, 100);
+        }
+
+
+        // --- GAME STATE MANAGEMENT ---
+
+        function updateUI() {
+            scoreDisplay.textContent = score;
+            
+            // Update Health Display
+            let healthIcon = '♥ ';
+            for (let i = 0; i < health; i++) {
+                healthIcon += '♥ ';
+            }
+            healthDisplay.textContent = healthIcon;
+        }
+        
+        function endGame(won = false) {
+            gameState = 'gameover';
+            cancelAnimationFrame(animationFrameId);
+
+            finalScoreDisplay.textContent = score;
+
+            if (won) {
+                 gameOverScreen.querySelector('h1').textContent = "PATTERN MASTERED!";
+                 gameOverScreen.style.color = "#00ff00";
+            } else {
+                gameOverScreen.querySelector('h1').textContent = "GAME OVER";
+                gameOverScreen.style.color = "#ff00ff";
+            }
+
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        // Initialize the game state on load
+        resetGame();
+    </script>
+
+</body>
+</html>

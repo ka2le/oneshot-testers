@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>4-Lane Pattern Tap</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: #0a0a1a;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  touch-action: none;
+  user-select: none;
+}
+canvas {
+  display: block;
+  margin: 0 auto;
+}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// --- Responsive sizing ---
+let W, H, laneWidth, hitY, noteSize;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  laneWidth = Math.min(W / 4, 120);
+  hitY = H * 0.82;
+  noteSize = Math.max(36, Math.min(52, laneWidth * 0.5));
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- Colors ---
+const LANE_COLORS = ['#00e5ff', '#ff4081', '#ffd740', '#69f0ae'];
+const LANE_BG = ['rgba(0,229,255,0.06)', 'rgba(255,64,129,0.06)', 'rgba(255,215,64,0.06)', 'rgba(105,240,174,0.06)'];
+const LANE_GLOW = ['rgba(0,229,255,0.3)', 'rgba(255,64,129,0.3)', 'rgba(255,215,64,0.3)', 'rgba(105,240,174,0.3)'];
+const NUMBERS = ['1', '2', '3', '4'];
+
+// --- Game State ---
+let state = 'menu'; // menu, playing, gameover
+let score = 0;
+let combo = 0;
+let maxCombo = 0;
+let health = 5;
+const MAX_HEALTH = 5;
+let level = 1;
+let stage = 0;
+let patternIndex = 0;
+let currentPattern = [];
+let patternRepeat = 0;
+let patternRepeatsDone = 0;
+let notes = [];
+let particles = [];
+let feedbacks = [];
+let laneFlash = [0, 0, 0, 0];
+let screenShake = 0;
+let speedMultiplier = 1;
+let spawnTimer = 0;
+let gameTime = 0;
+let highScore = parseInt(localStorage.getItem('patternTapHigh') || '0');
+let perfectCount = 0;
+let goodCount = 0;
+let missCount = 0;
+let patternStageTimer = 0;
+
+// --- Patterns ---
+const PATTERNS = [
+  // Beginner
+  [1,1,1,1], [1,2,1,2], [1,2,3,4], [2,2,2,2], [3,3,3,3],
+  // Intermediate
+  [1,1,2,2,1], [1,3,2,4], [2,2,3,1,4], [1,2,1,3,1], [3,1,3,2,2],
+  // Advanced
+  [1,2,1,3,1,4], [4,3,2,1,2,3,4], [1,3,2,4,1,3], [2,4,1,3,4,2],
+  // Expert
+  [1,2,3,4,3,2,1], [4,1,3,2,4,1,2,3], [1,3,2,4,1,4,2,3],
+  // Chaos
+  [1,4,2,3,1,3,2,4], [3,1,4,2,4,2,1,3],
+];
+
+// --- Pattern Groups ---
+const PATTERN_GROUPS = [
+  { start: 0, end: 4, label: 'Beginner', repeats: 3, speed: 1.0 },
+  { start: 4, end: 8, label: 'Intermediate', repeats: 4, speed: 1.3 },
+  { start: 8, end: 12, label: 'Advanced', repeats: 5, speed: 1.6 },
+  { start: 12, end: 16, label: 'Expert', repeats: 6, speed: 2.0 },
+  { start: 16, end: PATTERNS.length, label: 'Chaos', repeats: 7, speed: 2.4 },
+];
+
+let currentGroup = 0;
+let groupPatternIdx = 0;
+
+// --- Note Spawning ---
+function getPattern() {
+  return PATTERNS[groupPatternIdx];
+}
+
+function getNextNote() {
+  let pat = getPattern();
+  let idx = patternRepeat % pat.length;
+  return pat[idx];
+}
+
+function spawnNote() {
+  let lane = getNextNote() - 1;
+  notes.push({
+    lane: lane,
+    y: -noteSize,
+    speed: (2.5 + speedMultiplier * 0.8) * (H / 700),
+    hit: false,
+    missed: false,
+    alpha: 1,
+    scale: 1,
+    glow: 0,
+  });
+  patternRepeat++;
+}
+
+function selectNewPattern() {
+  let group = PATTERN_GROUPS[currentGroup];
+  let pat = PATTERNS[group.start + groupPatternIdx];
+  currentPattern = [...pat];
+  patternRepeat = 0;
+  patternRepeatsDone = 0;
+}
+
+// --- Particles ---
+function spawnHitParticles(lane, type) {
+  let cx = getLaneCenter(lane);
+  let cy = hitY;
+  let count = type === 'perfect' ? 20 : 12;
+  let color = LANE_COLORS[lane];
+  for (let i = 0; i < count; i++) {
+    let angle = (Math.PI * 2 * i / count) + Math.random() * 0.5;
+    let speed = 2 + Math.random() * 4;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2,
+      life: 1,
+      decay: 0.015 + Math.random() * 0.02,
+      size: 2 + Math.random() * 4,
+      color: color,
+    });
+  }
+  // Ring effect
+  particles.push({
+    x: cx, y: cy,
+    vx: 0, vy: 0,
+    life: 1,
+    decay: 0.03,
+    size: 10,
+    color: color,
+    ring: true,
+  });
+}
+
+function spawnMissParticles(lane) {
+  let cx = getLaneCenter(lane);
+  let cy = hitY;
+  for (let i = 0; i < 8; i++) {
+    let angle = Math.random() * Math.PI * 2;
+    let speed = 1 + Math.random() * 2;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: 0.03,
+      size: 3 + Math.random() * 3,
+      color: '#ff1744',
+    });
+  }
+}
+
+function getLaneCenter(lane) {
+  let totalLanesW = laneWidth * 4;
+  let startX = (W - totalLanesW) / 2;
+  return startX + laneWidth * lane + laneWidth / 2;
+}
+
+function getLaneX(lane) {
+  let totalLanesW = laneWidth * 4;
+  let startX = (W - totalLanesW) / 2;
+  return startX + laneWidth * lane;
+}
+
+// --- Feedback text ---
+function addFeedback(text, color, y) {
+  feedbacks.push({
+    text, color, y: y || hitY - 40,
+    life: 1,
+    vy: -1.5,
+    scale: 1.5,
+  });
+}
+
+// --- Input ---
+function handleInput(lane) {
+  if (state !== 'playing') return;
+  laneFlash[lane] = 1;
+
+  // Find closest note in this lane near hit zone
+  let closest = null;
+  let closestDist = Infinity;
+  for (let n of notes) {
+    if (n.lane === lane && !n.hit && !n.missed) {
+      let dist = Math.abs(n.y - hitY);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = n;
+      }
+    }
+  }
+
+  let hitWindow = noteSize * 1.5;
+  let perfectWindow = noteSize * 0.5;
+
+  if (closest && closestDist < hitWindow) {
+    closest.hit = true;
+    closest.glow = 1;
+
+    if (closestDist < perfectWindow) {
+      // Perfect
+      combo++;
+      if (combo > maxCombo) maxCombo = combo;
+      let multiplier = Math.min(Math.floor(combo / 5) + 1, 8);
+      score += 100 * multiplier;
+      perfectCount++;
+      addFeedback('PERFECT!', LANE_COLORS[lane], hitY - 40);
+      spawnHitParticles(lane, 'perfect');
+      laneFlash[lane] = 1.5;
+    } else {
+      // Good
+      combo++;
+      if (combo > maxCombo) maxCombo = combo;
+      let multiplier = Math.min(Math.floor(combo / 5) + 1, 8);
+      score += 50 * multiplier;
+      goodCount++;
+      addFeedback('GOOD', LANE_COLORS[lane], hitY - 40);
+      spawnHitParticles(lane, 'good');
+    }
+  } else {
+    // Wrong press - no note nearby
+    combo = 0;
+    health--;
+    screenShake = 8;
+    missCount++;
+    addFeedback('MISS', '#ff1744', hitY - 40);
+    spawnMissParticles(lane);
+    if (health <= 0) {
+      state = 'gameover';
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('patternTapHigh', highScore.toString());
+      }
+    }
+  }
+}
+
+// Keyboard
+document.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  let key = e.key;
+  if (state === 'menu' && (key === 'Enter' || key === ' ')) {
+    startGame();
+    return;
+  }
+  if (state === 'gameover' && (key === 'Enter' || key === ' ')) {
+    state = 'menu';
+    return;
+  }
+  if (key === '1') handleInput(0);
+  else if (key === '2') handleInput(1);
+  else if (key === '3') handleInput(2);
+  else if (key === '4') handleInput(3);
+});
+
+// Touch
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (state === 'menu') { startGame(); return; }
+  if (state === 'gameover') { state = 'menu'; return; }
+  for (let touch of e.changedTouches) {
+    let x = touch.clientX;
+    let totalLanesW = laneWidth * 4;
+    let startX = (W - totalLanesW) / 2;
+    let lane = Math.floor((x - startX) / laneWidth);
+    if (lane >= 0 && lane < 4) handleInput(lane);
+  }
+}, { passive: false });
+
+// Mouse for desktop testing
+canvas.addEventListener('mousedown', (e) => {
+  if (state === 'menu') { startGame(); return; }
+  if (state === 'gameover') { state = 'menu'; return; }
+  let x = e.clientX;
+  let totalLanesW = laneWidth * 4;
+  let startX = (W - totalLanesW) / 2;
+  let lane = Math.floor((x - startX) / laneWidth);
+  if (lane >= 0 && lane < 4) handleInput(lane);
+});
+
+// --- Game Control ---
+function startGame() {
+  state = 'playing';
+  score = 0;
+  combo = 0;
+  maxCombo = 0;
+  health = MAX_HEALTH;
+  level = 1;
+  stage = 0;
+  notes = [];
+  particles = [];
+  feedbacks = [];
+  laneFlash = [0, 0, 0, 0];
+  screenShake = 0;
+  speedMultiplier = 0;
+  spawnTimer = 0;
+  gameTime = 0;
+  perfectCount = 0;
+  goodCount = 0;
+  missCount = 0;
+  currentGroup = 0;
+  groupPatternIdx = 0;
+  patternRepeat = 0;
+  patternRepeatsDone = 0;
+  patternStageTimer = 0;
+  selectNewPattern();
+}
+
+// --- Update ---
+function update(dt) {
+  if (state !== 'playing') return;
+
+  gameTime += dt;
+  patternStageTimer += dt;
+
+  // Difficulty scaling
+  let group = PATTERN_GROUPS[currentGroup];
+  speedMultiplier = group.speed - 1;
+
+  // Pattern progression
+  let pat = getPattern();
+  let neededRepeats = group.repeats;
+  if (patternRepeat >= pat.length * neededRepeats) {
+    patternRepeat = 0;
+    patternRepeatsDone++;
+    groupPatternIdx++;
+    if (groupPatternIdx >= group.end - group.start) {
+      currentGroup++;
+      groupPatternIdx = 0;
+      if (currentGroup >= PATTERN_GROUPS.length) {
+        // Loop back with higher speed
+        currentGroup = PATTERN_GROUPS.length - 1;
+        speedMultiplier += 0.3;
+      }
+    }
+    selectNewPattern();
+  }
+
+  // Spawn notes
+  let spawnInterval = Math.max(0.25, 0.6 - speedMultiplier * 0.05);
+  spawnTimer += dt;
+  if (spawnTimer >= spawnInterval) {
+    spawnTimer = 0;
+    spawnNote();
+  }
+
+  // Update notes
+  for (let n of notes) {
+    n.y += n.speed * 60 * dt;
+
+    // Miss detection
+    if (!n.hit && !n.missed && n.y > hitY + noteSize * 1.2) {
+      n.missed = true;
+      combo = 0;
+      health--;
+      screenShake = 6;
+      missCount++;
+      addFeedback('MISS', '#ff1744', hitY - 30);
+      if (health <= 0) {
+        state = 'gameover';
+        if (score > highScore) {
+          highScore = score;
+          localStorage.setItem('patternTapHigh', highScore.toString());
+        }
+      }
+    }
+
+    // Fade hit notes
+    if (n.hit) {
+      n.alpha -= dt * 3;
+      n.scale += dt * 5;
+      n.glow -= dt * 3;
+    }
+  }
+
+  // Remove dead notes
+  notes = notes.filter(n => n.y < H + noteSize * 2 && (n.alpha > 0 || (!n.hit && !n.missed)));
+
+  // Update particles
+  for (let p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.1;
+    p.life -= p.decay;
+  }
+  particles = particles.filter(p => p.life > 0);
+
+  // Update feedbacks
+  for (let f of feedbacks) {
+    f.y += f.vy;
+    f.life -= dt * 1.5;
+    f.scale = Math.max(1, f.scale - dt * 3);
+  }
+  feedbacks = feedbacks.filter(f => f.life > 0);
+
+  // Lane flash decay
+  for (let i = 0; i < 4; i++) {
+    laneFlash[i] = Math.max(0, laneFlash[i] - dt * 4);
+  }
+
+  // Screen shake decay
+  screenShake = Math.max(0, screenShake - dt * 30);
+}
+
+// --- Draw ---
+function draw() {
+  ctx.save();
+
+  // Screen shake
+  if (screenShake > 0) {
+    ctx.translate(
+      (Math.random() - 0.5) * screenShake,
+      (Math.random() - 0.5) * screenShake
+    );
+  }
+
+  // Background
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle grid background
+  ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  if (state === 'menu') {
+    drawMenu();
+    ctx.restore();
+    return;
+  }
+
+  if (state === 'gameover') {
+    drawGameArea();
+    drawGameOver();
+    ctx.restore();
+    return;
+  }
+
+  drawGameArea();
+  ctx.restore();
+}
+
+function drawGameArea() {
+  let totalLanesW = laneWidth * 4;
+  let startX = (W - totalLanesW) / 2;
+
+  // Lane backgrounds
+  for (let i = 0; i < 4; i++) {
+    let x = startX + laneWidth * i;
+
+    // Lane bg
+    ctx.fillStyle = LANE_BG[i];
+    ctx.fillRect(x, 0, laneWidth, H);
+
+    // Lane borders
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+
+    // Lane number at bottom
+    ctx.fillStyle = LANE_COLORS[i];
+    ctx.globalAlpha = 0.15;
+    ctx.font = `bold ${laneWidth * 0.5}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(i + 1, x + laneWidth / 2, H - laneWidth * 0.3);
+    ctx.globalAlpha = 1;
+
+    // Lane flash effect
+    if (laneFlash[i] > 0) {
+      ctx.fillStyle = LANE_GLOW[i];
+      ctx.globalAlpha = laneFlash[i] * 0.5;
+      ctx.fillRect(x, hitY - noteSize * 2, laneWidth, noteSize * 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Right border
+  ctx.beginPath(); ctx.moveTo(startX + totalLanesW, 0); ctx.lineTo(startX + totalLanesW, H); ctx.stroke();
+
+  // Hit zone
+  let gradient = ctx.createLinearGradient(startX, hitY - 15, startX, hitY + 15);
+  gradient.addColorStop(0, 'rgba(255,255,255,0)');
+  gradient.addColorStop(0.5, 'rgba(255,255,255,0.15)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(startX, hitY - 15, totalLanesW, 30);
+
+  // Hit line
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(startX, hitY);
+  ctx.lineTo(startX + totalLanesW, hitY);
+  ctx.stroke();
+
+  // Hit zone glow
+  ctx.shadowColor = 'rgba(255,255,255,0.3)';
+  ctx.shadowBlur = 20;
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(startX, hitY);
+  ctx.lineTo(startX + totalLanesW, hitY);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Key labels at bottom
+  for (let i = 0; i < 4; i++) {
+    let cx = getLaneCenter(i);
+    let by = H - laneWidth * 0.15;
+
+    // Key cap
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    roundRect(ctx, cx - laneWidth * 0.3, by - 20, laneWidth * 0.6, 24, 6);
+    ctx.fill();
+
+    ctx.fillStyle = LANE_COLORS[i];
+    ctx.globalAlpha = 0.6;
+    ctx.font = `bold ${laneWidth * 0.35}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(i + 1, cx, by - 8);
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw notes
+  for (let n of notes) {
+    if (n.hit) {
+      ctx.globalAlpha = n.alpha;
+    }
+    let cx = getLaneCenter(n.lane);
+    let cy = n.y;
+    let s = noteSize * n.scale;
+
+    // Note glow
+    if (n.hit || n.glow > 0) {
+      ctx.shadowColor = LANE_COLORS[n.lane];
+      ctx.shadowBlur = 20 * n.glow;
+    }
+
+    // Note background circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, s / 2, 0, Math.PI * 2);
+    ctx.fillStyle = LANE_BG[n.lane];
+    ctx.fill();
+
+    // Note border
+    ctx.strokeStyle = LANE_COLORS[n.lane];
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Inner fill
+    let fillGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, s / 2);
+    fillGrad.addColorStop(0, LANE_COLORS[n.lane].replace(')', ',0.2)').replace('rgb', 'rgba'));
+    fillGrad.addColorStop(1, 'transparent');
+    ctx.beginPath();
+    ctx.arc(cx, cy, s / 2, 0, Math.PI * 2);
+    ctx.fillStyle = fillGrad;
+    ctx.fill();
+
+    // Number
+    ctx.fillStyle = LANE_COLORS[n.lane];
+    ctx.font = `bold ${s * 0.5}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(NUMBERS[n.lane], cx, cy);
+
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw particles
+  for (let p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    if (p.ring) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * (1 - p.life) * 8, 0, Math.PI * 2);
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 2 * p.life;
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // Draw feedbacks
+  for (let f of feedbacks) {
+    ctx.globalAlpha = f.life;
+    ctx.fillStyle = f.color;
+    ctx.font = `bold ${20 * f.scale}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = f.color;
+    ctx.shadowBlur = 10;
+    ctx.fillText(f.text, W / 2, f.y);
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+
+  // HUD
+  drawHUD();
+}
+
+function drawHUD() {
+  // Score
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${Math.min(28, W * 0.04)}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`${score.toLocaleString()}`, 15, 15);
+
+  // Combo
+  if (combo >= 3) {
+    let comboSize = Math.min(36, W * 0.05);
+    ctx.fillStyle = LANE_COLORS[Math.floor(combo / 5) % 4] || '#fff';
+    ctx.font = `bold ${comboSize}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 15;
+    ctx.fillText(`${combo}x COMBO`, W / 2, 15);
+    ctx.shadowBlur = 0;
+
+    // Multiplier badge
+    let mult = Math.min(Math.floor(combo / 5) + 1, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = `bold ${comboSize * 0.5}px 'Segoe UI', sans-serif`;
+    ctx.fillText(`×${mult}`, W / 2, 15 + comboSize + 5);
+  }
+
+  // Health
+  let heartSize = 20;
+  let heartX = W - 15 - MAX_HEALTH * (heartSize + 5);
+  for (let i = 0; i < MAX_HEALTH; i++) {
+    let hx = heartX + i * (heartSize + 5);
+    let hy = 20;
+    if (i < health) {
+      ctx.fillStyle = '#ff4081';
+      ctx.font = `${heartSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('♥', hx + heartSize / 2, hy + heartSize / 2 + 2);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.font = `${heartSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('♥', hx + heartSize / 2, hy + heartSize / 2 + 2);
+    }
+  }
+
+  // Level / Stage info
+  let group = PATTERN_GROUPS[currentGroup];
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.font = `${Math.min(14, W * 0.02)}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'right';
+  ctx.fillText(group.label, W - 15, 55);
+
+  // Pattern progress
+  let pat = getPattern();
+  let progress = patternRepeat / (pat.length * group.repeats);
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(W - 15 - 100, 62, 100, 4);
+  ctx.fillStyle = LANE_COLORS[currentGroup % 4];
+  ctx.globalAlpha = 0.5;
+  ctx.fillRect(W - 15 - 100, 62, 100 * progress, 4);
+  ctx.globalAlpha = 1;
+}
+
+function drawMenu() {
+  // Dark overlay
+  ctx.fillStyle = 'rgba(10,10,26,0.85)';
+  ctx.fillRect(0, 0, W, H);
+
+  let cy = H / 2;
+
+  // Title
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${Math.min(48, W * 0.08)}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = 30;
+  ctx.fillText('4-LANE', W / 2, cy - 80);
+  ctx.fillText('PATTERN TAP', W / 2, cy - 30);
+  ctx.shadowBlur = 0;
+
+  // Subtitle
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = `${Math.min(16, W * 0.03)}px 'Segoe UI', sans-serif`;
+  ctx.fillText('Match the numbers. Hit the beat.', W / 2, cy + 20);
+
+  // Demo lanes
+  let totalLanesW = laneWidth * 4;
+  let startX = (W - totalLanesW) / 2;
+  for (let i = 0; i < 4; i++) {
+    let cx = getLaneCenter(i);
+    let demoY = cy + 90 + Math.sin(Date.now() * 0.003 + i * 1.5) * 15;
+
+    ctx.beginPath();
+    ctx.arc(cx, demoY, noteSize * 0.4, 0, Math.PI * 2);
+    ctx.strokeStyle = LANE_COLORS[i];
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = LANE_COLORS[i];
+    ctx.font = `bold ${noteSize * 0.35}px 'Segoe UI', sans-serif`;
+    ctx.fillText(i + 1, cx, demoY);
+  }
+
+  // Hit line demo
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  ctx.moveTo(startX, cy + 130);
+  ctx.lineTo(startX + totalLanesW, cy + 130);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Start prompt
+  let pulse = 0.5 + Math.sin(Date.now() * 0.005) * 0.5;
+  ctx.fillStyle = `rgba(255,255,255,${0.3 + pulse * 0.7})`;
+  ctx.font = `bold ${Math.min(20, W * 0.035)}px 'Segoe UI', sans-serif`;
+  ctx.fillText('PRESS ENTER OR TAP TO START', W / 2, cy + 180);
+
+  // Controls
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = `${Math.min(13, W * 0.022)}px 'Segoe UI', sans-serif`;
+  ctx.fillText('Keys: 1 2 3 4  |  Tap lanes on mobile', W / 2, cy + 220);
+
+  // High score
+  if (highScore > 0) {
+    ctx.fillStyle = 'rgba(255,215,64,0.6)';
+    ctx.font = `bold ${Math.min(15, W * 0.025)}px 'Segoe UI', sans-serif`;
+    ctx.fillText(`★ HIGH SCORE: ${highScore.toLocaleString()}`, W / 2, cy + 255);
+  }
+}
+
+function drawGameOver() {
+  ctx.fillStyle = 'rgba(10,10,26,0.8)';
+  ctx.fillRect(0, 0, W, H);
+
+  let cy = H / 2;
+
+  ctx.fillStyle = '#ff4081';
+  ctx.font = `bold ${Math.min(42, W * 0.07)}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = '#ff4081';
+  ctx.shadowBlur = 20;
+  ctx.fillText('GAME OVER', W / 2, cy - 80);
+  ctx.shadowBlur = 0;
+
+  // Stats
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${Math.min(32, W * 0.055)}px 'Segoe UI', sans-serif`;
+  ctx.fillText(`${score.toLocaleString()}`, W / 2, cy - 20);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = `${Math.min(16, W * 0.028)}px 'Segoe UI', sans-serif`;
+  ctx.fillText(`MAX COMBO: ${maxCombo}x  |  PERFECT: ${perfectCount}  |  GOOD: ${goodCount}  |  MISS: ${missCount}`, W / 2, cy + 25);
+
+  if (score >= highScore && score > 0) {
+    ctx.fillStyle = '#ffd740';
+    ctx.font = `bold ${Math.min(18, W * 0.03)}px 'Segoe UI', sans-serif`;
+    ctx.fillText('★ NEW HIGH SCORE! ★', W / 2, cy + 60);
+  }
+
+  let pulse = 0.5 + Math.sin(Date.now() * 0.005) * 0.5;
+  ctx.fillStyle = `rgba(255,255,255,${0.3 + pulse * 0.7})`;
+  ctx.font = `bold ${Math.min(18, W * 0.03)}px 'Segoe UI', sans-serif`;
+  ctx.fillText('PRESS ENTER OR TAP TO CONTINUE', W / 2, cy + 110);
+}
+
+// --- Utility ---
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// --- Game Loop ---
+let lastTime = 0;
+function gameLoop(timestamp) {
+  let dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime = timestamp;
+
+  update(dt);
+  draw();
+
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

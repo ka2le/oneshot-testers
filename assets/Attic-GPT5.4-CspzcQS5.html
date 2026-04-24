@@ -1,0 +1,407 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Attic Point & Click POC</title>
+<style>
+html, body { margin:0; height:100%; overflow:hidden; background:#100d12; color:#f3eadc; font-family:Georgia, serif; }
+#app { height:100%; display:grid; grid-template-rows:1fr 135px; }
+#main { position:relative; overflow:hidden; background:#09070a; }
+#scene { position:absolute; inset:0; margin:auto; width:min(100vw, calc((100vh - 135px) * 1.528)); aspect-ratio:1528/1000; background:#000; }
+#scene img { width:100%; height:100%; display:block; user-select:none; pointer-events:none; }
+.hotspot { position:absolute; border-radius:10px; cursor:pointer; }
+.editor .hotspot { background:rgba(255,215,120,.14); border:1px solid rgba(255,215,120,.5); }
+.editor .hotspot:after { content:attr(data-label); position:absolute; left:4px; top:4px; background:rgba(0,0,0,.65); color:#ffe0a0; padding:2px 6px; border-radius:999px; font:12px sans-serif; white-space:nowrap; }
+.hotspot.selected { outline:2px solid #ffe0a0; }
+.handle { display:none; position:absolute; right:-7px; bottom:-7px; width:14px; height:14px; border-radius:50%; background:#ffe0a0; cursor:nwse-resize; }
+.editor .selected .handle { display:block; }
+#message { position:absolute; left:50%; bottom:20px; transform:translateX(-50%); max-width:760px; padding:15px 20px; border-radius:18px; background:rgba(16,10,14,.85); border:1px solid rgba(255,255,255,.18); font-size:20px; text-align:center; opacity:0; transition:.2s; pointer-events:none; }
+#message.show { opacity:1; }
+#hud { background:linear-gradient(#271d22,#110c10); border-top:1px solid rgba(255,255,255,.14); display:grid; grid-template-columns:110px 1fr 110px; align-items:center; padding:12px 20px; }
+button { background:#211820; color:#f3eadc; border:1px solid rgba(255,255,255,.22); border-radius:14px; padding:10px 14px; cursor:pointer; font-family:inherit; }
+#inventory { height:105px; display:flex; justify-content:center; align-items:center; gap:14px; overflow:hidden; }
+.item { width:86px; height:86px; flex:0 0 86px; border-radius:18px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.06); display:grid; place-items:center; font-size:34px; opacity:.7; transform:scale(.9); }
+.item.active { opacity:1; transform:scale(1.12); border-color:#ffe0a0; box-shadow:0 0 20px rgba(255,224,160,.25); }
+.item.half { opacity:.35; }
+.itemName { position:absolute; bottom:8px; font:11px system-ui, sans-serif; color:#d9c7aa; }
+#editorPanel { display:none; position:absolute; right:0; top:0; bottom:135px; width:430px; background:rgba(16,12,15,.94); border-left:1px solid rgba(255,255,255,.15); padding:14px; }
+.editor #editorPanel { display:block; }
+.editor #scene { transform:translateX(-215px); }
+textarea { width:100%; height:calc(100% - 96px); background:#0d0a0c; color:#f8e9ca; border:1px solid rgba(255,255,255,.18); border-radius:12px; padding:10px; resize:none; font:12px monospace; }
+#editorButtons { display:flex; gap:8px; margin-bottom:10px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="main">
+    <div id="scene"><img id="bg"></div>
+    <div id="message"></div>
+    <div id="editorPanel">
+      <div id="editorButtons">
+        <button onclick="copyJson()">Copy JSON</button>
+        <button onclick="applyJson()">Apply JSON</button>
+        <button onclick="toggleEditor()">Close Editor</button>
+      </div>
+      <textarea id="jsonBox"></textarea>
+    </div>
+  </div>
+
+  <div id="hud">
+    <button onclick="rotateInventory(-1)">◀</button>
+    <div id="inventory"></div>
+    <button onclick="rotateInventory(1)">▶</button>
+  </div>
+</div>
+
+<script>
+let room = {
+  id: "attic1",
+  name: "The Attic",
+  background: { image: "attic1.png", width: 1528, height: 1000 },
+  inventory: [
+    { id:"interact", name:"Pointing Finger", icon:"☝️", tool:"interact" },
+    { id:"look", name:"Look", icon:"👁️", tool:"look" },
+    { id:"talk", name:"Talk", icon:"💬", tool:"talk" }
+  ],
+  worldItems: {
+    brassKey: { id:"brassKey", name:"Small Brass Key", icon:"🗝️", use:"key" },
+    secretLetter: { id:"secretLetter", name:"Secret Letter", icon:"💌", use:"letter" }
+  },
+  flags: {
+    foundKey: false,
+    wardrobeOpen: false,
+    foundLetter: false
+  },
+  hotspots: [
+    {
+      id:"top-hat",
+      label:"Top Hat",
+      x:398, y:674, w:115, h:87,
+      text:{
+        look:"A very dignified hat. It looks like it has seen better mysteries.",
+        talk:"The hat refuses to comment without a head present.",
+        interact:"You pat the hat. Somewhere, etiquette improves slightly."
+      },
+      actions:{
+        interact:{
+          requiresFlagFalse:"foundKey",
+          addItem:"brassKey",
+          setFlag:"foundKey",
+          message:"You lift the top hat and find a small brass key hiding underneath, looking almost too pleased with itself."
+        }
+      }
+    },
+    {
+      id:"mice-and-cheese",
+      label:"Mice and Cheese",
+      x:36, y:843, w:270, h:130,
+      text:{
+        look:"Tiny mice guarding a kingdom of cheese.",
+        talk:"They squeak something that sounds legally binding.",
+        interact:"The mice let you have a crumb, but only because you look trustworthy."
+      }
+    },
+    {
+      id:"wardrobe",
+      label:"Wardrobe",
+      x:626, y:298, w:218, h:325,
+      text:{
+        look:"A heavy old wardrobe. It is locked, naturally. Old wardrobes are very dramatic about boundaries.",
+        talk:"I tried to convince it, but it told me it really can't open without a key.",
+        interact:"You tug the handles. Locked. The wardrobe seems smug about this."
+      },
+      states:[
+        {
+          when:{ flag:"wardrobeOpen", is:true },
+          text:{
+            look:"The wardrobe is open. Inside is a suspiciously neat secret letter.",
+            talk:"The open wardrobe says nothing. It has already revealed too much.",
+            interact:"You check inside the wardrobe again."
+          },
+          actions:{
+            interact:{
+              requiresFlagFalse:"foundLetter",
+              addItem:"secretLetter",
+              setFlag:"foundLetter",
+              message:"Inside the wardrobe, tucked behind a winter coat with no alibi, you find a secret letter."
+            }
+          }
+        }
+      ],
+      itemActions:{
+        brassKey:{
+          requiresFlagFalse:"wardrobeOpen",
+          setFlag:"wardrobeOpen",
+          message:"The brass key fits. The wardrobe unlocks with a wooden sigh, like it has been waiting years to be dramatic."
+        },
+        secretLetter:{
+          message:"You wave the letter at the wardrobe. It refuses to comment on its own correspondence."
+        }
+      }
+    },
+    {
+      id:"kitchen-box",
+      label:"Kitchen Box",
+      x:1100, y:572, w:265, h:340,
+      text:{
+        look:"A box clearly marked kitchen. Definitely not winter coats. Suspicious.",
+        talk:"You ask the box what is inside. It says cardboard things.",
+        interact:"You rummage around and find only coats. Betrayal."
+      }
+    },
+    {
+      id:"clock",
+      label:"Grandfather Clock",
+      x:1320, y:210, w:150, h:365,
+      text:{
+        look:"The clock hands are trying to look innocent.",
+        talk:"Tick. Tock. That was probably a threat.",
+        interact:"You wind the clock. It loses interest in time immediately."
+      }
+    },
+    {
+      id:"covered-chair",
+      label:"Covered Chair",
+      x:875, y:402, w:245, h:315,
+      text:{
+        look:"Something chair-shaped under a sheet. Or possibly a very patient ghost.",
+        talk:"You say hello. The sheet maintains a professional silence.",
+        interact:"You lift a corner. Dust attacks."
+      }
+    }
+  ]
+};
+
+let editor = location.search.includes("editor=true");
+let activeIndex = 0;
+let selectedHotspot = null;
+let drag = null;
+
+document.body.classList.toggle("editor", editor);
+document.getElementById("bg").src = room.background.image;
+
+function getActiveItem() { return room.inventory[activeIndex]; }
+
+function getHotspotState(h) {
+  if (!h.states) return h;
+  for (const state of h.states) {
+    if (state.when && room.flags[state.when.flag] === state.when.is) return mergeHotspot(h, state);
+  }
+  return h;
+}
+
+function mergeHotspot(base, state) {
+  return {
+    ...base,
+    ...state,
+    text: { ...(base.text || {}), ...(state.text || {}) },
+    actions: { ...(base.actions || {}), ...(state.actions || {}) },
+    itemActions: { ...(base.itemActions || {}), ...(state.itemActions || {}) }
+  };
+}
+
+function render() {
+  const scene = document.getElementById("scene");
+  scene.querySelectorAll(".hotspot").forEach(e => e.remove());
+
+  room.hotspots.forEach(h => {
+    const el = document.createElement("div");
+    el.className = "hotspot" + (selectedHotspot === h.id ? " selected" : "");
+    el.dataset.label = h.label;
+    el.style.left = pct(h.x, room.background.width);
+    el.style.top = pct(h.y, room.background.height);
+    el.style.width = pct(h.w, room.background.width);
+    el.style.height = pct(h.h, room.background.height);
+    el.onclick = e => { e.stopPropagation(); clickHotspot(h); };
+
+    if (editor) {
+      el.onpointerdown = e => startDrag(e, h, "move");
+      const handle = document.createElement("div");
+      handle.className = "handle";
+      handle.onpointerdown = e => { e.stopPropagation(); startDrag(e, h, "resize"); };
+      el.appendChild(handle);
+    }
+
+    scene.appendChild(el);
+  });
+
+  renderInventory();
+  updateJson();
+}
+
+function renderInventory() {
+  const inv = document.getElementById("inventory");
+  inv.innerHTML = "";
+  const total = room.inventory.length;
+  const visible = Math.min(total, 6);
+
+  for (let n = 0; n < visible; n++) {
+    let offset = n - Math.floor(visible / 2);
+    if (total < 6) offset = n - activeIndex;
+
+    const i = (activeIndex + offset + total) % total;
+    if (total < 6 && (i < 0 || i >= total)) continue;
+
+    const item = room.inventory[i];
+    const el = document.createElement("div");
+    el.className = "item" + (i === activeIndex ? " active" : "") + (total >= 6 && n === visible - 1 ? " half" : "");
+    el.title = item.name;
+    el.innerHTML = "<div>" + item.icon + "</div><div class='itemName'>" + item.name + "</div>";
+    el.onclick = () => { activeIndex = i; renderInventory(); };
+    inv.appendChild(el);
+  }
+}
+
+function rotateInventory(dir) {
+  activeIndex = (activeIndex + dir + room.inventory.length) % room.inventory.length;
+  renderInventory();
+}
+
+function clickHotspot(rawHotspot) {
+  const h = getHotspotState(rawHotspot);
+
+  if (editor) {
+    selectedHotspot = h.id;
+    render();
+    return;
+  }
+
+  const active = getActiveItem();
+
+  if (active.use && h.itemActions && h.itemActions[active.id]) {
+    runAction(h.itemActions[active.id]);
+    return;
+  }
+
+  if (active.use) {
+    showMessage("That doesn't seem to work here.");
+    return;
+  }
+
+  const tool = active.tool;
+  const action = h.actions && h.actions[tool];
+
+  if (action && canRunAction(action)) {
+    runAction(action);
+    return;
+  }
+
+  const fallback = {
+    look: "That looks like " + article(h.label) + " " + h.label.toLowerCase() + ".",
+    talk: "I don't think it can talk. Not without encouragement, anyway.",
+    interact: "You fiddle with it for a moment. Nothing obvious happens."
+  };
+
+  showMessage((h.text && h.text[tool]) || fallback[tool]);
+}
+
+function canRunAction(action) {
+  if (action.requiresFlagFalse && room.flags[action.requiresFlagFalse]) return false;
+  if (action.requiresFlagTrue && !room.flags[action.requiresFlagTrue]) return false;
+  return true;
+}
+
+function runAction(action) {
+  if (!canRunAction(action)) {
+    showMessage(action.blockedMessage || "Nothing else happens.");
+    return;
+  }
+
+  if (action.addItem && room.worldItems[action.addItem] && !room.inventory.some(i => i.id === action.addItem)) {
+    room.inventory.push(room.worldItems[action.addItem]);
+    activeIndex = room.inventory.length - 1;
+  }
+
+  if (action.setFlag) room.flags[action.setFlag] = true;
+  if (action.clearFlag) room.flags[action.clearFlag] = false;
+
+  showMessage(action.message || "Done.");
+  render();
+}
+
+function showMessage(text) {
+  const msg = document.getElementById("message");
+  msg.textContent = text;
+  msg.classList.add("show");
+  clearTimeout(showMessage.timer);
+  showMessage.timer = setTimeout(() => msg.classList.remove("show"), 4200);
+}
+
+function pct(v, max) { return (v / max * 100) + "%"; }
+function article(s) { return /^[aeiou]/i.test(s) ? "an" : "a"; }
+
+function startDrag(e, h, mode) {
+  selectedHotspot = h.id;
+  const p = eventToRoom(e);
+  drag = { h, mode, startX:p.x, startY:p.y, ox:h.x, oy:h.y, ow:h.w, oh:h.h };
+  e.preventDefault();
+  render();
+}
+
+window.onpointermove = e => {
+  if (!drag) return;
+  const p = eventToRoom(e);
+  const dx = p.x - drag.startX;
+  const dy = p.y - drag.startY;
+
+  if (drag.mode === "move") {
+    drag.h.x = Math.round(clamp(drag.ox + dx, 0, room.background.width - drag.h.w));
+    drag.h.y = Math.round(clamp(drag.oy + dy, 0, room.background.height - drag.h.h));
+  } else {
+    drag.h.w = Math.round(clamp(drag.ow + dx, 20, room.background.width - drag.h.x));
+    drag.h.h = Math.round(clamp(drag.oh + dy, 20, room.background.height - drag.h.y));
+  }
+
+  render();
+};
+
+window.onpointerup = () => { drag = null; updateJson(); };
+
+function eventToRoom(e) {
+  const r = document.getElementById("scene").getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) / r.width * room.background.width,
+    y: (e.clientY - r.top) / r.height * room.background.height
+  };
+}
+
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+function updateJson() {
+  document.getElementById("jsonBox").value = JSON.stringify(room, null, 2);
+}
+
+function copyJson() {
+  navigator.clipboard.writeText(document.getElementById("jsonBox").value);
+  showMessage("Copied room JSON to clipboard.");
+}
+
+function applyJson() {
+  try {
+    room = JSON.parse(document.getElementById("jsonBox").value);
+    document.getElementById("bg").src = room.background.image;
+    selectedHotspot = null;
+    activeIndex = Math.min(activeIndex, room.inventory.length - 1);
+    render();
+    showMessage("JSON applied.");
+  } catch {
+    showMessage("That JSON has a syntax error.");
+  }
+}
+
+function toggleEditor() {
+  editor = !editor;
+  document.body.classList.toggle("editor", editor);
+  render();
+}
+
+window.onkeydown = e => {
+  if (e.key === "e") toggleEditor();
+  if (e.key === "ArrowLeft") rotateInventory(-1);
+  if (e.key === "ArrowRight") rotateInventory(1);
+};
+
+render();
+</script>
+</body>
+</html>
