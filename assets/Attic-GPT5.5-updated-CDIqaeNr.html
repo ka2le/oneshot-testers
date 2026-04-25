@@ -1,0 +1,1245 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Point & Click Engine</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#100d12;color:#f3eadc;font-family:Georgia;}
+#app{height:100%;position:relative;background:radial-gradient(circle at 50% 45%,#25191a 0%,#100d12 58%,#070508 100%);}
+#main{position:absolute;inset:0;overflow:hidden;background:transparent;}
+#scene{position:absolute;left:50%;top:50%;width:min(100vw,calc(100vh * 1.528));height:min(100vh,calc(100vw / 1.528));transform:translate(-50%,-50%);box-shadow:0 0 70px rgba(0,0,0,.45);}
+#scene img{width:100%;height:100%;display:block;object-fit:contain;pointer-events:none;user-select:none;}
+.hotspot{position:absolute;cursor:pointer;border-radius:10px;}
+.exitIcon{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:34px;filter:drop-shadow(0 3px 5px #000);pointer-events:none;opacity:.9;}
+
+#fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:.18s;z-index:4;}
+#fade.on{opacity:1;}
+
+#message{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);max-width:min(760px,calc(100vw - 32px));padding:9px 14px;border-radius:14px;background:rgba(18,12,14,.74);border:1px dashed rgba(255,220,160,.34);font-size:16px;line-height:1.28;text-align:center;opacity:0;transition:.2s;pointer-events:none;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.08);backdrop-filter:blur(5px);}
+#message.show{opacity:1;}
+#message.success{border:1px solid rgba(255,224,160,.78);box-shadow:0 0 17px rgba(255,224,160,.32),0 10px 30px rgba(0,0,0,.32);}
+
+#hud{position:absolute;left:12px;top:12px;z-index:18;pointer-events:none;}
+#inventoryShell{pointer-events:auto;display:inline-block;max-width:calc(100vw - 24px);padding:5px;border-radius:15px;background:rgba(18,12,14,.16);border:1px dashed rgba(235,200,135,.34);box-shadow:0 8px 22px rgba(0,0,0,.18),inset 0 0 16px rgba(255,210,130,.035);backdrop-filter:blur(3px);}
+#inventoryViewport{position:relative;overflow:visible;}
+#inventoryTrack{display:flex;gap:5px;align-items:flex-start;transition:none;transform:none !important;}
+.item{width:50px;height:50px;flex:0 0 50px;border-radius:12px;border:1px solid rgba(235,200,135,.36);background:radial-gradient(circle at 50% 32%,rgba(74,53,42,.98),rgba(22,15,17,.98));display:grid;place-items:center;font-size:22px;position:relative;cursor:pointer;transition:transform .14s,border-color .14s,box-shadow .14s;}
+.item:hover{transform:translateY(1px);border-color:rgba(255,224,160,.72);box-shadow:0 0 10px rgba(255,224,160,.12);}
+.item.active{transform:translateY(2px);border:1px solid #ffe0a0;box-shadow:0 0 14px rgba(255,224,160,.28),inset 0 0 14px rgba(255,224,160,.10);}
+.itemNumber{position:absolute;top:2px;left:5px;font:8px system-ui,sans-serif;color:#f7dfad;opacity:.88;text-shadow:0 1px 2px #000;}
+.itemName{position:absolute;left:4px;right:4px;bottom:3px;font:7.5px system-ui,sans-serif;color:#ead8bd;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px #000;opacity:.86;}
+#invLabel{display:none;}
+
+.effect{position:absolute;pointer-events:none;transform:translate(-50%,-50%);font-size:24px;z-index:7;animation:pop .75s ease-out forwards;}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-50%) scale(.45) rotate(0deg);}35%{opacity:1;}100%{opacity:0;transform:translate(-50%,-50%) scale(2.1) rotate(18deg);}}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="main">
+    <div id="scene"><img id="bg"></div>
+    <div id="fade"></div>
+    <div id="message"></div>
+  </div>
+
+  <div id="hud">
+    <div id="inventoryShell">
+      <div id="inventoryViewport"><div id="inventoryTrack"></div></div>
+      <div id="invLabel"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const atticGame = {
+  startRoom: "attic1",
+
+  tools: [
+    { id:"interact", name:"Point", icon:"☝️", tool:"interact" },
+    { id:"look", name:"Look", icon:"👁️", tool:"look" },
+    { id:"talk", name:"Talk", icon:"💬", tool:"talk" }
+  ],
+
+  items: {
+    brassKey: { id:"brassKey", name:"Small Brass Key", icon:"🗝️", use:"key", itemType:"tool" },
+    dustBrush: { id:"dustBrush", name:"Dust Brush", icon:"🧹", use:"brush", itemType:"tool" },
+    grapes: { id:"grapes", name:"Grapes", icon:"🍇", use:"grapes", itemType:"food" },
+    sealedLetter: { id:"sealedLetter", name:"Sealed Letter", icon:"✉️", use:"sealedLetter", itemType:"tool" },
+    loveLetter: { id:"loveLetter", name:"Revealed Love Letter", icon:"💌", use:"loveLetter", itemType:"tool" },
+    leftHeart: { id:"leftHeart", name:"Left Heart Half", icon:"💔", use:"leftHeart", itemType:"tool" },
+    rightHeart: { id:"rightHeart", name:"Right Heart Half", icon:"❤️‍🩹", use:"rightHeart", itemType:"tool" },
+    tinyBell: { id:"tinyBell", name:"Tiny Bell", icon:"🔔", use:"bell", itemType:"tool" },
+    ribbon: { id:"ribbon", name:"Green Ribbon", icon:"🎀", use:"ribbon", itemType:"tool" }
+  },
+
+  rooms: {
+    attic1: {
+      id:"attic1",
+      name:"The Attic",
+      background:{ image:"../attic1.png", width:1528, height:1000 },
+      hotspots:[
+        {
+          id:"exit-to-kitchen",
+          developerDescription:"Clickable room-exit area at the lower center of the scene; used as a generic stairs/doorway transition depending on the current room.",
+          type:"exit",
+          icon:"🚪",
+          targetRoom:"kitchen1",
+          x:640, y:850, w:250, h:120,
+          text:{
+            look:"Down to the KITCHEN. Less dust. More judgmental cookware.",
+            talk:"The stairs creak, 'One step at a time.' Rude, but fair.",
+            interact:""
+          }
+        },
+        {
+          id:"top-hat",
+          developerDescription:"Black top hat with purple band sitting on the brass-trimmed trunk in the foreground attic scene.",
+          label:"Top Hat",
+          x:398, y:674, w:115, h:87,
+          text:{
+            look:"A top hat. Dusty, dramatic, and definitely hiding something. Hats are bowls with confidence.",
+            talk:"The hat says, 'I contain multitudes. Also possibly a KEY.' Subtle.",
+            interact:"I lift the hat. It coughs like an old magician."
+          },
+          givesItem:{
+            itemId:"brassKey",
+            effect:"sparkle",
+            onFirst:"Under the hat: a small BRASS KEY. Classic hat behavior.",
+            onDone:"The hat is empty now. Still overdressed."
+          }
+        },
+        {
+          id:"mice-and-cheese",
+          developerDescription:"Two small mice gathered by a wedge of cheese on a suitcase/crate in the lower-left attic foreground.",
+          label:"Mouse Banquet",
+          x:36, y:843, w:270, h:130,
+          text:{
+            look:"A tiny mouse banquet. Plenty of CHEESE, but the mice keep sighing about GRAPES.",
+            talk:"The elder mouse squeaks, 'Cheese is food. GRAPES are cuisine.'",
+            interact:"I reach for cheese. Twelve mice make eye contact. I withdraw my entire personality."
+          },
+          useItem:{
+            grapes:{
+              givesItem:"leftHeart",
+              effect:"burst",
+              consumeUsedItem:true,
+              onSuccess:"The mice accept the GRAPES like tiny royalty. In return, they roll out a cracked HALF HEART. Weird economy. Works for me.",
+              onDone:"The mice are grape-rich and morally unavailable."
+            },
+            tinyBell:{
+              completes:"mouseRestaurant",
+              effect:"none",
+              onSuccess:"Ding! A mouse yells, 'Dinner service!' Another mouse is already crying. Hospitality is stressful.",
+              onDone:"The mice already run a restaurant. It has one star. Literally, one star drawn on cardboard."
+            }
+          },
+          completedWhenItemExists:"leftHeart",
+          completedText:{
+            look:"The mice are full of GRAPES and secrets. Dangerous combination.",
+            talk:"The elder mouse says, 'Take the HEART to the living room. That room has unresolved furniture.'",
+            interact:"A mouse offers me a crumb. I accept diplomatically."
+          }
+        },
+        {
+          id:"wardrobe",
+          developerDescription:"Large wooden wardrobe against the back wall of the attic, centered under the chandelier.",
+          label:"Wardrobe",
+          x:626, y:298, w:218, h:325,
+          text:{
+            look:"A locked wardrobe. Big 'I know things' energy. Probably coats. Possibly scandal.",
+            talk:"The wardrobe says nothing. Very suspicious. Very wooden.",
+            interact:"I pull the handles. Locked. The wardrobe wins round one."
+          },
+          useItem:{
+            brassKey:{
+              givesItem:"sealedLetter",
+              effect:"sparkle",
+              consumeUsedItem:true,
+              onSuccess:"The KEY turns. Inside: coats, moths, and a SEALED LETTER. The coats look relieved.",
+              onDone:"The wardrobe is open. It has no more plot, only sleeves."
+            }
+          },
+          completedWhenItemExists:"sealedLetter",
+          completedText:{
+            look:"The wardrobe is open. Mostly coats. One hanger is doing its best.",
+            talk:"It creaks, 'The LETTER was never sent. Humans. Honestly.'",
+            interact:"I check again. Nope. Still coats. Extremely committed coats."
+          }
+        },
+        {
+          id:"covered-chair",
+          developerDescription:"Tall chair or furniture stack covered with a white sheet on the right side of the attic.",
+          label:"Covered Chair",
+          x:875, y:402, w:245, h:315,
+          text:{
+            look:"A chair under a sheet. Very DUSTY. The dust has dust. The dust has ancestors.",
+            talk:"I say hello. The chair sneezes first.",
+            interact:"I touch it. My hand becomes a historical document."
+          },
+          useItem:{
+            dustBrush:{
+              setsState:{ roomId:"attic1", hotspotId:"covered-chair", state:"clean" },
+              effect:"burst",
+              onSuccess:"I brush away the DUST. Underneath: a chair, a mouse archivist, and about three legal clouds of sneeze.",
+              onDone:"Already clean. The mouse says, 'Please stop exfoliating my ceiling.'"
+            },
+            sealedLetter:{
+              requiresState:{ roomId:"attic1", hotspotId:"covered-chair", state:"clean" },
+              completes:"mouseInspectedLetter",
+              effect:"none",
+              onSuccess:"The mouse sniffs the SEALED LETTER. 'Needs FIRE,' it says. 'Old ink is shy.' Good hint, tiny librarian.",
+              onBlocked:"Not into the DUST. That is how letters become archaeology.",
+              onDone:"The mouse already diagnosed it: FIRE reveals shy ink."
+            }
+          },
+          states:{
+            clean:{
+              text:{
+                look:"Clean chair. Tiny mouse archivist. Huge glasses. Zero salary.",
+                talk:"The mouse says, 'Marcel wrote. Mabel waited. The LETTER stayed sealed. Classic idiot plot.'",
+                interact:"The mouse stamps my hand with invisible approval. Bureaucracy, but cute."
+              }
+            }
+          }
+        },
+        {
+          id:"gramophone",
+          developerDescription:"Brass horn gramophone and framed portrait cluster on the left side of the attic.",
+          label:"Gramophone",
+          x:190, y:600, w:220, h:220,
+          text:{
+            look:"An old gramophone. Basically a brass flower that yells jazz.",
+            talk:"It crackles, 'I played their song. Then they fought. I prefer jazz.'",
+            interact:"I crank it. Three romantic notes escape, panic, and hide."
+          },
+          useItem:{
+            tinyBell:{
+              completes:"atticWaltz",
+              effect:"sparkle",
+              onSuccess:"The BELL wakes the gramophone. A waltz starts. The mice dance badly but with legal confidence.",
+              onDone:"The gramophone is already playing. The mice are still not good."
+            }
+          },
+          completedStates:{
+            atticWaltz:{
+              text:{
+                look:"The gramophone hums a waltz. The attic is 14% less haunted.",
+                talk:"It plays, 'la la la, unresolved feelings, la la.'",
+                interact:"I crank it again. The mice demand a dance floor and tax benefits."
+              }
+            }
+          }
+        },
+        {
+          id:"kitchen-box",
+          developerDescription:"Large cardboard box on the right side of the attic, labelled KITCHEN but also full of winter coats.",
+          label:"Kitchen Box",
+          x:1100, y:572, w:265, h:340,
+          text:{
+            look:"A box marked KITCHEN. In the attic. Organization, but make it fiction.",
+            talk:"The box says, 'Definitely not coats.' A sleeve falls out.",
+            interact:"I rummage. Coats. A box of lies."
+          }
+        },
+        {
+          id:"armor",
+          developerDescription:"Small suit of armor standing near the middle-left attic floor in front of boxes.",
+          label:"Small Armor",
+          x:536, y:424, w:120, h:220,
+          text:{
+            look:"Tiny armor. For a child, a goblin, or a kettle with enemies.",
+            talk:"I salute. It clanks back. Respect.",
+            interact:"I lower the visor. Something inside whispers, 'Finally.'"
+          }
+        },
+        {
+          id:"clock",
+          developerDescription:"Large grandfather clock mounted on the right attic wall.",
+          label:"Grandfather Clock",
+          x:1320, y:210, w:150, h:365,
+          text:{
+            look:"The clock is stuck at ten past awkward.",
+            talk:"Tick. Tock. Sigh. This clock needs therapy.",
+            interact:"I wind it. It ticks twice, then remembers the drama."
+          },
+          useItem:{
+            ribbon:{
+              completes:"atticClockRibboned",
+              effect:"none",
+              consumeUsedItem:true,
+              onSuccess:"I tie the RIBBON to the clock key. The clock now looks punctual and fancy.",
+              onDone:"The clock is already accessorized. Let it have this."
+            }
+          },
+          completedStates:{
+            atticClockRibboned:{
+              text:{
+                look:"The clock wears the RIBBON proudly. Time, but make it couture.",
+                talk:"The clock says, 'Finally, someone understands vertical elegance.'",
+                interact:"It ticks once. A fancy tick."
+              }
+            }
+          }
+        },
+        {
+          id:"purple-portrait",
+          developerDescription:"Framed portrait of a purple creature near the upper-right attic wall.",
+          label:"Purple Portrait",
+          x:1192, y:88, w:155, h:210,
+          text:{
+            look:"A purple creature in a portrait. Bat? Goblin? Emotional cupcake? Yes.",
+            talk:"It says, 'We are HOUSE FEELINGS. Some houses get ghosts. This one got us.'",
+            interact:"I straighten the frame. It winks. Paint should not do that."
+          }
+        }
+,
+               {
+          id:"attic-round-window",
+          developerDescription:"Large round attic window on the left back wall, casting pale light onto the covered furniture and floor.",
+          x:170, y:70, w:210, h:205,
+          text:{
+            look:"A massive round window. It's letting in light, but the dust is currently winning the war.",
+            talk:"It whispers, 'I see everything. Mostly just your clutter.'",
+            interact:"I peer out. The world outside looks suspiciously organized."
+          }
+        },
+        {
+          id:"attic-chandelier",
+          developerDescription:"Ornate chandelier hanging from the attic rafters near the top center of the room.",
+          x:640, y:0, w:290, h:165,
+          text:{
+            look:"An ornate chandelier. It looks like it expects a formal invitation to exist in this mess.",
+            talk:"It glitters with pure, unadulterated judgment.",
+            interact:"I stare up. Being this fancy is clearly exhausting."
+          }
+        },
+        {
+          id:"attic-telescope",
+          developerDescription:"Brass telescope on a stand angled across the mid-right attic, in front of stacked paintings and covered objects.",
+          x:920, y:370, w:210, h:175,
+          text:{
+            look:"A brass telescope. For spying on stars or neighbors' questionable gardening choices.",
+            talk:"It's aimed at a pile of junk. Even the telescope has lost its way.",
+            interact:"I look through it. I see nothing but a very large, very expensive dust mote."
+          }
+        },
+        {
+          id:"attic-ladder-globe",
+          developerDescription:"Wooden ladder and small globe tucked near the bright round window on the rear-left side of the attic.",
+          x:445, y:155, w:125, h:230,
+          text:{
+            look:"A ladder and a tiny globe. For the intellectual who likes to climb things.",
+            talk:"The globe says, 'I know everything about the world, yet I'm stuck in an attic.'",
+            interact:"I spin the globe. It's a very small world, and very dusty."
+          }
+        },
+        {
+          id:"attic-pink-shoe-books",
+          developerDescription:"Single pink high-heeled shoe resting on stacked books near the lower-right-middle attic floor.",
+          x:1005, y:740, w:210, h:140,
+          text:{
+            look:"A pink high heel perched on books. It's 'Literary Chic,' I suppose.",
+            talk:"The shoe says, 'I am far too fabulous for this level of disorganization.'",
+            interact:"I poke the shoe. It's expensive, impractical, and deeply offended."
+          }
+        }
+
+      ]
+    },
+
+    kitchen1: {
+      id:"kitchen1",
+      name:"The Kitchen",
+      background:{ image:"../kitchen1.png", width:1528, height:1000 },
+      hotspots:[
+        {
+          id:"exit-to-attic",
+          developerDescription:"Clickable room-exit area at the lower center of the kitchen scene; returns to the attic.",
+          type:"exit",
+          icon:"🚪",
+          targetRoom:"attic1",
+          x:638, y:855, w:250, h:120,
+          text:{
+            look:"Back to the ATTIC. Bring antihistamines and emotional patience.",
+            talk:"The stairs say, 'Mind the dust. It has opinions.'",
+            interact:""
+          }
+        },
+        {
+          id:"exit-to-livingroom",
+          developerDescription:"Dark door on the right side of the kitchen with a gold M on it, leading to the living room.",
+          type:"exit",
+          icon:"🚪",
+          targetRoom:"livingroom1",
+          x:1332, y:319, w:160, h:352,
+          text:{
+            look:"The door to the LIVING ROOM. The gold M says 'mystery' or possibly 'moisturizer.'",
+            talk:"The door says, 'Bring the HEART here eventually. No pressure. Huge pressure.'",
+            interact:""
+          }
+        },
+        {
+          id:"frog-portrait",
+          developerDescription:"Large framed portrait of a formally dressed frog on the upper-left kitchen wall.",
+          label:"Frog Portrait",
+          x:5, y:53, w:165, h:230,
+          text:{
+            look:"A frog in formalwear. He looks like he reviews soup for a living.",
+            talk:"The frog croaks, 'Show me a proper LOVE LETTER and I may remember where the other HEART half is.'",
+            interact:"I adjust the frame. He judges me in French."
+          },
+          useItem:{
+            loveLetter:{
+              givesItem:"rightHeart",
+              effect:"sparkle",
+              consumeUsedItem:true,
+              onSuccess:"The frog reads the LOVE LETTER. One painted tear. Very classy. From behind the frame drops the second HALF HEART.",
+              onDone:"The frog has already cried once today. His dignity has limits."
+            },
+            sealedLetter:{
+              completes:"frogRejectedSealedLetter",
+              effect:"none",
+              onSuccess:"The frog squints. 'SEALED? I am a critic, not a crowbar. Reveal it first.'",
+              onDone:"The frog still wants the LETTER revealed. Art frogs are picky."
+            }
+          },
+          completedWhenItemExists:"rightHeart",
+          completedText:{
+            look:"The frog looks lighter now. Still smug, but emotionally processed.",
+            talk:"He croaks, 'Repair the HEART in the living room. Then maybe this house stops sighing.'",
+            interact:"I bow. He accepts. Unfortunately."
+          }
+        },
+        {
+          id:"bicycle",
+          developerDescription:"Red bicycle mounted high on the right kitchen wall.",
+          label:"Wall Bicycle",
+          x:1136, y:84, w:260, h:230,
+          text:{
+            look:"A bicycle on the wall. Finally, a bike lane for spiders.",
+            talk:"The bike says, 'I once delivered letters. Then one stayed SEALED. Awkward career pivot.'",
+            interact:"I spin the wheel. Ding? Something small is hiding there."
+          },
+          givesItem:{
+            itemId:"tinyBell",
+            effect:"sparkle",
+            onFirst:"Behind the wheel: a TINY BELL. It goes ding with main-character energy.",
+            onDone:"No more bells. The bicycle recommends cardio."
+          }
+        },
+        {
+          id:"fruit-bowl",
+          developerDescription:"Large brass fruit bowl on the kitchen island, containing pineapple, grapes, pears, and oranges.",
+          label:"Fruit Bowl",
+          x:834, y:555, w:335, h:195,
+          text:{
+            look:"A fruit bowl. The pineapple is clearly management. The GRAPES are unpaid interns.",
+            talk:"The grapes whisper, 'Attic mice love us. We are basically purple bribes.'",
+            interact:"I take some GRAPES. The pineapple files a complaint."
+          },
+          givesItem:{
+            itemId:"grapes",
+            effect:"sparkle",
+            onFirst:"I take the GRAPES. Somewhere upstairs, a mouse gets goosebumps.",
+            onDone:"The fruit bowl has no more plot grapes. Only decorative banana politics."
+          }
+        },
+        {
+          id:"cupboard",
+          developerDescription:"Lower kitchen cupboard area left of center, below the counter and near the sink/coffee station.",
+          label:"Cupboard",
+          x:390, y:490, w:200, h:180,
+          text:{
+            look:"A cupboard slightly open. Universal sign for 'free item inside.'",
+            talk:"It smells like lemon and secrets.",
+            interact:"I open it. Something brushy falls out. Foreshadowing with bristles."
+          },
+          givesItem:{
+            itemId:"dustBrush",
+            effect:"sparkle",
+            onFirst:"A DUST BRUSH. Finally, a way to negotiate with the ATTIC.",
+            onDone:"Empty now. Just lemon smell and cupboard confidence."
+          }
+        },
+        {
+          id:"cookbook",
+          developerDescription:"Green book titled Culinary Excellence for Gentlemen on the kitchen island counter.",
+          label:"Cookbook",
+          x:647, y:746, w:245, h:105,
+          text:{
+            look:"'Culinary Excellence for Gentlemen.' Chapter 8: Apologizing With Custard.",
+            talk:"The book says, 'Broken HEART? Reduce pride. Add honesty. Stir badly.'",
+            interact:"Every recipe serves two. Even the lonely soup. Oof."
+          }
+        },
+        {
+          id:"sink-window",
+          developerDescription:"Bright window and plant-filled sill above the farmhouse sink on the left side of the kitchen.",
+          label:"Sunny Window",
+          x:188, y:108, w:210, h:320,
+          text:{
+            look:"Warm sunlight. Happy plants. Suspiciously wholesome.",
+            talk:"A plant says, 'Mabel waited here for a LETTER. Plants notice. We are nosy but rooted.'",
+            interact:"On the sill: tiny scratched letters, M + M. Cute. Also legally evidence."
+          }
+        },
+        {
+          id:"coffee-machine",
+          developerDescription:"Small teal coffee machine on the back counter, just left of the stove.",
+          label:"Coffee Machine",
+          x:475, y:398, w:120, h:130,
+          text:{
+            look:"A coffee machine. Small, stern, probably unionized.",
+            talk:"It hisses, 'Marcel proposed after three espressos. Bad pacing. Good crema.'",
+            interact:"I press a button. It steams a tiny heart, then pretends it didn't."
+          }
+        },
+        {
+          id:"hanging-pans",
+          developerDescription:"Copper pans and cooking utensils hanging on the rail above the stove.",
+          label:"Hanging Pans",
+          x:616, y:322, w:470, h:145,
+          text:{
+            look:"Copper pans. Shiny enough to reflect twelve versions of my bad decisions.",
+            talk:"The pans clang, 'The HEART broke during The Argument. Five stars. No notes.'",
+            interact:"I tap one. It sings the opening note of kitchen drama."
+          },
+          useItem:{
+            tinyBell:{
+              completes:"pansOrchestra",
+              effect:"none",
+              onSuccess:"I ring the BELL. The pans answer like a tiny orchestra that accepts tips.",
+              onDone:"The pans are already musically overconfident."
+            }
+          },
+          completedStates:{
+            pansOrchestra:{
+              text:{
+                look:"The pans gleam with performance anxiety.",
+                talk:"They whisper, 'Encore costs extra butter.'",
+                interact:"I tap one. The others shush it. Band drama."
+              }
+            }
+          }
+        },
+        {
+          id:"lilies",
+          developerDescription:"White lilies in a blue-and-white vase on the right side of the kitchen island/back counter area.",
+          label:"White Lilies",
+          x:1125, y:492, w:190, h:245,
+          text:{
+            look:"White lilies. Beautiful, dramatic, allergic to subtlety.",
+            talk:"They whisper, 'Mabel forgave slowly. Marcel apologized never. Terrible system.'",
+            interact:"They smell like weddings and unfinished sentences."
+          }
+        },
+        {
+          id:"menu-board",
+          developerDescription:"Black chalk menu board on the left kitchen wall near the sink.",
+          label:"Menu Board",
+          x:77, y:346, w:110, h:215,
+          text:{
+            look:"The menu says crème brûlée. Under it: 'Never serve PRIDE. It curdles.'",
+            talk:"The chalkboard says, 'Today's special: humble pie. Nobody ordered it.'",
+            interact:"I tap it. Chalk dust falls like tiny chef snow."
+          }
+        }
+,
+        {
+          id:"kitchen-stove-range",
+          developerDescription:"Large black-and-brass stove and oven centered beneath the range hood, with pots and kettle on top.",
+          x:610, y:420, w:330, h:255
+        },
+        {
+          id:"kitchen-range-hood",
+          developerDescription:"Large dark metal range hood above the stove, with brass trim and white tile backsplash below.",
+          x:610, y:84, w:408, h:215
+        },
+        {
+          id:"kitchen-hanging-plant",
+          developerDescription:"Hanging green plant in front of the bright kitchen window.",
+          x:246, y:130, w:145, h:180
+        },
+        {
+          id:"kitchen-wine-tray",
+          developerDescription:"Wine bottles and glasses on a small tray in the lower-left kitchen foreground.",
+          x:0, y:595, w:255, h:210
+        },
+        {
+          id:"kitchen-good-food-sign",
+          developerDescription:"Small framed sign above the right door reading GOOD FOOD, GOOD-MOOD, GOOD DAY.",
+          x:1280, y:95, w:155, h:100
+        },
+        {
+          id:"kitchen-pendant-lamp",
+          developerDescription:"Large black-and-brass pendant lamp hanging above the kitchen island.",
+          x:810, y:0, w:210, h:240
+        }
+      ]
+    },
+
+    livingroom1: {
+      id:"livingroom1",
+      name:"The Living Room",
+      background:{ image:"../livingroom1.png", width:1528, height:1000 },
+      hotspots:[
+        {
+          id:"exit-to-kitchen",
+          developerDescription:"Clickable room-exit area at the lower center of the scene; used as a generic stairs/doorway transition depending on the current room.",
+          type:"exit",
+          icon:"🚪",
+          targetRoom:"kitchen1",
+          x:638, y:855, w:250, h:120,
+          text:{
+            look:"Back to the KITCHEN. Where the frog has opinions and the fruit has hierarchy.",
+            talk:"The return door says, 'Snacks are valid puzzle strategy.'",
+            interact:""
+          }
+        },
+        {
+          id:"fireplace",
+          developerDescription:"Lit fireplace and mantel in the center-left of the living room.",
+          label:"Fireplace",
+          x:320, y:338, w:380, h:345,
+          text:{
+            look:"A warm FIRE. Perfect for hands, marshmallows, and suspicious old ink.",
+            talk:"The flames whisper, 'Letters reveal things when warmed. People too, but slower.'",
+            interact:"I warm my hands. The fire approves. Finally, a fan."
+          },
+          useItem:{
+            sealedLetter:{
+              givesItem:"loveLetter",
+              effect:"sparkle",
+              consumeUsedItem:true,
+              onSuccess:"I warm the SEALED LETTER. Hidden ink appears. It is now a LOVE LETTER. Spicy stationery!",
+              onDone:"The hidden ink is already revealed. The letter has peaked."
+            },
+            loveLetter:{
+              completes:"letterAlreadyRevealed",
+              effect:"none",
+              onSuccess:"The LOVE LETTER glows near the fire. It has already had its makeover montage.",
+              onDone:"The LOVE LETTER is revealed. Take it to someone judgmental. Frog-shaped, maybe."
+            }
+          }
+        },
+        {
+          id:"broken-heart-locket",
+          developerDescription:"Small broken heart locket on the fireplace mantel, visually positioned near the clock and candles.",
+          label:"Broken Heart Locket",
+          x:465, y:315, w:180, h:120,
+          text:{
+            look:"A broken HEART locket on the mantel. Two empty slots. It is not being subtle.",
+            talk:"The locket gives a tiny metallic sigh. Honestly, same.",
+            interact:"I touch it. One side feels warm. One side feels like a bad breakup."
+          },
+          useItem:{
+            leftHeart:{
+              setsState:{ roomId:"livingroom1", hotspotId:"broken-heart-locket", state:"leftPlaced" },
+              effect:"sparkle",
+              consumeUsedItem:true,
+              onSuccess:"The first HALF HEART clicks in. The fireplace brightens. The house whispers, 'Ooooh.'",
+              onDone:"That half is already placed. The locket wants the other one. Greedy, but fair."
+            },
+            rightHeart:{
+              requiresState:{ roomId:"livingroom1", hotspotId:"broken-heart-locket", state:"leftPlaced" },
+              completes:"heartRepaired",
+              effect:"burst",
+              consumeUsedItem:true,
+              onSuccess:"The second HALF HEART clicks in. The locket glows. Somewhere, a frog sniffles in a tuxedo.",
+              onBlocked:"The locket wants the LEFT half first. Apparently hearts have installation order.",
+              onDone:"The HEART is already repaired. It is now legally wholesome."
+            },
+            loveLetter:{
+              completes:"letterShownToHeart",
+              effect:"none",
+              onSuccess:"The LOVE LETTER trembles near the HEART. Nice sentiment, wrong hardware.",
+              onDone:"The LOVE LETTER helped emotionally. Now the HEART needs actual pieces."
+            }
+          },
+          states:{
+            leftPlaced:{
+              text:{
+                look:"One HALF HEART is in place. The other slot looks aggressively empty.",
+                talk:"The locket ticks like a nervous cupcake.",
+                interact:"It hums once. Translation: 'More heart, please.'"
+              }
+            }
+          },
+          completedStates:{
+            heartRepaired:{
+              text:{
+                look:"The HEART is whole again. The crack still shows, but now it looks like a smile with history.",
+                talk:"The locket whispers, 'Sorry opens. Forgiveness enters. Squirrels complicate.'",
+                interact:"Inside are two tiny portraits: Marcel and Mabel, smiling. A squirrel photobombs them. Naturally."
+              }
+            }
+          }
+        },
+        {
+          id:"green-sofa",
+          developerDescription:"Large green sofa on the right half of the living room.",
+          label:"Green Sofa",
+          x:810, y:475, w:450, h:205,
+          text:{
+            look:"A green sofa. Fancy, saggy, and clearly full of crumbs and emotional lore.",
+            talk:"The sofa says, 'Mabel sat left. Marcel paced right. The squirrel ate evidence.'",
+            interact:"I search the cushions. Crumbs, a button, and one dramatic RIBBON."
+          },
+          givesItem:{
+            itemId:"ribbon",
+            effect:"sparkle",
+            onFirst:"I find a GREEN RIBBON. It smells like perfume and plot relevance.",
+            onDone:"No more ribbons. Only crumbs and sofa judgment."
+          }
+        },
+        {
+          id:"squirrel-window",
+          developerDescription:"Squirrel sitting in the open window on the right side of the living room.",
+          label:"Squirrel at Window",
+          x:1292, y:232, w:185, h:300,
+          text:{
+            look:"A squirrel at the window. Tail huge. Confidence illegal.",
+            talk:"The squirrel says, 'I delivered letters. One was late. One was eaten. Mistakes were made.'",
+            interact:"It shakes my finger like a tiny mayor."
+          },
+          useItem:{
+            ribbon:{
+              completes:"squirrelRibboned",
+              effect:"none",
+              consumeUsedItem:true,
+              onSuccess:"I give the squirrel the RIBBON. It becomes an official courier. Power goes to its tail immediately.",
+              onDone:"The squirrel is already decorated and unbearable."
+            },
+            tinyBell:{
+              completes:"squirrelAlerted",
+              effect:"none",
+              onSuccess:"Ding! The squirrel salutes so hard its tail becomes punctuation.",
+              onDone:"The squirrel remains on high alert. For snacks."
+            }
+          },
+          completedStates:{
+            squirrelRibboned:{
+              text:{
+                look:"The squirrel wears the RIBBON like a mayoral sash.",
+                talk:"It says, 'Courier Bureau reopened. First delivery: vibes.'",
+                interact:"It signs an invisible clipboard. Bureaucracy has fur now."
+              }
+            }
+          }
+        },
+        {
+          id:"cat-portrait",
+          developerDescription:"Small oval cat portrait mounted right of the bookcase and above the sofa.",
+          label:"Cat Portrait",
+          x:1178, y:343, w:130, h:165,
+          text:{
+            look:"A cat portrait. Noble, smug, probably guilty.",
+            talk:"The cat says, 'I saw everything. I will reveal nothing. Unless praised.'",
+            interact:"I straighten the frame. It becomes crooked again out of spite."
+          },
+          useItem:{
+            loveLetter:{
+              completes:"catJudgedLetter",
+              effect:"none",
+              onSuccess:"The cat reads the LOVE LETTER. 'Adequate remorse. Weak commas. Continue.'",
+              onDone:"The cat has judged the letter. It will be bringing this up for years."
+            }
+          }
+        },
+        {
+          id:"newspaper-chair",
+          developerDescription:"Green armchair on the left side with an old newspaper tucked into it.",
+          label:"Newspaper Chair",
+          x:0, y:455, w:300, h:320,
+          text:{
+            look:"An armchair with an old newspaper: 'LOCAL CAT MISSING AGAIN.' The cat is literally on the wall.",
+            talk:"The chair says, 'Missing? She calls it freelancing.'",
+            interact:"I rustle the paper. Article says: 'Great Locket Argument Still Awkward.'"
+          },
+          useItem:{
+            dustBrush:{
+              completes:"newspaperCleaned",
+              effect:"none",
+              onSuccess:"I brush the chair. The headline clears: 'HOUSE ANIMALS FORM SEARCH PARTY, FIND CAKE.'",
+              onDone:"The chair is cleaner. Not clean. Let's stay realistic."
+            }
+          },
+          completedStates:{
+            newspaperCleaned:{
+              text:{
+                look:"The newspaper is readable now. The cat was never missing. She was networking.",
+                talk:"The chair says, 'Journalism peaked with cake coverage.'",
+                interact:"I rustle the paper. It rustles back with old gossip."
+              }
+            }
+          }
+        },
+        {
+          id:"tea-table",
+          developerDescription:"Low wooden coffee table in front of the sofa with tea service, cookies, books, and photos.",
+          label:"Tea Table",
+          x:520, y:675, w:455, h:190,
+          text:{
+            look:"Tea, cookies, books, and a photo. Someone expected company and got backstory.",
+            talk:"The teapot says, 'They both wanted to apologize. Tragic. Also cold tea.'",
+            interact:"The photo shows Marcel, Mabel, and a squirrel stealing a biscuit. Important historical theft."
+          },
+          useItem:{
+            grapes:{
+              completes:"teaGrapePlaced",
+              effect:"none",
+              onSuccess:"I place a GRAPE by the teacup. Fancy? No. Symbolic? Probably.",
+              onDone:"The ceremonial grape has been installed. History will decide if that mattered."
+            }
+          },
+          completedStates:{
+            teaGrapePlaced:{
+              text:{
+                look:"A single GRAPE rests by the teacup. It is doing its best as a tribute.",
+                talk:"The teapot says, 'Odd garnish. Respectable commitment.'",
+                interact:"The grape rolls slightly. Symbolism is slippery."
+              }
+            }
+          }
+        },
+        {
+          id:"deer-plaque",
+          developerDescription:"Mounted deer-head plaque above the fireplace mantel.",
+          label:"Deer Plaque",
+          x:420, y:120, w:205, h:220,
+          text:{
+            look:"A deer plaque. Calm, antlered, tired of everyone.",
+            talk:"The deer says, 'Repair the HEART. The chandelier keeps humming breakup songs.'",
+            interact:"One antler wiggles. The deer denies everything."
+          }
+        },
+        {
+          id:"spider-corner",
+          developerDescription:"Cobweb-filled upper-left corner shelf area of the living room.",
+          label:"Cobweb Corner",
+          x:20, y:20, w:270, h:190,
+          text:{
+            look:"A cobweb mansion. The spider has better architecture than most cities.",
+            talk:"The spider says, 'Dust is not dirt. It is atmosphere.'",
+            interact:"I blow gently. The web plays one haunted harp note."
+          },
+          useItem:{
+            dustBrush:{
+              completes:"spiderComplaint",
+              effect:"none",
+              onSuccess:"I brush the lower web. The spider says, 'Minimalist. Brave. Wrong.'",
+              onDone:"The spider has already filed a renovation complaint."
+            }
+          },
+          completedStates:{
+            spiderComplaint:{
+              text:{
+                look:"The web has one cleaner corner. The spider has chosen to call it a balcony.",
+                talk:"The spider says, 'No further edits without permits.'",
+                interact:"The web twangs. Passive-aggressive acoustics."
+              }
+            }
+          }
+        },
+        {
+          id:"globe",
+          developerDescription:"Old globe with a skull tag in the lower-left foreground of the living room.",
+          label:"Old Globe",
+          x:0, y:770, w:200, h:220,
+          text:{
+            look:"An old globe with a skull tag. Geography, but goth.",
+            talk:"I ask where Marcel went. The globe spins to 'away' then 'back.' Very helpful, sphere.",
+            interact:"It stops on a tiny label: REGRET. Population: one idiot."
+          }
+        },
+        {
+          id:"umbrella-trunk",
+          developerDescription:"Right foreground trunk with detective hat, umbrellas, and travel gear.",
+          label:"Umbrella Trunk",
+          x:1208, y:674, w:300, h:300,
+          text:{
+            look:"A trunk with umbrellas and a detective hat. Weather noir.",
+            talk:"The umbrella says, 'He left in a storm. Came back for socks. Romance is weird.'",
+            interact:"I lift the hat. Dust. Suspicious dust."
+          },
+          useItem:{
+            dustBrush:{
+              completes:"trunkDusted",
+              effect:"none",
+              onSuccess:"I brush the trunk. In the dust: 'M + M, stubborn forever.' Accurate.",
+              onDone:"The trunk is cleaner, but still dramatically packed."
+            }
+          },
+          completedStates:{
+            trunkDusted:{
+              text:{
+                look:"The dust message is clear now: M + M, stubborn forever.",
+                talk:"The umbrella says, 'I was there. Nobody packed sense.'",
+                interact:"I tap the trunk. It sounds full of coats and bad timing."
+              }
+            }
+          }
+        },
+        {
+          id:"gentleman-portrait",
+          developerDescription:"Framed portrait of a mustached gentleman on the upper-middle/right living-room wall.",
+          label:"Gentleman Portrait",
+          x:846, y:150, w:170, h:245,
+          text:{
+            look:"A gentleman portrait. Marcel, probably. Mustache: excellent. Choices: questionable.",
+            talk:"He murmurs, 'I thought silence was noble. Turns out it was just quiet cowardice.'",
+            interact:"I tilt the frame. His mustache looks apologetic."
+          },
+          useItem:{
+            loveLetter:{
+              completes:"marcelSawLetter",
+              effect:"none",
+              onSuccess:"I show Marcel the LOVE LETTER. He whispers, 'Too late, but not useless.' Portraits are intense.",
+              onDone:"Marcel has seen the letter. His mustache remains in therapy."
+            }
+          },
+          completedStates:{
+            marcelSawLetter:{
+              text:{
+                look:"Marcel's portrait looks softer now. Same mustache. Less emotional tax evasion.",
+                talk:"He says, 'Please fix the HEART. I have been framed with regret long enough.'",
+                interact:"I tilt the frame back. He looks almost brave."
+              }
+            }
+          }
+        },
+        {
+          id:"mantel-clock",
+          developerDescription:"Small mantel clock sitting on the fireplace mantel beneath the deer plaque.",
+          label:"Mantel Clock",
+          x:533, y:258, w:120, h:105,
+          text:{
+            look:"A mantel clock stopped at almost-o'clock.",
+            talk:"It says, 'The house paused when the HEART broke. Very dramatic. We know.'",
+            interact:"I nudge the hand. One tick. Tiny progress."
+          },
+          completedStates:{
+            heartRepaired:{
+              text:{
+                look:"The clock ticks again. Tomorrow has been reluctantly approved.",
+                talk:"Tick. Tock. Thanks.",
+                interact:"It chimes once. Soft as a teacup apology."
+              }
+            }
+          }
+        }
+,
+        {
+          id:"livingroom-green-lamp",
+          developerDescription:"Tall fringed green floor lamp between the fireplace area and the sofa.",
+          x:695, y:336, w:160, h:280
+        },
+        {
+          id:"livingroom-bookcase",
+          developerDescription:"Tall glass-front bookcase and shelves behind the sofa, holding books and small objects.",
+          x:775, y:180, w:185, h:315
+        },
+        {
+          id:"livingroom-chandelier",
+          developerDescription:"Gold chandelier with candle-shaped lights hanging from the ceiling near the top center.",
+          x:630, y:0, w:295, h:160
+        },
+        {
+          id:"livingroom-shelf-skull",
+          developerDescription:"Left wall shelf with books, a skull under glass, and small curios beneath cobwebs.",
+          x:70, y:160, w:210, h:230
+        },
+        {
+          id:"livingroom-open-window-curtains",
+          developerDescription:"Open arched window with green curtains on the right side, behind the squirrel.",
+          x:1235, y:105, w:260, h:320
+        },
+        {
+          id:"livingroom-rug",
+          developerDescription:"Large green patterned rug covering most of the living-room floor beneath the table and seating.",
+          x:350, y:660, w:760, h:280
+        }
+      ]
+    }
+  }
+};
+
+let game = {
+  data: atticGame,
+  currentRoom: atticGame.startRoom,
+  inventory: [],
+  usedItems: [],
+  completedInteractions: [],
+  hotspotStates: {},
+  activeIndex: 0,
+  messageLockedUntil: 0
+};
+
+function currentRoom(){return game.data.rooms[game.currentRoom];}
+function allInventoryItems(){return [...game.data.tools, ...game.inventory.map(id => game.data.items[id]).filter(Boolean)];}
+function activeItem(){return allInventoryItems()[game.activeIndex] || allInventoryItems()[0];}
+function hasItem(id){return game.inventory.includes(id) || game.usedItems.includes(id);}
+function hasCompleted(id){return game.completedInteractions.includes(id);}
+function stateKey(roomId, hotspotId){return roomId + "." + hotspotId;}
+function getHotspotState(roomId, hotspotId){return game.hotspotStates[stateKey(roomId, hotspotId)] || "default";}
+function setHotspotState(roomId, hotspotId, state){game.hotspotStates[stateKey(roomId, hotspotId)] = state;}
+
+function addItem(id){
+  if(!hasItem(id) && game.data.items[id]){
+    const selected = activeItem();
+    game.inventory.push(id);
+
+    const items = allInventoryItems();
+    const previousIndex = items.findIndex(item => item && selected && item.id === selected.id);
+    game.activeIndex = previousIndex >= 0 ? previousIndex : 0;
+  }
+}
+function consumeItem(id){
+  game.inventory = game.inventory.filter(itemId => itemId !== id);
+  if(!game.usedItems.includes(id)) game.usedItems.push(id);
+  game.activeIndex = Math.max(0, Math.min(game.activeIndex, allInventoryItems().length - 1));
+}
+
+function mergeHotspot(base, patch){
+  return {
+    ...base,
+    ...patch,
+    text:{ ...(base.text || {}), ...(patch.text || {}) },
+    useItem:{ ...(base.useItem || {}), ...(patch.useItem || {}) }
+  };
+}
+
+function getResolvedHotspot(rawHotspot){
+  const roomId = currentRoom().id;
+  const state = getHotspotState(roomId, rawHotspot.id);
+
+  if(rawHotspot.completedWhenItemExists && hasItem(rawHotspot.completedWhenItemExists) && rawHotspot.completedText){
+    return { ...rawHotspot, text:rawHotspot.completedText };
+  }
+
+  if(rawHotspot.completedStates){
+    for(const completedId in rawHotspot.completedStates){
+      if(hasCompleted(completedId)) return mergeHotspot(rawHotspot, rawHotspot.completedStates[completedId]);
+    }
+  }
+
+  if(state !== "default" && rawHotspot.states && rawHotspot.states[state]){
+    return mergeHotspot(rawHotspot, rawHotspot.states[state]);
+  }
+
+  return rawHotspot;
+}
+
+function ruleBlocked(rule){
+  if(rule.requiresState){
+    const s = getHotspotState(rule.requiresState.roomId, rule.requiresState.hotspotId);
+    if(s !== rule.requiresState.state) return "state";
+  }
+  if(rule.completes && hasCompleted(rule.completes)) return "completed";
+  if(rule.givesItem && hasItem(rule.givesItem)) return "item";
+  if(rule.setsState){
+    const current = getHotspotState(rule.setsState.roomId, rule.setsState.hotspotId);
+    if(current === rule.setsState.state) return "stateAlready";
+  }
+  return false;
+}
+
+function hasTextValue(value){
+  if(typeof value === "string") return value.trim().length > 0;
+  if(Array.isArray(value)) return value.some(hasTextValue);
+  if(value && typeof value === "object") return Object.entries(value).some(([key, nested]) => key !== "developerDescription" && hasTextValue(nested));
+  return false;
+}
+function isInactiveHotspot(h){
+  return !hasTextValue(h.text) && !hasTextValue(h.completedText) && !hasTextValue(h.states) && !hasTextValue(h.completedStates) && !hasTextValue(h.useItem);
+}
+
+function clickHotspot(rawHotspot){
+  const h = getResolvedHotspot(rawHotspot);
+  if(isInactiveHotspot(h)) return;
+  const active = activeItem();
+
+  if(h.type === "exit" && active.tool === "interact"){
+    changeRoom(h.targetRoom);
+    return;
+  }
+
+  if(active.use && h.useItem && h.useItem[active.id]){
+    const rule = h.useItem[active.id];
+    const blocked = ruleBlocked(rule);
+
+    if(blocked){
+      showMessage(rule.onBlocked || rule.onDone || "Nothing else happens.");
+      return;
+    }
+
+    if(rule.givesItem) addItem(rule.givesItem);
+    if(rule.setsState) setHotspotState(rule.setsState.roomId, rule.setsState.hotspotId, rule.setsState.state);
+    if(rule.completes && !hasCompleted(rule.completes)) game.completedInteractions.push(rule.completes);
+    if(rule.consumeUsedItem) consumeItem(active.id);
+
+    spawnEffect(rawHotspot, rule.effect || "sparkle");
+    showMessage(rule.onSuccess || "Done.", rule.effect === "none" ? undefined : "success");
+    render();
+    return;
+  }
+
+  if(active.use){
+    showMessage("That doesn't seem to work here.");
+    return;
+  }
+
+  if(active.tool === "interact" && h.givesItem){
+    if(hasItem(h.givesItem.itemId)){
+      showMessage(h.givesItem.onDone || "Nothing else happens.");
+    }else{
+      addItem(h.givesItem.itemId);
+      spawnEffect(rawHotspot, h.givesItem.effect || "sparkle");
+      showMessage(h.givesItem.onFirst || "You found something.", "success");
+      render();
+    }
+    return;
+  }
+
+  const text = getResolvedHotspot(rawHotspot).text || {};
+  const fallback = {
+    look:"That looks like " + article(h.label || "thing") + " " + (h.label || "thing").toLowerCase() + ".",
+    talk:"I don't think it can talk. Not without encouragement, anyway.",
+    interact:"You fiddle with it for a moment. Nothing obvious happens."
+  };
+
+  showMessage(text[active.tool] || fallback[active.tool]);
+}
+
+function changeRoom(targetRoom){
+  const fade = document.getElementById("fade");
+  fade.classList.add("on");
+  setTimeout(() => {
+    game.currentRoom = targetRoom;
+    render();
+    setTimeout(() => fade.classList.remove("on"), 80);
+  }, 180);
+}
+
+function spawnEffect(h, type){
+  if(type === "none") return;
+
+  const scene = document.getElementById("scene");
+  const room = currentRoom();
+  const effect = document.createElement("div");
+  effect.className = "effect";
+
+  const centerX = ((h.x + h.w / 2) / room.background.width) * scene.clientWidth;
+  const centerY = ((h.y + h.h / 2) / room.background.height) * scene.clientHeight;
+
+  effect.style.left = centerX + "px";
+  effect.style.top = centerY + "px";
+  effect.textContent = type === "burst" ? "✨✦✨" : "✨";
+
+  scene.appendChild(effect);
+  setTimeout(() => effect.remove(), 800);
+}
+
+function render(){
+  const room = currentRoom();
+  const scene = document.getElementById("scene");
+  const bg = document.getElementById("bg");
+
+  bg.src = room.background.image;
+  scene.querySelectorAll(".hotspot").forEach(e => e.remove());
+
+  room.hotspots.forEach(h => {
+    const resolvedHotspot = getResolvedHotspot(h);
+    if(isInactiveHotspot(resolvedHotspot)) return;
+
+    const el = document.createElement("div");
+    const state = getHotspotState(room.id, h.id);
+    el.className = "hotspot" + (state !== "default" || (h.completedStates && Object.keys(h.completedStates).some(hasCompleted)) ? " changed" : "");
+    el.style.left = pct(h.x, room.background.width);
+    el.style.top = pct(h.y, room.background.height);
+    el.style.width = pct(h.w, room.background.width);
+    el.style.height = pct(h.h, room.background.height);
+    el.onclick = () => clickHotspot(h);
+
+    if(h.type === "exit"){
+      const icon = document.createElement("div");
+      icon.className = "exitIcon";
+      icon.textContent = h.icon || "🚪";
+      el.appendChild(icon);
+    }
+
+    scene.appendChild(el);
+  });
+
+  renderInventory();
+}
+
+function renderInventory(){
+  const track = document.getElementById("inventoryTrack");
+  const items = allInventoryItems();
+  track.innerHTML = "";
+
+  game.activeIndex = Math.max(0, Math.min(game.activeIndex, items.length - 1));
+
+  items.forEach((item, i) => {
+    const el = document.createElement("div");
+    el.className = "item" + (i === game.activeIndex ? " active" : "");
+    el.title = (i + 1) + ". " + (item.name || item.id);
+    el.innerHTML = "<div class='itemNumber'>" + (i + 1) + "</div><div>" + item.icon + "</div><div class='itemName'>" + (item.name || item.id) + "</div>";
+    el.onclick = () => {
+      game.activeIndex = i;
+      renderInventory();
+    };
+    track.appendChild(el);
+  });
+}
+
+function rotateInventory(dir){
+  const total = allInventoryItems().length;
+  game.activeIndex = (game.activeIndex + dir + total) % total;
+  renderInventory();
+}
+
+function showMessage(text, type){
+  const now = Date.now();
+  if(now < game.messageLockedUntil && type !== "success") return;
+
+  const msg = document.getElementById("message");
+  msg.textContent = text;
+  msg.className = "show" + (type === "success" ? " success" : "");
+
+  clearTimeout(showMessage.timer);
+
+  if(type === "success"){
+    game.messageLockedUntil = now + 1800;
+    showMessage.timer = setTimeout(() => {
+      msg.className = "";
+      game.messageLockedUntil = 0;
+    }, 5200);
+  }else{
+    showMessage.timer = setTimeout(() => msg.className = "", 5000);
+  }
+}
+
+function pct(v, max){return (v / max * 100) + "%";}
+function article(s){return /^[aeiou]/i.test(s) ? "an" : "a";}
+
+window.onkeydown = e => {
+  if(e.key === "ArrowLeft") rotateInventory(-1);
+  if(e.key === "ArrowRight") rotateInventory(1);
+
+  const n = Number(e.key);
+  if(n >= 1 && n <= 9){
+    const items = allInventoryItems();
+    if(items[n - 1]){
+      game.activeIndex = n - 1;
+      renderInventory();
+    }
+  }
+};
+
+render();
+</script>
+</body>
+</html>
