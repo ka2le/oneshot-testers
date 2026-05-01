@@ -6,13 +6,18 @@ const gameModules = import.meta.glob('../games/*.html', {
   import: 'default',
 })
 
+const labels = {
+  'drinks': 'Drinks',
+}
+
 export const games = Object.entries(gameModules)
   .map(([path, href]) => {
     const fileName = path.split('/').pop() ?? ''
-    const name = fileName.replace(/\.html$/i, '')
+    const slug = fileName.replace(/\.html$/i, '')
+    const name = labels[slug] ?? slug
 
     return {
-      slug: name,
+      slug,
       name,
       href: typeof href === 'string' && href.startsWith('/') ? href : `${base}games/${fileName}`,
     }
