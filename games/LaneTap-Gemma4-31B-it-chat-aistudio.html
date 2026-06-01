@@ -1,0 +1,488 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>4-Lane Pattern Tap</title>
+    <style>
+        :root {
+            --bg-color: #0a0a12;
+            --lane-1: #00f2ff; /* Cyan */
+            --lane-2: #ff007a; /* Magenta */
+            --lane-3: #ffea00; /* Yellow */
+            --lane-4: #00ff88; /* Green */
+            --text-color: #ffffff;
+            --panel-bg: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text-color);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            height: 100%;
+            max-height: 900px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            background: #000;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: rgba(10, 10, 18, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 10;
+            transition: opacity 0.3s ease;
+        }
+
+        .hidden {
+            display: none;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            background: linear-gradient(to bottom, #fff, #888);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px rgba(255,255,255,0.3));
+        }
+
+        p {
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            color: #aaa;
+            max-width: 80%;
+        }
+
+        .btn {
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+            box-shadow: 0 10px 20px rgba(0, 242, 255, 0.3);
+            text-transform: uppercase;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .stats-container {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .stat-box {
+            background: var(--panel-bg);
+            padding: 10px 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #888;
+            display: block;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        #combo-text {
+            position: absolute;
+            top: 40%;
+            width: 100%;
+            text-align: center;
+            font-size: 4rem;
+            font-weight: 900;
+            font-style: italic;
+            opacity: 0;
+            pointer-events: none;
+            text-shadow: 0 0 20px rgba(255,255,255,0.5);
+            z-index: 5;
+            transition: transform 0.1s;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div class="stats-container">
+            <div class="stat-box">
+                <span class="stat-label">Score</span>
+                <span id="score" class="stat-value">0</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">Health</span>
+                <span id="health" class="stat-value">100%</span>
+            </div>
+        </div>
+
+        <div id="combo-text">0x</div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="overlay">
+            <h1>Pattern Tap</h1>
+            <p>Press keys <b>1, 2, 3, 4</b> or tap the lanes when numbers reach the target line.</p>
+            <button class="btn" onclick="game.start()">Start Game</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over-screen" class="overlay hidden">
+            <h1>Game Over</h1>
+            <p id="final-score-text">Your score: 0</p>
+            <button class="btn" onclick="game.start()">Try Again</button>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+<script>
+/** 
+ * GAME CONFIGURATION
+ */
+const CONFIG = {
+    laneColors: ['#00f2ff', '#ff007a', '#ffea00', '#00ff88'],
+    baseFallSpeed: 4,
+    speedIncrement: 0.05,
+    spawnInterval: 800, // ms between notes
+    hitZoneY: 0.85,     // 85% down the screen
+    hitWindow: 60,      // pixels tolerance for 'Good'
+    perfectWindow: 20,  // pixels tolerance for 'Perfect'
+    initialHealth: 100,
+    missPenalty: 10,
+    patterns: [
+        // Level 1: Simple repetition
+        [1,1,1,1], [2,2,2,2], [1,2,1,2], [3,4,3,4], [1,2,3,4],
+        // Level 2: Symmetrical & Sequences
+        [4,3,2,1], [1,3,2,4], [1,1,2,2], [3,3,4,4], [1,2,3,4,4,3,2,1],
+        // Level 3: Complex
+        [1,4,2,3], [1,1,2,3,4,4], [2,4,2,4], [1,3,1,3], [4,1,4,1],
+        // Level 4: Mastery
+        [1,2,3,4,1,2,3,4], [4,4,3,3,2,2,1,1], [1,3,4,2,1,3,4,2]
+    ]
+};
+
+class Note {
+    constructor(lane, y, speed) {
+        this.lane = lane; // 0 to 3
+        this.y = y;
+        this.speed = speed;
+        this.hit = false;
+        this.missed = false;
+        this.radius = 25;
+    }
+
+    update() {
+        this.y += this.speed;
+    }
+
+    draw(ctx, canvasWidth, canvasHeight) {
+        const laneWidth = canvasWidth / 4;
+        const x = (this.lane * laneWidth) + laneWidth / 2;
+        
+        ctx.beginPath();
+        ctx.arc(x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = CONFIG.laneColors[this.lane];
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = CONFIG.laneColors[this.lane];
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = "#000";
+        ctx.font = "bold 20px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(this.lane + 1, x, this.y);
+    }
+}
+
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+
+        this.state = 'MENU'; // MENU, PLAYING, GAMEOVER
+        this.score = 0;
+        this.health = CONFIG.initialHealth;
+        this.combo = 0;
+        this.notes = [];
+        this.lastSpawnTime = 0;
+        this.currentPattern = [];
+        this.patternIndex = 0;
+        this.speedMultiplier = 1;
+        this.shake = 0;
+
+        this.setupInputs();
+        this.loop();
+    }
+
+    resize() {
+        this.canvas.width = this.canvas.offsetWidth;
+        this.canvas.height = this.canvas.offsetHeight;
+    }
+
+    setupInputs() {
+        // Keyboard
+        window.addEventListener('keydown', (e) => {
+            if (['1','2','3','4'].includes(e.key)) {
+                this.handleInput(parseInt(e.key) - 1);
+            }
+        });
+
+        // Touch/Click
+        this.canvas.addEventListener('mousedown', (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const lane = Math.floor(x / (this.canvas.width / 4));
+            this.handleInput(lane);
+        });
+    }
+
+    start() {
+        this.score = 0;
+        this.health = CONFIG.initialHealth;
+        this.combo = 0;
+        this.notes = [];
+        this.speedMultiplier = 1;
+        this.patternIndex = 0;
+        this.nextPattern();
+        this.state = 'PLAYING';
+        
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('game-over-screen').classList.add('hidden');
+        this.updateUI();
+    }
+
+    nextPattern() {
+        // Pick a random pattern based on current score progress
+        const difficultyTier = Math.min(
+            Math.floor(this.score / 1000), 
+            CONFIG.patterns.length - 1
+        );
+        // Select a pattern from the pool (simplified progression)
+        this.currentPattern = CONFIG.patterns[Math.floor(Math.random() * (difficultyTier + 1))];
+        this.patternIndex = 0;
+    }
+
+    handleInput(lane) {
+        if (this.state !== 'PLAYING') return;
+
+        const hitY = this.canvas.height * CONFIG.hitZoneY;
+        let hitFound = false;
+
+        for (let note of this.notes) {
+            if (note.lane === lane && !note.hit) {
+                const dist = Math.abs(note.y - hitY);
+
+                if (dist < CONFIG.hitWindow) {
+                    note.hit = true;
+                    hitFound = true;
+                    
+                    const isPerfect = dist < CONFIG.perfectWindow;
+                    this.score += isPerfect ? 100 : 50;
+                    this.combo++;
+                    this.triggerComboEffect();
+                    break;
+                }
+            }
+        }
+
+        if (!hitFound) {
+            this.health -= 5; // Penalty for ghost tapping
+            this.combo = 0;
+            this.shake = 10;
+        }
+        
+        this.updateUI();
+    }
+
+    triggerComboEffect() {
+        const el = document.getElementById('combo-text');
+        el.innerText = this.combo + 'x';
+        el.style.opacity = '1';
+        el.style.transform = 'scale(1.2)';
+        setTimeout(() => {
+            el.style.transform = 'scale(1)';
+        }, 50);
+    }
+
+    updateUI() {
+        document.getElementById('score').innerText = this.score;
+        document.getElementById('health').innerText = Math.max(0, this.health) + '%';
+        if (this.health <= 0 && this.state === 'PLAYING') {
+            this.gameOver();
+        }
+    }
+
+    gameOver() {
+        this.state = 'GAMEOVER';
+        document.getElementById('game-over-screen').classList.remove('hidden');
+        document.getElementById('final-score-text').innerText = `Final Score: ${this.score}`;
+    }
+
+    spawnNote() {
+        const noteValue = this.currentPattern[this.patternIndex];
+        const speed = CONFIG.baseFallSpeed * this.speedMultiplier;
+        this.notes.push(new Note(noteValue - 1, -50, speed));
+
+        this.patternIndex++;
+        if (this.patternIndex >= this.currentPattern.length) {
+            this.nextPattern();
+            this.speedMultiplier += CONFIG.speedIncrement;
+        }
+    }
+
+    update(timestamp) {
+        if (this.state !== 'PLAYING') return;
+
+        // Spawning logic
+        if (timestamp - this.lastSpawnTime > CONFIG.spawnInterval / this.speedMultiplier) {
+            this.spawnNote();
+            this.lastSpawnTime = timestamp;
+        }
+
+        // Update notes
+        for (let i = this.notes.length - 1; i >= 0; i--) {
+            const note = this.notes[i];
+            note.update();
+
+            // Check for miss (fell past hit zone)
+            if (!note.hit && note.y > this.canvas.height * (CONFIG.hitZoneY + 0.1)) {
+                note.missed = true;
+                this.health -= CONFIG.missPenalty;
+                this.combo = 0;
+                this.shake = 15;
+                this.updateUI();
+                this.notes.splice(i, 1);
+            } else if (note.hit) {
+                this.notes.splice(i, 1);
+            }
+        }
+
+        if (this.shake > 0) this.shake *= 0.9;
+    }
+
+    draw() {
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // Apply Screen Shake
+        ctx.save();
+        if (this.shake > 0.5) {
+            ctx.translate(Math.random() * this.shake, Math.random() * this.shake);
+        }
+
+        // Draw Lanes
+        const laneWidth = w / 4;
+        for (let i = 0; i < 4; i++) {
+            // Subtle lane background
+            ctx.fillStyle = 'rgba(255,255,255,0.03)';
+            ctx.fillRect(i * laneWidth, 0, laneWidth, h);
+
+            // Lane Borders
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(i * laneWidth, 0, laneWidth, h);
+        }
+
+        // Draw Hit Zone Line
+        const hitY = h * CONFIG.hitZoneY;
+        ctx.beginPath();
+        ctx.moveTo(0, hitY);
+        ctx.lineTo(w, hitY);
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([10, 10]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw Hit Zone Glow
+        const grad = ctx.createLinearGradient(0, hitY - 20, 0, hitY + 20);
+        grad.addColorStop(0, 'transparent');
+        grad.addColorStop(0.5, 'rgba(255,255,255,0.1)');
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, hitY - 20, w, 40);
+
+        // Draw Notes
+        this.notes.forEach(note => note.draw(ctx, w, h));
+
+        ctx.restore();
+    }
+
+    loop(timestamp = 0) {
+        this.update(timestamp);
+        this.draw();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+}
+
+// Initialize Game
+const game = new Game();
+</script>
+</body>
+</html>

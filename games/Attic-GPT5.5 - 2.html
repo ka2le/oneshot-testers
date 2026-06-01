@@ -1,0 +1,853 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Point & Click Engine</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#100d12;color:#f3eadc;font-family:Georgia;}
+#app{height:100%;position:relative;background:radial-gradient(circle at 50% 45%,#25191a 0%,#100d12 58%,#070508 100%);}
+#main{position:absolute;inset:0;overflow:hidden;background:transparent;}
+#scene{position:absolute;left:50%;top:50%;width:min(100vw,calc(100vh * 1.528));height:min(100vh,calc(100vw / 1.528));transform:translate(-50%,-50%);box-shadow:0 0 70px rgba(0,0,0,.45);}
+#scene img{width:100%;height:100%;display:block;object-fit:contain;pointer-events:none;user-select:none;}
+.hotspot{position:absolute;cursor:pointer;border-radius:10px;}
+.exitIcon{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:34px;filter:drop-shadow(0 3px 5px #000);pointer-events:none;opacity:.9;}
+
+#fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:.18s;z-index:4;}
+#fade.on{opacity:1;}
+
+#message{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);max-width:min(760px,calc(100vw - 32px));padding:9px 14px;border-radius:14px;background:rgba(18,12,14,.74);border:1px dashed rgba(255,220,160,.34);font-size:16px;line-height:1.28;text-align:center;opacity:0;transition:.2s;pointer-events:none;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.08);backdrop-filter:blur(5px);}
+#message.show{opacity:1;}
+#message.success{border:1px solid rgba(255,224,160,.78);box-shadow:0 0 17px rgba(255,224,160,.32),0 10px 30px rgba(0,0,0,.32);}
+
+#hud{position:absolute;left:12px;top:12px;z-index:18;pointer-events:none;}
+#inventoryShell{pointer-events:auto;display:inline-block;max-width:calc(100vw - 24px);padding:5px;border-radius:15px;background:rgba(18,12,14,.16);border:1px dashed rgba(235,200,135,.34);box-shadow:0 8px 22px rgba(0,0,0,.18),inset 0 0 16px rgba(255,210,130,.035);backdrop-filter:blur(3px);}
+#inventoryViewport{position:relative;overflow:visible;}
+#inventoryTrack{display:flex;gap:5px;align-items:flex-start;transition:none;transform:none !important;}
+.item{width:50px;height:50px;flex:0 0 50px;border-radius:12px;border:1px solid rgba(235,200,135,.36);background:radial-gradient(circle at 50% 32%,rgba(74,53,42,.98),rgba(22,15,17,.98));display:grid;place-items:center;font-size:22px;position:relative;cursor:pointer;transition:transform .14s,border-color .14s,box-shadow .14s;}
+.item:hover{transform:translateY(1px);border-color:rgba(255,224,160,.72);box-shadow:0 0 10px rgba(255,224,160,.12);}
+.item.active{transform:translateY(2px);border:1px solid #ffe0a0;box-shadow:0 0 14px rgba(255,224,160,.28),inset 0 0 14px rgba(255,224,160,.10);}
+.itemNumber{position:absolute;top:2px;left:5px;font:8px system-ui,sans-serif;color:#f7dfad;opacity:.88;text-shadow:0 1px 2px #000;}
+.itemName{position:absolute;left:4px;right:4px;bottom:3px;font:7.5px system-ui,sans-serif;color:#ead8bd;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px #000;opacity:.86;}
+#invLabel{display:none;}
+
+.effect{position:absolute;pointer-events:none;transform:translate(-50%,-50%);font-size:24px;z-index:7;animation:pop .75s ease-out forwards;}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-50%) scale(.45) rotate(0deg);}35%{opacity:1;}100%{opacity:0;transform:translate(-50%,-50%) scale(2.1) rotate(18deg);}}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="main">
+    <div id="scene"><img id="bg"></div>
+    <div id="fade"></div>
+    <div id="message"></div>
+  </div>
+
+  <div id="hud">
+    <div id="inventoryShell">
+      <div id="inventoryViewport"><div id="inventoryTrack"></div></div>
+      <div id="invLabel"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const hiddenManorGame = {
+  startRoom:"kitchen",
+
+  tools:[
+    { id:"interact", name:"Point", icon:"☝️", tool:"interact" },
+    { id:"look", name:"Look", icon:"👁️", tool:"look" },
+    { id:"talk", name:"Talk", icon:"💬", tool:"talk" }
+  ],
+
+  items:{
+    sugarPearl:{ id:"sugarPearl", name:"Sugar Pearl", icon:"🫧", use:"sugarPearl" },
+    moonJam:{ id:"moonJam", name:"Moonberry Jam", icon:"🍓", use:"moonJam" },
+    cheeseStamp:{ id:"cheeseStamp", name:"Cheese Stamp", icon:"🧀", use:"cheeseStamp" },
+    conductorsBaton:{ id:"conductorsBaton", name:"Conductor's Baton", icon:"🎼", use:"conductorsBaton" },
+    starMap:{ id:"starMap", name:"Star Map", icon:"🗺️", use:"starMap" },
+    fireflyJar:{ id:"fireflyJar", name:"Firefly Jar", icon:"🫙", use:"fireflyJar" },
+    tinyPropeller:{ id:"tinyPropeller", name:"Tiny Propeller", icon:"🛩️", use:"tinyPropeller" },
+    royalSeal:{ id:"royalSeal", name:"Royal Seal", icon:"📜", use:"royalSeal" },
+    cellarKey:{ id:"cellarKey", name:"Cellar Key", icon:"🗝️", use:"cellarKey" },
+    etiquetteCard:{ id:"etiquetteCard", name:"Etiquette Card", icon:"🎩", use:"etiquetteCard" },
+    grandRecipe:{ id:"grandRecipe", name:"Grand Recipe", icon:"📖", use:"grandRecipe" },
+    moonTart:{ id:"moonTart", name:"Moon Tart", icon:"🥧", use:"moonTart" }
+  },
+
+  rooms:{
+    kitchen:{
+      id:"kitchen",
+      name:"The Floury Kitchen",
+      background:{ image:"kitchen2.png", width:1528, height:1000 },
+      hotspots:[
+        {
+          id:"frogChef",
+          x:275, y:385, w:210, h:300,
+          text:{
+            look:"A frog chef stirs a copper pot with the confidence of someone who has never measured anything in his life.",
+            interact:"Chef Croakford says, 'Dinner for the Moon Prince is ruined! I am missing the royal sugar pearl, moonberry jam, and the Grand Recipe. Also dignity, but that is optional.'",
+            talk:"Chef Croakford whispers, 'The recipe was taken upstairs by the attic owl. He claimed it needed historical context.'"
+          },
+          useItem:{
+            sugarPearl:{
+              setsState:{ roomId:"kitchen", hotspotId:"mixingTable", state:"pearlAdded" },
+              consumeUsedItem:true,
+              effect:"sparkle",
+              onSuccess:"The pearl dissolves into the dough with a polite twinkle. Chef Croakford wipes away a proud amphibian tear.",
+              onDone:"The dough already has enough pearl. Any more and it becomes jewelry."
+            },
+            moonJam:{
+              requiresState:{ roomId:"kitchen", hotspotId:"mixingTable", state:"pearlAdded" },
+              setsState:{ roomId:"kitchen", hotspotId:"mixingTable", state:"jamAdded" },
+              consumeUsedItem:true,
+              effect:"burst",
+              onSuccess:"You fold the moonberry jam into the dough. It glows like a dessert with secrets.",
+              onBlocked:"The chef blocks the jar with his spoon. 'Pearl first! We are not barbarians.'",
+              onDone:"The jam is already in the dough. The dough looks smug about it."
+            },
+            grandRecipe:{
+              requiresState:{ roomId:"kitchen", hotspotId:"mixingTable", state:"jamAdded" },
+              setsState:{ roomId:"kitchen", hotspotId:"oven", state:"recipeReady" },
+              consumeUsedItem:true,
+              effect:"sparkle",
+              onSuccess:"The recipe explains the final step: 'Bake until the moon feels remembered.' Chef Croakford says that is perfectly clear.",
+              onBlocked:"The recipe is useless until the dough contains the pearl and jam. It mostly just says 'No improvising, frog.'",
+              onDone:"The recipe has already been consulted and judged."
+            }
+          },
+          states:{
+            grateful:{ text:{ talk:"Chef Croakford says, 'A tart for the Moon Prince! I shall name a ladle after you.'" } }
+          }
+        },
+        {
+          id:"mixingTable",
+          x:540, y:520, w:440, h:260,
+          text:{
+            look:"Two mouse apprentices knead dough with the focus of tiny monks. Flour covers everything except the parts that should be floury.",
+            interact:"The mice offer you a shimmering sugar pearl. 'We found it in the flour. We were going to hatch it.'",
+            talk:"The left mouse says, 'Chef says a recipe is just a law with butter.' The right mouse nods solemnly."
+          },
+          givesItem:{ itemId:"sugarPearl", effect:"sparkle", onFirst:"You receive the Sugar Pearl. It hums faintly, probably in C sharp.", onDone:"The mice have no more pearls. They are now guarding a raisin." },
+          states:{
+            pearlAdded:{ text:{ look:"The dough now sparkles gently. The mice have promoted it to 'important dough'." } },
+            jamAdded:{ text:{ look:"The dough is marbled with moonberry jam and looks ready for instructions from a higher pastry authority." } }
+          }
+        },
+        {
+          id:"oven",
+          x:95, y:280, w:260, h:420,
+          text:{
+            look:"A grand black-and-gold oven. It looks powerful enough to bake bread, pies, and possibly small opinions.",
+            interact:"The oven door is warm, proud, and refusing to work without a proper recipe."
+          },
+          useItem:{
+            grandRecipe:{
+              setsState:{ roomId:"kitchen", hotspotId:"oven", state:"recipeReady" },
+              consumeUsedItem:true,
+              effect:"sparkle",
+              onSuccess:"You tuck the recipe into the brass recipe clip. The oven clears its throat in Old Culinary.",
+              onDone:"The oven already has the recipe. It is pretending not to read ahead."
+            }
+          },
+          states:{
+            recipeReady:{
+              text:{ look:"The oven glows with purpose. It is ready to bake something dangerously charming.", interact:"You bake the Moon Tart. The kitchen smells like butter, night air, and applause." },
+              givesItem:{ itemId:"moonTart", effect:"burst", onFirst:"You receive the Moon Tart. It is still warm and slightly theatrical.", onDone:"One Moon Tart is enough. Even the oven looks tired." }
+            }
+          }
+        },
+        {
+          id:"snailButler",
+          x:1160, y:660, w:180, h:220,
+          text:{
+            look:"A snail butler waits beside the tea tray. He has the posture of someone who once arrived late and decided to make it a lifestyle.",
+            interact:"The snail butler says, 'The Moon Prince accepts guests only with perfect etiquette. I misplaced the card in the cellar during a slow emergency.'",
+            talk:"He says, 'Never slurp soup in front of royalty unless the soup slurps first.'"
+          },
+          useItem:{
+            etiquetteCard:{
+              completes:"snailApproved",
+              consumeUsedItem:false,
+              effect:"sparkle",
+              onSuccess:"The snail butler studies the card. 'Excellent. You may now bow at a speed I consider reckless.'",
+              onDone:"The snail butler has already approved your manners. This may be the proudest day of his week."
+            }
+          },
+          completedStates:{
+            snailApproved:{ text:{ talk:"The snail butler says, 'Remember: pinky out, antennae in, no jokes about tides.'" } }
+          }
+        },
+        {
+          id:"cellarDoor",
+          x:1185, y:280, w:175, h:360,
+          text:{
+            look:"An arched doorway leads down toward cooler stone and suspicious preserves.",
+            interact:"The cellar door is locked. A note says: 'Key held by the portraits until morale improves.'"
+          },
+          useItem:{
+            cellarKey:{
+              setsState:{ roomId:"kitchen", hotspotId:"cellarDoor", state:"unlocked" },
+              consumeUsedItem:false,
+              effect:"burst",
+              onSuccess:"The cellar key turns. Somewhere below, a jar giggles.",
+              onDone:"The cellar door is already unlocked."
+            }
+          },
+          states:{
+            unlocked:{
+              type:"exit",
+              icon:"🚪",
+              targetRoom:"cellar",
+              text:{ look:"The cellar is open. It smells like stone, cheese, and ambitious jam.", interact:"" }
+            }
+          }
+        },
+        {
+          id:"hallwayToMusic",
+          type:"exit",
+          icon:"🚪",
+          targetRoom:"musicRoom",
+          x:1325, y:300, w:165, h:340,
+          text:{ look:"Beyond the doorway lies the manor's music room, where everything has opinions about tempo.", interact:"" }
+        },
+        {
+          id:"vegetableCrate",
+          x:25, y:780, w:280, h:185,
+          text:{
+            look:"A heroic pile of vegetables waits to become soup. The cabbage looks like it knows too much.",
+            interact:"You search the vegetables. The carrots are innocent. The cabbage refuses to comment.",
+            talk:"You whisper to the cabbage. It remains leafy but emotionally distant."
+          }
+        },
+        {
+          id:"chinaCabinet",
+          x:795, y:230, w:210, h:280,
+          text:{
+            look:"A cabinet of blue-and-white jars. Every jar is labeled in a handwriting that starts elegant and ends panicked.",
+            interact:"You open a jar. It contains dried lavender and a tiny note reading, 'Not the secret one.'"
+          }
+        }
+      ]
+    },
+
+    musicRoom:{
+      id:"musicRoom",
+      name:"Moonlit Music Room",
+      background:{ image:"musicroom2.png", width:1528, height:1000 },
+      hotspots:[
+        {
+          id:"rabbitConductor",
+          x:350, y:170, w:250, h:360,
+          text:{
+            look:"A rabbit conductor stands on a little platform, waving a baton like he personally invented rhythm.",
+            interact:"Maestro Lapin squeaks, 'The Moon Waltz is impossible without my official baton. I am currently conducting with moral authority alone.'",
+            talk:"He says, 'The portraits hum when flattered, the piano sulks when ignored, and the beetles always come in early.'"
+          },
+          useItem:{
+            conductorsBaton:{
+              setsState:{ roomId:"musicRoom", hotspotId:"orchestra", state:"tuned" },
+              consumeUsedItem:true,
+              effect:"sparkle",
+              onSuccess:"Maestro Lapin snatches the baton and the room snaps into tempo. Even the chandelier stops jingling off-beat.",
+              onDone:"The maestro already has his baton and is using it to threaten a trombone."
+            },
+            moonTart:{
+              requiresState:{ roomId:"musicRoom", hotspotId:"orchestra", state:"tuned" },
+              requiresCompleted:"snailApproved",
+              completes:"finalConcert",
+              consumeUsedItem:true,
+              effect:"burst",
+              onSuccess:"You present the Moon Tart as the orchestra plays. The moonbeam lands on the piano, the portraits sing harmony, and the manor remembers its annual Midnight Banquet.",
+              onBlocked:"This is not yet a royal presentation. You need tuned music and approved etiquette.",
+              onDone:"The Moon Prince has already received the tart. The room is still glowing with smug success."
+            }
+          },
+          completedStates:{
+            finalConcert:{ text:{ look:"Maestro Lapin bows so deeply his ears dust the piano. The Midnight Banquet is saved.", talk:"He says, 'Bravo! You have restored music, manners, and dessert. History will be mostly accurate.'" } }
+          }
+        },
+        {
+          id:"grandPiano",
+          x:560, y:250, w:455, h:320,
+          text:{
+            look:"A glossy grand piano dominates the room. Its open sheet music is titled 'Nocturne for Hungry Royalty'.",
+            interact:"You press a key. The piano answers with a chord that sounds like a locked drawer clearing its throat.",
+            talk:"You ask the piano how it feels. It plays a minor chord. Typical."
+          },
+          useItem:{
+            cheeseStamp:{
+              setsState:{ roomId:"musicRoom", hotspotId:"grandPiano", state:"authorized" },
+              consumeUsedItem:false,
+              effect:"sparkle",
+              onSuccess:"You stamp the sheet music with the official cheese seal. The piano, now legally satisfied, opens a hidden compartment.",
+              onDone:"The sheet music is already stamped. The piano respects paperwork."
+            }
+          },
+          states:{
+            authorized:{
+              text:{ look:"The piano's secret compartment is open. Inside rests a conductor's baton wrapped in velvet and passive aggression.", interact:"You take the conductor's baton." },
+              givesItem:{ itemId:"conductorsBaton", effect:"sparkle", onFirst:"You receive the Conductor's Baton. It smells faintly of varnish and applause.", onDone:"The compartment is empty except for a note: 'Return baton before encore.'" }
+            }
+          }
+        },
+        {
+          id:"orchestra",
+          x:65, y:700, w:1320, h:230,
+          text:{
+            look:"An insect orchestra waits on tiny chairs. The beetles polish brass, the crickets tune strings, and one ladybug looks born to judge.",
+            interact:"The orchestra attempts a warm-up. It sounds like a cupboard falling down politely.",
+            talk:"A beetle says, 'We cannot play the Moon Waltz until the maestro has his baton. We tried democracy. It was very loud.'"
+          },
+          states:{
+            tuned:{ text:{ look:"The orchestra is tuned and waiting. Every instrument gleams. The ladybug has reduced her judgment by almost twelve percent.", interact:"They play a bright little phrase that makes the curtains sway." } }
+          }
+        },
+        {
+          id:"portraitGallery",
+          x:970, y:145, w:380, h:270,
+          text:{
+            look:"The family portraits watch the room with gilded suspicion. The fox duchess seems especially fond of compliments.",
+            interact:"You bow to the portraits. The fox duchess approves; the lion pretends he invented bowing.",
+            talk:"The small mouse portrait whispers, 'The cellar key is hidden where the music keeps time.'"
+          },
+          useItem:{
+            royalSeal:{
+              givesItem:{ itemId:"cellarKey", effect:"sparkle", onFirst:"You press the Royal Seal beneath the mouse portrait. A tiny key drops out with aristocratic embarrassment.", onDone:"The portraits have no more keys, only opinions." },
+              onSuccess:"The seal fits the carved crest below the portraits.",
+              onDone:"The portraits are already impressed, which is dangerous."
+            }
+          }
+        },
+        {
+          id:"mantelClock",
+          x:1260, y:365, w:180, h:190,
+          text:{
+            look:"A mantel clock ticks in waltz time: one-two-three, one-two-three. It is the only clock in the manor that enjoys pressure.",
+            interact:"You open the clock face and find a circular royal crest hidden behind the hands."
+          },
+          givesItem:{ itemId:"royalSeal", effect:"sparkle", onFirst:"You receive the Royal Seal. It has a moon, a fork, and a very serious squirrel engraved on it.", onDone:"The clock contains only ticks now, and it is very possessive of them." }
+        },
+        {
+          id:"windowMoon",
+          x:455, y:80, w:245, h:250,
+          text:{
+            look:"The full moon stares through the window like a dinner guest checking whether the table is set.",
+            interact:"Moonlight spills across the piano. For a moment, the sheet music rearranges itself into the shape of a tart."
+          }
+        },
+        {
+          id:"atticStairs",
+          type:"exit",
+          icon:"🚪",
+          targetRoom:"attic",
+          x:20, y:110, w:260, h:470,
+          text:{ look:"A dark corner of the library wall hides a narrow stair up to the attic.", interact:"" }
+        },
+        {
+          id:"backToKitchen",
+          type:"exit",
+          icon:"🚪",
+          targetRoom:"kitchen",
+          x:1390, y:360, w:120, h:360,
+          text:{ look:"Back to the kitchen, where the flour has probably spread.", interact:"" }
+        }
+      ]
+    },
+
+    attic:{
+      id:"attic",
+      name:"The Firefly Attic",
+      background:{ image:"attic2.png", width:1528, height:1000 },
+      hotspots:[
+        {
+          id:"owlHistorian",
+          x:130, y:310, w:340, h:330,
+          text:{
+            look:"Professor Hootwick sits on an old trunk, reading a letter through spectacles that magnify his concern.",
+            interact:"The owl says, 'The Grand Recipe is historically significant. I cannot release it until I know which stars were above the first banquet.'",
+            talk:"He says, 'The squirrel assistant has the star map, naturally. Squirrels are drawn to documents with corners.'"
+          },
+          useItem:{
+            starMap:{
+              setsState:{ roomId:"attic", hotspotId:"owlHistorian", state:"starsKnown" },
+              consumeUsedItem:false,
+              effect:"sparkle",
+              onSuccess:"Professor Hootwick compares the map to the dusty ceiling. 'Aha! The moon was in the House of Butter. That explains everything.'",
+              onDone:"The professor already knows the stars. He is now correcting their grammar."
+            },
+            fireflyJar:{
+              requiresState:{ roomId:"attic", hotspotId:"owlHistorian", state:"starsKnown" },
+              givesItem:{ itemId:"grandRecipe", effect:"burst", onFirst:"The fireflies illuminate the old letter. Hidden ink reveals the Grand Recipe. Professor Hootwick reluctantly lets you borrow it.", onDone:"The professor has no more recipes, but several lectures remain available." },
+              onSuccess:"The fireflies glow over the page like tiny librarians.",
+              onBlocked:"The professor says, 'Light without context is just gossip. Bring the star map first.'"
+            }
+          },
+          states:{
+            starsKnown:{ text:{ look:"Professor Hootwick has identified the banquet constellation and looks almost unbearably satisfied.", talk:"He says, 'Now we need firefly light. Moon recipes are shy under ordinary lamps.'" } }
+          }
+        },
+        {
+          id:"squirrelDesk",
+          x:930, y:475, w:315, h:260,
+          text:{
+            look:"A squirrel engineer works on a red toy airplane. His goggles suggest genius; the glue on his elbow suggests otherwise.",
+            interact:"The squirrel says, 'My plane could fetch the star map from that high beam, but alas! My propeller has gone missing in the kitchen of history.'",
+            talk:"He says, 'Never trust a propeller. Round things always think they are wheels.'"
+          },
+          useItem:{
+            tinyPropeller:{
+              setsState:{ roomId:"attic", hotspotId:"toyPlane", state:"repaired" },
+              consumeUsedItem:true,
+              effect:"burst",
+              onSuccess:"The squirrel installs the propeller. The toy plane buzzes proudly, nearly salutes, and aims at the rafters.",
+              onDone:"The plane already has a propeller and an inflated sense of destiny."
+            }
+          }
+        },
+        {
+          id:"toyPlane",
+          x:900, y:590, w:330, h:190,
+          text:{
+            look:"A little red airplane sits on the workbench. It is missing a propeller and pretending this was a design choice.",
+            interact:"Without a propeller, the plane makes a brave but stationary airplane noise."
+          },
+          states:{
+            repaired:{
+              text:{ look:"The toy plane is repaired. It vibrates with heroic impatience.", interact:"You launch the plane. It circles the attic, steals a map from the rafters, and crash-lands into a hat." },
+              givesItem:{ itemId:"starMap", effect:"sparkle", onFirst:"You receive the Star Map. Several constellations are labeled with snack names.", onDone:"The plane has already performed its one miracle and would like a medal." }
+            }
+          }
+        },
+        {
+          id:"fireflyJars",
+          x:760, y:290, w:300, h:290,
+          text:{
+            look:"Dozens of fireflies glow in glass jars. They blink in patterns that might be language or just gossip.",
+            interact:"The jars are sealed with tiny brass latches. A note says: 'For scholarly illumination only.'",
+            talk:"You ask the fireflies for help. They blink: 'PAYMENT IN STORIES ACCEPTED.' Probably."
+          },
+          useItem:{
+            etiquetteCard:{
+              givesItem:{ itemId:"fireflyJar", effect:"sparkle", onFirst:"You read the etiquette card aloud. The fireflies appreciate the bit about not interrupting royalty and volunteer as scholarly light.", onDone:"You already have a jar of helpful fireflies. The rest are unionizing." },
+              onSuccess:"The fireflies agree that politeness counts as a story.",
+              onDone:"The fireflies have already chosen their representative."
+            }
+          }
+        },
+        {
+          id:"telescope",
+          x:845, y:120, w:350, h:230,
+          text:{
+            look:"A brass telescope points through dusty sunbeams toward the moon. It has seen many stars and at least one chimney sweep.",
+            interact:"You peer through the telescope. The moon looks hungry."
+          }
+        },
+        {
+          id:"trunkOfToys",
+          x:420, y:675, w:280, h:180,
+          text:{
+            look:"An old toy trunk overflows with broken soldiers, ribbons, medals, and one clown doll with the confidence of a tax collector.",
+            interact:"You rummage through the trunk and find a tiny propeller tucked inside a velvet shoe.",
+            talk:"The clown doll says nothing. That is somehow worse."
+          },
+          givesItem:{ itemId:"tinyPropeller", effect:"sparkle", onFirst:"You receive the Tiny Propeller. It spins when you say 'adventure' too loudly.", onDone:"The trunk contains no more propellers. The clown refuses to be searched again." }
+        },
+        {
+          id:"constellationBoard",
+          x:1025, y:310, w:310, h:190,
+          text:{
+            look:"A chalkboard shows constellations connected with string. One looks like a fork. Another looks like a squirrel denying involvement.",
+            interact:"You trace the chalk lines. They form a route from the kitchen, through music, into the cellar, and back to dessert."
+          }
+        },
+        {
+          id:"backToMusic",
+          type:"exit",
+          icon:"🚪",
+          targetRoom:"musicRoom",
+          x:0, y:155, w:120, h:620,
+          text:{ look:"The stairway leads back down to the music room.", interact:"" }
+        }
+      ]
+    },
+
+    cellar:{
+      id:"cellar",
+      name:"The Cheesemonger Cellar",
+      background:{ image:"cellar2.png", width:1528, height:1000 },
+      hotspots:[
+        {
+          id:"batSommelier",
+          x:250, y:170, w:260, h:330,
+          text:{
+            look:"A cheerful bat in a waistcoat stands atop a barrel, holding grapes like a dramatic bouquet.",
+            interact:"The bat says, 'Welcome to the cellar! Tonight's special is moonberry jam, aged in darkness and mild confusion.'",
+            talk:"He says, 'The moles are sealing jam for the banquet, but they won't open the reserve without proper etiquette. Moles are surprisingly formal underground.'"
+          },
+          useItem:{
+            etiquetteCard:{
+              setsState:{ roomId:"cellar", hotspotId:"moleJamTable", state:"formal" },
+              consumeUsedItem:false,
+              effect:"sparkle",
+              onSuccess:"You show the etiquette card. The bat gasps. 'Ah! Authorized manners. Moles, commence polite jam handling!'",
+              onDone:"The cellar already acknowledges your manners. The bat keeps bowing anyway."
+            }
+          }
+        },
+        {
+          id:"cheeseHedgehog",
+          x:640, y:520, w:265, h:260,
+          text:{
+            look:"A hedgehog cheesemonger slices wedges with the care of a jeweler and the grin of a smuggler.",
+            interact:"The hedgehog says, 'No stamp, no cheese authority. No cheese authority, no piano permission. The manor is very clear on this.'",
+            talk:"He whispers, 'Find me the good blue cheese label and I can make you an official stamp. Bureaucracy is mostly dairy.'"
+          },
+          useItem:{
+            royalSeal:{
+              givesItem:{ itemId:"cheeseStamp", effect:"sparkle", onFirst:"The hedgehog presses the Royal Seal into soft cheese wax. You receive an official Cheese Stamp.", onDone:"The hedgehog refuses to make a second stamp. 'That way lies counterfeit fondue.'" },
+              onSuccess:"The hedgehog approves the royal crest and invents a short anthem for cheese paperwork.",
+              onDone:"You already have the Cheese Stamp."
+            }
+          }
+        },
+        {
+          id:"moleJamTable",
+          x:1000, y:560, w:390, h:270,
+          text:{
+            look:"Three moles work around a jam table, sealing jars with intense underground concentration.",
+            interact:"The moles guard the moonberry jam reserve. One says, 'No manners, no moonberries.'",
+            talk:"A mole says, 'We once let an impolite guest near the jam. He double-dipped history.'"
+          },
+          states:{
+            formal:{
+              text:{ look:"The moles have recognized your etiquette. Their tiny aprons look less suspicious of you.", interact:"The moles present a jar of moonberry jam with a bow so deep it nearly becomes digging." },
+              givesItem:{ itemId:"moonJam", effect:"sparkle", onFirst:"You receive the Moonberry Jam. It sloshes with faint lunar drama.", onDone:"The moles have closed the reserve. They now bow at each other for practice." }
+            }
+          }
+        },
+        {
+          id:"etiquetteCrate",
+          x:1090, y:790, w:260, h:150,
+          text:{
+            look:"A crate labeled 'ETIQUETTES'. Whoever wrote it believed manners were plural and possibly stackable.",
+            interact:"Inside is a card titled 'Royal Table Manners for Creatures With, Without, or Uncertain About Elbows.'",
+            talk:"You ask the crate for advice. The crate recommends splinter-free posture."
+          },
+          givesItem:{ itemId:"etiquetteCard", effect:"sparkle", onFirst:"You receive the Etiquette Card. Rule one: never call the Moon Prince 'your roundness' unless invited.", onDone:"The crate has no more useful etiquette. Only advanced fork theory remains." }
+        },
+        {
+          id:"blueCheeseLabel",
+          x:795, y:705, w:170, h:100,
+          text:{
+            look:"A tiny chalk sign reads 'Bleu de Grotte'. The cheese behind it smells like a cave learned opera.",
+            interact:"The label is exactly the sort of official-looking nonsense the piano would respect."
+          }
+        },
+        {
+          id:"barrels",
+          x:170, y:420, w:430, h:300,
+          text:{
+            look:"Massive barrels line the cellar. One is marked 'Château de la Nuit, 1921'. Another is marked 'Do Not Tap Unless Plot Requires'.",
+            interact:"You tap a barrel. It replies with a hollow glug, which is cellar for 'maybe later'."
+          }
+        },
+        {
+          id:"preserveShelves",
+          x:1180, y:180, w:260, h:340,
+          text:{
+            look:"Shelves of confitures glow in reds, golds, and purples. One jar appears to be staring back.",
+            interact:"Most jars are ordinary preserves. One is labeled 'Jamais Vu', which feels like a warning."
+          }
+        },
+        {
+          id:"backToKitchen",
+          type:"exit",
+          icon:"🚪",
+          targetRoom:"kitchen",
+          x:720, y:120, w:285, h:350,
+          text:{ look:"The stone stairs lead back up to the kitchen.", interact:"" }
+        }
+      ]
+    }
+  }
+};
+let game = {
+  data: hiddenManorGame ,
+  currentRoom: hiddenManorGame .startRoom,
+  inventory: [],
+  usedItems: [],
+  completedInteractions: [],
+  hotspotStates: {},
+  activeIndex: 0,
+  messageLockedUntil: 0
+};
+
+function currentRoom(){return game.data.rooms[game.currentRoom];}
+function allInventoryItems(){return [...game.data.tools, ...game.inventory.map(id => game.data.items[id]).filter(Boolean)];}
+function activeItem(){return allInventoryItems()[game.activeIndex] || allInventoryItems()[0];}
+function hasItem(id){return game.inventory.includes(id) || game.usedItems.includes(id);}
+function hasCompleted(id){return game.completedInteractions.includes(id);}
+function stateKey(roomId, hotspotId){return roomId + "." + hotspotId;}
+function getHotspotState(roomId, hotspotId){return game.hotspotStates[stateKey(roomId, hotspotId)] || "default";}
+function setHotspotState(roomId, hotspotId, state){game.hotspotStates[stateKey(roomId, hotspotId)] = state;}
+
+function addItem(id){
+  if(!hasItem(id) && game.data.items[id]){
+    const selected = activeItem();
+    game.inventory.push(id);
+
+    const items = allInventoryItems();
+    const previousIndex = items.findIndex(item => item && selected && item.id === selected.id);
+    game.activeIndex = previousIndex >= 0 ? previousIndex : 0;
+  }
+}
+function consumeItem(id){
+  game.inventory = game.inventory.filter(itemId => itemId !== id);
+  if(!game.usedItems.includes(id)) game.usedItems.push(id);
+  game.activeIndex = Math.max(0, Math.min(game.activeIndex, allInventoryItems().length - 1));
+}
+
+function mergeHotspot(base, patch){
+  return {
+    ...base,
+    ...patch,
+    text:{ ...(base.text || {}), ...(patch.text || {}) },
+    useItem:{ ...(base.useItem || {}), ...(patch.useItem || {}) }
+  };
+}
+
+function getResolvedHotspot(rawHotspot){
+  const roomId = currentRoom().id;
+  const state = getHotspotState(roomId, rawHotspot.id);
+
+  if(rawHotspot.completedWhenItemExists && hasItem(rawHotspot.completedWhenItemExists) && rawHotspot.completedText){
+    return { ...rawHotspot, text:rawHotspot.completedText };
+  }
+
+  if(rawHotspot.completedStates){
+    for(const completedId in rawHotspot.completedStates){
+      if(hasCompleted(completedId)) return mergeHotspot(rawHotspot, rawHotspot.completedStates[completedId]);
+    }
+  }
+
+  if(state !== "default" && rawHotspot.states && rawHotspot.states[state]){
+    return mergeHotspot(rawHotspot, rawHotspot.states[state]);
+  }
+
+  return rawHotspot;
+}
+
+function ruleBlocked(rule){
+  if(rule.requiresState){
+    const s = getHotspotState(rule.requiresState.roomId, rule.requiresState.hotspotId);
+    if(s !== rule.requiresState.state) return "state";
+  }
+  if(rule.completes && hasCompleted(rule.completes)) return "completed";
+  if(rule.givesItem && hasItem(rule.givesItem)) return "item";
+  if(rule.setsState){
+    const current = getHotspotState(rule.setsState.roomId, rule.setsState.hotspotId);
+    if(current === rule.setsState.state) return "stateAlready";
+  }
+  return false;
+}
+
+function hasTextValue(value){
+  if(typeof value === "string") return value.trim().length > 0;
+  if(Array.isArray(value)) return value.some(hasTextValue);
+  if(value && typeof value === "object") return Object.entries(value).some(([key, nested]) => key !== "developerDescription" && hasTextValue(nested));
+  return false;
+}
+function isInactiveHotspot(h){
+  return !hasTextValue(h.text) && !hasTextValue(h.completedText) && !hasTextValue(h.states) && !hasTextValue(h.completedStates) && !hasTextValue(h.useItem);
+}
+
+function clickHotspot(rawHotspot){
+  const h = getResolvedHotspot(rawHotspot);
+  if(isInactiveHotspot(h)) return;
+  const active = activeItem();
+
+  if(h.type === "exit" && active.tool === "interact"){
+    changeRoom(h.targetRoom);
+    return;
+  }
+
+  if(active.use && h.useItem && h.useItem[active.id]){
+    const rule = h.useItem[active.id];
+    const blocked = ruleBlocked(rule);
+
+    if(blocked){
+      showMessage(rule.onBlocked || rule.onDone || "Nothing else happens.");
+      return;
+    }
+
+    if(rule.givesItem) addItem(rule.givesItem);
+    if(rule.setsState) setHotspotState(rule.setsState.roomId, rule.setsState.hotspotId, rule.setsState.state);
+    if(rule.completes && !hasCompleted(rule.completes)) game.completedInteractions.push(rule.completes);
+    if(rule.consumeUsedItem) consumeItem(active.id);
+
+    spawnEffect(rawHotspot, rule.effect || "sparkle");
+    showMessage(rule.onSuccess || "Done.", rule.effect === "none" ? undefined : "success");
+    render();
+    return;
+  }
+
+  if(active.use){
+    showMessage("That doesn't seem to work here.");
+    return;
+  }
+
+  if(active.tool === "interact" && h.givesItem){
+    if(hasItem(h.givesItem.itemId)){
+      showMessage(h.givesItem.onDone || "Nothing else happens.");
+    }else{
+      addItem(h.givesItem.itemId);
+      spawnEffect(rawHotspot, h.givesItem.effect || "sparkle");
+      showMessage(h.givesItem.onFirst || "You found something.", "success");
+      render();
+    }
+    return;
+  }
+
+  const text = getResolvedHotspot(rawHotspot).text || {};
+  const fallback = {
+    look:"That looks like " + article(h.label || "thing") + " " + (h.label || "thing").toLowerCase() + ".",
+    talk:"I don't think it can talk. Not without encouragement, anyway.",
+    interact:"You fiddle with it for a moment. Nothing obvious happens."
+  };
+
+  showMessage(text[active.tool] || fallback[active.tool]);
+}
+
+function changeRoom(targetRoom){
+  const fade = document.getElementById("fade");
+  fade.classList.add("on");
+  setTimeout(() => {
+    game.currentRoom = targetRoom;
+    render();
+    setTimeout(() => fade.classList.remove("on"), 80);
+  }, 180);
+}
+
+function spawnEffect(h, type){
+  if(type === "none") return;
+
+  const scene = document.getElementById("scene");
+  const room = currentRoom();
+  const effect = document.createElement("div");
+  effect.className = "effect";
+
+  const centerX = ((h.x + h.w / 2) / room.background.width) * scene.clientWidth;
+  const centerY = ((h.y + h.h / 2) / room.background.height) * scene.clientHeight;
+
+  effect.style.left = centerX + "px";
+  effect.style.top = centerY + "px";
+  effect.textContent = type === "burst" ? "✨✦✨" : "✨";
+
+  scene.appendChild(effect);
+  setTimeout(() => effect.remove(), 800);
+}
+
+function render(){
+  const room = currentRoom();
+  const scene = document.getElementById("scene");
+  const bg = document.getElementById("bg");
+
+  bg.src = room.background.image;
+  scene.querySelectorAll(".hotspot").forEach(e => e.remove());
+
+  room.hotspots.forEach(h => {
+    const resolvedHotspot = getResolvedHotspot(h);
+    if(isInactiveHotspot(resolvedHotspot)) return;
+
+    const el = document.createElement("div");
+    const state = getHotspotState(room.id, h.id);
+    el.className = "hotspot" + (state !== "default" || (h.completedStates && Object.keys(h.completedStates).some(hasCompleted)) ? " changed" : "");
+    el.style.left = pct(h.x, room.background.width);
+    el.style.top = pct(h.y, room.background.height);
+    el.style.width = pct(h.w, room.background.width);
+    el.style.height = pct(h.h, room.background.height);
+    el.onclick = () => clickHotspot(h);
+
+    if(h.type === "exit"){
+      const icon = document.createElement("div");
+      icon.className = "exitIcon";
+      icon.textContent = h.icon || "🚪";
+      el.appendChild(icon);
+    }
+
+    scene.appendChild(el);
+  });
+
+  renderInventory();
+}
+
+function renderInventory(){
+  const track = document.getElementById("inventoryTrack");
+  const items = allInventoryItems();
+  track.innerHTML = "";
+
+  game.activeIndex = Math.max(0, Math.min(game.activeIndex, items.length - 1));
+
+  items.forEach((item, i) => {
+    const el = document.createElement("div");
+    el.className = "item" + (i === game.activeIndex ? " active" : "");
+    el.title = (i + 1) + ". " + (item.name || item.id);
+    el.innerHTML = "<div class='itemNumber'>" + (i + 1) + "</div><div>" + item.icon + "</div><div class='itemName'>" + (item.name || item.id) + "</div>";
+    el.onclick = () => {
+      game.activeIndex = i;
+      renderInventory();
+    };
+    track.appendChild(el);
+  });
+}
+
+function rotateInventory(dir){
+  const total = allInventoryItems().length;
+  game.activeIndex = (game.activeIndex + dir + total) % total;
+  renderInventory();
+}
+
+function showMessage(text, type){
+  const now = Date.now();
+  if(now < game.messageLockedUntil && type !== "success") return;
+
+  const msg = document.getElementById("message");
+  msg.textContent = text;
+  msg.className = "show" + (type === "success" ? " success" : "");
+
+  clearTimeout(showMessage.timer);
+
+  if(type === "success"){
+    game.messageLockedUntil = now + 1800;
+    showMessage.timer = setTimeout(() => {
+      msg.className = "";
+      game.messageLockedUntil = 0;
+    }, 5200);
+  }else{
+    showMessage.timer = setTimeout(() => msg.className = "", 5000);
+  }
+}
+
+function pct(v, max){return (v / max * 100) + "%";}
+function article(s){return /^[aeiou]/i.test(s) ? "an" : "a";}
+
+window.onkeydown = e => {
+  if(e.key === "ArrowLeft") rotateInventory(-1);
+  if(e.key === "ArrowRight") rotateInventory(1);
+
+  const n = Number(e.key);
+  if(n >= 1 && n <= 9){
+    const items = allInventoryItems();
+    if(items[n - 1]){
+      game.activeIndex = n - 1;
+      renderInventory();
+    }
+  }
+};
+
+render();
+</script>
+</body>
+</html>

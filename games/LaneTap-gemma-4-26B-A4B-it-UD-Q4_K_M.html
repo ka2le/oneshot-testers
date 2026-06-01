@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PATTERN TAP</title>
+    <style>
+        :root {
+            --bg: #0a0a12;
+            --lane-border: #1a1a2e;
+            --accent: #00f2ff;
+            --font: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg);
+            color: white;
+            font-family: var(--font);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            height: 100%;
+            max-height: 800px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            background: var(--bg);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(10, 10, 18, 0.85);
+            z-index: 10;
+            text-align: center;
+            transition: opacity 0.3s ease;
+        }
+
+        .hidden {
+            display: none;
+            opacity: 0;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin: 0;
+            letter-spacing: 5px;
+            color: var(--accent);
+            text-shadow: 0 0 20px var(--accent);
+        }
+
+        p {
+            font-size: 1.2rem;
+            color: #aaa;
+            margin: 20px 0;
+        }
+
+        .btn {
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            background: transparent;
+            color: var(--accent);
+            border: 2px solid var(--accent);
+            border-radius: 50px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.2s;
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
+        }
+
+        .btn:hover {
+            background: var(--accent);
+            color: var(--bg);
+            box-shadow: 0 0 30px var(--accent);
+        }
+
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .stat-box {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #666;
+            display: block;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        #combo-container {
+            position: absolute;
+            bottom: 150px;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #combo-text {
+            font-size: 3rem;
+            font-weight: 900;
+            font-style: italic;
+            opacity: 0;
+            transform: scale(0.5);
+            transition: all 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #combo-text.active {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        #feedback-text {
+            position: absolute;
+            top: 60%;
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.5rem;
+            pointer-events: none;
+            text-transform: uppercase;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- HUD -->
+        <div id="hud">
+            <div class="stat-box">
+                <span class="stat-label">Score</span>
+                <div id="score-val" class="stat-value">0</div>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">Health</span>
+                <div id="health-val" class="stat-value">100%</div>
+            </div>
+        </div>
+
+        <div id="combo-container">
+            <div id="combo-text">0</div>
+        </div>
+
+        <div id="feedback-text"></div>
+
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Screens -->
+        <div id="start-screen" class="overlay">
+            <h1>PATTERN</h1>
+            <p>Press [1] [2] [3] [4] when numbers hit the zone</p>
+            <button class="btn" onclick="startGame()">Start Game</button>
+        </div>
+
+        <div id="game-over-screen" class="overlay hidden">
+            <h1 style="color: #ff4d4d; text-shadow: 0 0 20px #ff4d4d;">FAILED</h1>
+            <p id="final-score-msg">Score: 0</p>
+            <button class="btn" onclick="startGame()">Try Again</button>
+        </div>
+    </div>
+
+<script>
+    /** @type {HTMLCanvasElement} */
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score-val');
+    const healthEl = document.getElementById('health-val');
+    const comboEl = document.getElementById('combo-text');
+    const feedbackEl = document.getElementById('feedback-text');
+    const startScreen = document.getElementById('start-screen');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const finalScoreMsg = document.getElementById('final-score-msg');
+
+    // Game Config
+    const LANES = 4;
+    const COLORS = ['#00f2ff', '#ff00ff', '#ffff00', '#00ff44'];
+    const KEYS = ['1', '2', '3', '4'];
+    
+    // Patterns
+    const PATTERNS = [
+        [1, 1, 1, 1],
+        [1, 2, 1, 2],
+        [1, 2, 3, 4],
+        [1, 1, 2, 2, 1, 1],
+        [1, 3, 2, 4],
+        [2, 2, 3, 1, 4],
+        [1, 2, 1, 3, 1, 4],
+        [4, 3, 2, 1, 2, 3, 4],
+        [1, 4, 2, 3, 1, 4, 2, 3]
+    ];
+
+    let gameState = 'MENU';
+    let score = 0;
+    let health = 100;
+    let combo = 0;
+    let notes = [];
+    let particles = [];
+    let laneFlashes = [0, 0, 0, 0];
+    let currentPatternIndex = 0;
+    let patternQueue = []; // Sequence of notes to spawn
+    let lastSpawnTime = 0;
+    let spawnInterval = 800; // ms
+    let noteSpeed = 4; // pixels per frame
+    let gameLoopId;
+    let startTime = 0;
+
+    // Handle Resize
+    function resize() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- Classes ---
+
+    class Note {
+        constructor(lane, value) {
+            this.lane = lane;
+            this.value = value;
+            this.y = -50;
+            this.hit = false;
+            this.missed = false;
+            this.size = 35;
+        }
+
+        update() {
+            this.y += noteSpeed;
+            // If note falls past hit zone
+            if (this.y > canvas.height * 0.85 && !this.hit && !this.missed) {
+                this.missed = true;
+                handleMiss();
+            }
+        }
+
+        draw() {
+            const laneWidth = canvas.width / LANES;
+            const x = this.lane * laneWidth + laneWidth / 2;
+            
+            ctx.save();
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = COLORS[this.lane];
+            ctx.fillStyle = COLORS[this.lane];
+            
+            // Draw circle
+            ctx.beginPath();
+            ctx.arc(x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw number
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.value, x, this.y);
+            ctx.restore();
+        }
+    }
+
+    class Particle {
+        constructor(x, y, color) {
+            this.x = x;
+            this.y = y;
+            this.color = color;
+            this.vx = (Math.random() - 0.5) * 10;
+            this.vy = (Math.random() - 0.5) * 10;
+            this.alpha = 1;
+            this.life = 1.0;
+        }
+
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.life -= 0.02;
+            this.alpha = this.life;
+        }
+
+        draw() {
+            ctx.save();
+            ctx.globalAlpha = this.alpha;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // --- Game Logic ---
+
+    function startGame() {
+        // Reset State
+        score = 0;
+        health = 100;
+        combo = 0;
+        notes = [];
+        particles = [];
+        laneFlashes = [0, 0, 0, 0];
+        currentPatternIndex = 0;
+        patternQueue = [];
+        noteSpeed = 4;
+        spawnInterval = 800;
+        gameState = 'PLAYING';
+        startTime = Date.now();
+
+        // UI
+        scoreEl.textContent = '0';
+        healthEl.textContent = '100%';
+        startScreen.classList.add('hidden');
+        gameOverScreen.classList.add('hidden');
+        
+        // Load first pattern
+        loadNextPattern();
+
+        if (gameLoopId) cancelAnimationFrame(gameLoopId);
+        gameLoopId = requestAnimationFrame(update);
+    }
+
+    function loadNextPattern() {
+        const pattern = PATTERNS[currentPatternIndex % PATTERNS.length];
+        // Convert pattern values to a queue of {lane, timeOffset}
+        // We spread them out by the spawnInterval
+        patternQueue = pattern.map((val, index) => ({
+            lane: val - 1,
+            value: val,
+            spawnAt: Date.now() + (index * spawnInterval)
+        }));
+        
+        // Increase difficulty
+        currentPatternIndex++;
+        noteSpeed += 0.2;
+        spawnInterval = Math.max(400, spawnInterval - 20);
+    }
+
+    function handleHit(lane) {
+        const hitZoneY = canvas.height * 0.8;
+        const tolerance = 60;
+
+        // Find the note in this lane closest to the hit zone
+        let foundNote = null;
+        for (let i = 0; i < notes.length; i++) {
+            const n = notes[i];
+            if (n.lane === lane && !n.hit && !n.missed) {
+                const dist = Math.abs(n.y - hitZoneY);
+                if (dist < tolerance) {
+                    foundNote = n;
+                    break;
+                }
+            }
+        }
+
+        if (foundNote) {
+            const dist = Math.abs(foundNote.y - hitZoneY);
+            foundNote.hit = true;
+            
+            // Scoring
+            let points = 10;
+            let rating = "GOOD";
+            if (dist < 20) {
+                points = 30;
+                rating = "PERFECT";
+            }
+
+            score += points * (1 + Math.floor(combo / 10));
+            combo++;
+            scoreEl.textContent = score;
+            
+            showFeedback(rating, COLORS[lane]);
+            createExplosion(foundNote.lane * (canvas.width/LANES) + (canvas.width/LANES/2), foundNote.y, COLORS[lane]);
+            
+            // Update UI
+            comboEl.textContent = combo;
+            comboEl.classList.add('active');
+            
+            // Clean up note
+            notes = notes.filter(n => n !== foundNote);
+        } else {
+            handleMiss();
+        }
+    }
+
+    function handleMiss() {
+        combo = 0;
+        health -= 10;
+        healthEl.textContent = Math.max(0, health) + '%';
+        comboEl.classList.remove('active');
+        showFeedback("MISS", "#ff4d4d");
+        
+        // Shake effect could be added here
+        if (health <= 0) endGame();
+    }
+
+    function endGame() {
+        gameState = 'GAMEOVER';
+        gameOverScreen.classList.remove('hidden');
+        finalScoreMsg.textContent = `Score: ${score}`;
+    }
+
+    function showFeedback(text, color) {
+        feedbackEl.textContent = text;
+        feedbackEl.style.color = color;
+        feedbackEl.style.opacity = 1;
+        setTimeout(() => {
+            feedbackEl.style.opacity = 0;
+        }, 400);
+    }
+
+    function createExplosion(x, y, color) {
+        for (let i = 0; i < 12; i++) {
+            particles.push(new Particle(x, y, color));
+        }
+    }
+
+    // --- Main Loop ---
+
+    function update() {
+        if (gameState !== 'PLAYING') return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Draw Lanes
+        const laneWidth = canvas.width / LANES;
+        for (let i = 0; i < LANES; i++) {
+            // Lane Background
+            ctx.fillStyle = i % 2 === 0 ? '#0e0e1a' : '#121225';
+            ctx.fillRect(i * laneWidth, 0, laneWidth, canvas.height);
+            
+            // Lane Borders
+            ctx.strokeStyle = '#1a1a2e';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(i * laneWidth, 0, laneWidth, canvas.height);
+
+            // Lane Flash on input
+            if (laneFlashes[i] > 0) {
+                ctx.fillStyle = `${COLORS[i]}${Math.floor(laneFlashes[i] * 50).toString(16).padStart(2, '0')}`;
+                ctx.fillRect(i * laneWidth, 0, laneWidth, canvas.height);
+                laneFlashes[i] -= 0.05;
+            }
+        }
+
+        // 2. Draw Hit Zone
+        const hitZoneY = canvas.height * 0.8;
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, hitZoneY);
+        ctx.lineTo(canvas.width, hitZoneY);
+        ctx.stroke();
+
+        // 3. Handle Spawning from Pattern Queue
+        const now = Date.now();
+        if (patternQueue.length > 0 && now >= patternQueue[0].spawnAt) {
+            const nextNote = patternQueue.shift();
+            notes.push(new Note(nextNote.lane, nextNote.value));
+
+            // If queue is empty, get next pattern
+            if (patternQueue.length === 0) {
+                loadNextPattern();
+            }
+        }
+
+        // 4. Update & Draw Notes
+        for (let i = notes.length - 1; i >= 0; i--) {
+            const n = notes[i];
+            n.update();
+            n.draw();
+            if (n.missed) notes.splice(i, 1);
+        }
+
+        // 5. Update & Draw Particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.update();
+            p.draw();
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        gameLoopId = requestAnimationFrame(update);
+    }
+
+    // --- Input Handling ---
+
+    function handleInput(laneIndex) {
+        if (gameState !== 'PLAYING') return;
+        
+        laneFlashes[laneIndex] = 1.0;
+        handleHit(laneIndex);
+    }
+
+    window.addEventListener('keydown', (e) => {
+        const key = e.key;
+        const idx = KEYS.indexOf(key);
+        if (idx !== -1) {
+            handleInput(idx);
+        }
+    });
+
+    // Mobile Touch Support
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const touchX = touch.clientX - rect.left;
+        const laneWidth = canvas.width / LANES;
+        const laneIdx = Math.floor(touchX / laneWidth);
+        if (laneIdx >= 0 && laneIdx < LANES) {
+            handleInput(laneIdx);
+        }
+    }, { passive: false });
+
+</script>
+</body>
+</html>

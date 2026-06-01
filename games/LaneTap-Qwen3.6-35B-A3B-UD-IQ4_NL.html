@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>4-Lane Pattern Tap</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #0a0a0f;
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  canvas {
+    display: block;
+    width: 100%; height: 100%;
+  }
+  #touchBtns {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 4px 12px;
+    z-index: 10;
+    display: none;
+  }
+  .touch-btn {
+    flex: 1; max-width: 80px;
+    height: 60px;
+    border: none;
+    border-radius: 12px;
+    font-size: 24px;
+    font-weight: 800;
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.05s, filter 0.05s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .touch-btn:active { transform: scale(0.92); filter: brightness(1.4); }
+  .touch-btn[data-n="1"] { background: linear-gradient(135deg, #ff4466, #cc2244); box-shadow: 0 0 15px #ff446680; }
+  .touch-btn[data-n="2"] { background: linear-gradient(135deg, #44bbff, #2288cc); box-shadow: 0 0 15px #44bbff80; }
+  .touch-btn[data-n="3"] { background: linear-gradient(135deg, #44ff88, #22cc66); box-shadow: 0 0 15px #44ff8880; }
+  .touch-btn[data-n="4"] { background: linear-gradient(135deg, #ffaa22, #cc8800); box-shadow: 0 0 15px #ffaa2280; }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="touchBtns">
+  <button class="touch-btn" data-n="1">1</button>
+  <button class="touch-btn" data-n="2">2</button>
+  <button class="touch-btn" data-n="3">3</button>
+  <button class="touch-btn" data-n="4">4</button>
+</div>
+<script>
+// ─── CANVAS SETUP ───
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize() {
+  W = canvas.width = window.innerWidth * devicePixelRatio;
+  H = canvas.height = window.innerHeight * devicePixelRatio;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── AUDIO ENGINE ───
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+function initAudio() { if (!audioCtx) audioCtx = new AudioCtx(); }
+function playTone(freq, dur, vol, type='sine') {
+  if (!audioCtx) return;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  g.gain.setValueAtTime(vol || 0.1, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime + dur);
+}
+function sfxHit(perfect) {
+  initAudio();
+  playTone(perfect ? 880 : 660, 0.12, 0.15);
+  if (perfect) { playTone(1320, 0.1, 0.08); }
+}
+function sfxMiss() { initAudio(); playTone(180, 0.2, 0.1, 'sawtooth'); }
+function sfxCombo(n) { initAudio(); playTone(440 + n * 80, 0.15, 0.12); }
+
+// ─── COLORS ───
+const LANE_COLORS = ['#ff4466', '#44bbff', '#44ff88', '#ffaa22'];
+const LANE_GLOWS  = ['#ff446688', '#44bbff88', '#44ff8888', '#ffaa2288'];
+const LANE_BG     = ['#1a0a0e', '#0a1a1e', '#0a1a0e', '#1a1a0a'];
+
+// ─── PATTERNS ───
+const PATTERNS = [
+  // Beginner
+  [1,1,1,1], [1,1,2,2], [3,3,4,4], [1,2,1,2], [3,4,3,4],
+  [1,1,3,3], [2,2,4,4], [1,3,1,3], [2,4,2,4], [1,2,3,4],
+  // Intermediate
+  [1,1,2,2,1], [1,3,2,4], [2,2,3,1,4], [1,2,2,3,3], [4,4,3,3,4],
+  [1,2,1,3,1], [4,3,4,2,4], [1,3,2,3,1], [2,4,2,3,3], [1,4,2,3],
+  // Advanced
+  [1,2,1,3,1,4], [4,3,2,1,2,3], [1,4,3,2,4,1], [2,1,3,4,2,1],
+  [1,2,3,4,4,3,2,1], [1,3,2,4,1,3,4,2], [4,1,3,2,4,1,2,3],
+  [1,1,2,2,3,3,4,4], [4,4,3,3,2,2,1,1], [1,3,3,1,4,2,2,4],
+];
+
+// ─── GAME STATE ───
+let state = 'MENU'; // MENU, PLAYING, GAMEOVER
+let score = 0;
+let highScore = parseInt(localStorage.getItem('pattap_hi') || '0');
+let health = 100;
+const MAX_HEALTH = 100;
+let combo = 0;
+let maxCombo = 0;
+let perfects = 0, goods = 0, misses = 0;
+let notes = [];
+let particles = [];
+let floatingTexts = [];
+let laneFlash = [0,0,0,0];
+let shakeX = 0, shakeY = 0;
+let patternIndex = 0;
+let patternRepeats = 0;
+let patternRepeatCount = 3;
+let patternNotesIndex = 0;
+let spawnTimer = 0;
+let fallSpeed = 3.5;
+let spawnInterval = 500;
+let gameTime = 0;
+let lastTime = 0;
+let noteQueue = [];
+let bgStars = [];
+
+// ─── HIT ZONE ───
+let hitY, laneWidth, laneX = [], hitZoneHeight = 50;
+let noteRadius;
+
+function calcLayout() {
+  const margin = Math.min(W * 0.08, 40);
+  const playWidth = W - margin * 2;
+  laneWidth = playWidth / 4;
+  hitY = H * 0.82;
+  hitZoneHeight = Math.max(36, H * 0.045);
+  noteRadius = Math.max(18, laneWidth * 0.3);
+  for (let i = 0; i < 4; i++) {
+    laneX[i] = margin + i * laneWidth + laneWidth / 2;
+  }
+}
+
+// ─── BACKGROUND STARS ───
+function initStars() {
+  bgStars = [];
+  for (let i = 0; i < 80; i++) {
+    bgStars.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      s: Math.random() * 1.5 + 0.5,
+      a: Math.random() * 0.5 + 0.1,
+      sp: Math.random() * 0.3 + 0.1
+    });
+  }
+}
+initStars();
+
+// ─── NOTE GENERATION ───
+function buildNoteQueue() {
+  if (patternIndex >= PATTERNS.length) patternIndex = PATTERNS.length - 1;
+  const pat = PATTERNS[patternIndex];
+  noteQueue = [];
+  for (let r = 0; r < patternRepeatCount; r++) {
+    for (let i = 0; i < pat.length; i++) {
+      noteQueue.push({ lane: pat[i] - 1, delay: i });
+    }
+  }
+  patternNotesIndex = 0;
+  spawnTimer = 100;
+}
+
+function spawnNote() {
+  if (patternNotesIndex >= noteQueue.length) {
+    // Next pattern
+    patternIndex = Math.min(patternIndex + 1, PATTERNS.length - 1);
+    patternRepeatCount = patternIndex < 4 ? 3 : patternIndex < 12 ? 2 : 1;
+    buildNoteQueue();
+  }
+  const q = noteQueue[patternNotesIndex];
+  notes.push({
+    lane: q.lane,
+    y: -noteRadius * 2,
+    value: q.lane + 1,
+    hit: false,
+    missed: false,
+    alpha: 1,
+    scale: 1,
+    glow: 0
+  });
+  patternNotesIndex++;
+}
+
+// ─── PARTICLES ───
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 4 + 2;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2,
+      life: 1,
+      decay: Math.random() * 0.03 + 0.02,
+      size: Math.random() * 4 + 2,
+      color
+    });
+  }
+}
+
+function spawnFloatingText(x, y, text, color) {
+  floatingTexts.push({ x, y, text, color, life: 1, vy: -2 });
+}
+
+// ─── INPUT ───
+let inputQueue = [];
+document.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (state === 'MENU' || state === 'GAMEOVER') {
+    if (e.key === 'Enter' || e.key === ' ') { startGame(); return; }
+    return;
+  }
+  const n = parseInt(e.key);
+  if (n >= 1 && n <= 4) handleInput(n - 1);
+});
+
+// Touch buttons
+const touchBtns = document.querySelectorAll('.touch-btn');
+touchBtns.forEach(btn => {
+  btn.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (state === 'MENU' || state === 'GAMEOVER') { startGame(); return; }
+    handleInput(parseInt(btn.dataset.n) - 1);
+  });
+  btn.addEventListener('mousedown', e => {
+    if (state === 'MENU' || state === 'GAMEOVER') { startGame(); return; }
+    handleInput(parseInt(btn.dataset.n) - 1);
+  });
+});
+
+// Tap to start on canvas
+canvas.addEventListener('touchstart', e => {
+  if (state === 'MENU' || state === 'GAMEOVER') { e.preventDefault(); startGame(); }
+});
+canvas.addEventListener('mousedown', e => {
+  if (state === 'MENU' || state === 'GAMEOVER') { startGame(); }
+});
+
+// ─── GAME LOGIC ───
+function startGame() {
+  initAudio();
+  state = 'PLAYING';
+  score = 0; health = MAX_HEALTH; combo = 0; maxCombo = 0;
+  perfects = 0; goods = 0; misses = 0;
+  notes = []; particles = []; floatingTexts = [];
+  laneFlash = [0,0,0,0];
+  patternIndex = 0; patternRepeatCount = 3;
+  gameTime = 0; fallSpeed = 3.5; spawnInterval = 500;
+  calcLayout();
+  buildNoteQueue();
+  showTouchButtons();
+}
+
+function showTouchButtons() {
+  const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+  document.getElementById('touchBtns').style.display = isMobile ? 'flex' : 'none';
+}
+showTouchButtons();
+
+function handleInput(lane) {
+  if (state !== 'PLAYING') return;
+  laneFlash[lane] = 1;
+
+  // Find closest note in this lane near hit zone
+  let bestNote = null;
+  let bestDist = Infinity;
+  const tolerance = noteRadius * 4;
+
+  for (const note of notes) {
+    if (note.lane === lane && !note.hit && !note.missed) {
+      const dist = Math.abs(note.y - hitY);
+      if (dist < bestDist && dist < tolerance * 2) {
+        bestDist = dist;
+        bestNote = note;
+      }
+    }
+  }
+
+  if (bestNote) {
+    const dist = Math.abs(bestNote.y - hitY);
+    const ratio = dist / hitZoneHeight;
+
+    bestNote.hit = true;
+    bestNote.glow = 1;
+
+    if (ratio < 0.25) {
+      // Perfect
+      bestNote.perfect = true;
+      perfects++;
+      combo++;
+      score += 100 * Math.min(combo, 20);
+      spawnParticles(laneX[lane], hitY, LANE_COLORS[lane], 20);
+      spawnFloatingText(laneX[lane], hitY - 40, 'PERFECT', '#ffff44');
+      if (combo > 0 && combo % 5 === 0) sfxCombo(combo);
+    } else if (ratio < 0.7) {
+      // Good
+      bestNote.perfect = false;
+      goods++;
+      combo++;
+      score += 50 * Math.min(combo, 10);
+      spawnParticles(laneX[lane], hitY, LANE_COLORS[lane], 10);
+      spawnFloatingText(laneX[lane], hitY - 40, 'GOOD', '#88ff88');
+    } else {
+      // Shitty
+      goods++;
+      combo++;
+      score += 25;
+      spawnFloatingText(laneX[lane], hitY - 40, 'OK', '#aaaa88');
+    }
+
+    if (combo > maxCombo) maxCombo = combo;
+    sfxHit(bestNote.perfect);
+
+    // Health restore on perfect
+    health = Math.min(MAX_HEALTH, health + (bestNote.perfect ? 2 : 1));
+  } else {
+    // Pressed with no note nearby - small penalty
+    combo = 0;
+    health = Math.max(0, health - 2);
+    shakeX = 3; shakeY = 3;
+  }
+}
+
+function checkMisses(dt) {
+  for (const note of notes) {
+    if (!note.hit && !note.missed && note.y > hitY + noteRadius * 2) {
+      note.missed = true;
+      misses++;
+      combo = 0;
+      health -= 8;
+      shakeX = 5; shakeY = 5;
+      sfxMiss();
+      spawnFloatingText(laneX[note.lane], hitY - 30, 'MISS', '#ff4444');
+      spawnParticles(laneX[note.lane], hitY, '#ff4444', 8);
+    }
+  }
+  if (health <= 0) {
+    health = 0;
+    state = 'GAMEOVER';
+    if (score > highScore) {
+      highScore = score;
+      localStorage.setItem('pattap_hi', highScore);
+    }
+  }
+}
+
+// ─── UPDATE ───
+function update(dt) {
+  if (state !== 'PLAYING') return;
+
+  gameTime += dt;
+
+  // Difficulty scaling
+  fallSpeed = 3.5 + gameTime * 0.015;
+  const baseInterval = Math.max(200, 500 - gameTime * 1.5);
+  spawnInterval = baseInterval;
+
+  // Spawn notes
+  spawnTimer += dt;
+  if (spawnTimer >= spawnInterval && patternNotesIndex < noteQueue.length) {
+    spawnTimer -= spawnInterval;
+    spawnNote();
+  }
+
+  // Move notes
+  for (const note of notes) {
+    if (!note.hit) {
+      note.y += fallSpeed * (dt / 16);
+    }
+  }
+
+  // Clean up off-screen notes
+  notes = notes.filter(n => n.y < H + 100 && !(n.hit && n.alpha <= 0));
+
+  // Fade hit notes
+  for (const note of notes) {
+    if (note.hit) {
+      note.alpha -= 0.08;
+      note.scale += 0.05;
+      note.glow = Math.max(0, note.glow - 0.03);
+    }
+  }
+
+  // Lane flash decay
+  for (let i = 0; i < 4; i++) {
+    laneFlash[i] = Math.max(0, laneFlash[i] - 0.06);
+  }
+
+  // Shake decay
+  shakeX *= 0.85;
+  shakeY *= 0.85;
+
+  // Particles
+  for (const p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.1;
+    p.life -= p.decay;
+  }
+  particles = particles.filter(p => p.life > 0);
+
+  // Floating texts
+  for (const ft of floatingTexts) {
+    ft.y += ft.vy;
+    ft.life -= 0.02;
+  }
+  floatingTexts = floatingTexts.filter(ft => ft.life > 0);
+
+  // Stars
+  for (const s of bgStars) {
+    s.y += s.sp;
+    if (s.y > H) { s.y = 0; s.x = Math.random() * W; }
+  }
+
+  checkMisses(dt);
+}
+
+// ─── DRAW ───
+function drawRoundedRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function draw() {
+  calcLayout();
+  ctx.save();
+  ctx.translate(shakeX * (Math.random() - 0.5), shakeY * (Math.random() - 0.5));
+
+  // Background
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0a0a14');
+  grad.addColorStop(0.5, '#0d0d1a');
+  grad.addColorStop(1, '#0a0a12');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  for (const s of bgStars) {
+    ctx.globalAlpha = s.a * (0.5 + 0.5 * Math.sin(gameTime * 0.001 + s.x));
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(s.x, s.y, s.s, s.s);
+  }
+  ctx.globalAlpha = 1;
+
+  if (state === 'MENU') {
+    drawMenu();
+    ctx.restore();
+    return;
+  }
+
+  if (state === 'GAMEOVER') {
+    drawGame();
+    drawGameOver();
+    ctx.restore();
+    return;
+  }
+
+  drawGame();
+  ctx.restore();
+}
+
+function drawGame() {
+  // Lane backgrounds
+  for (let i = 0; i < 4; i++) {
+    const lx = laneX[i] - laneWidth / 2;
+    // Lane bg
+    ctx.fillStyle = LANE_BG[i];
+    ctx.fillRect(lx, 0, laneWidth, H);
+
+    // Lane border
+    ctx.strokeStyle = '#ffffff08';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(lx, 0);
+    ctx.lineTo(lx, H);
+    ctx.stroke();
+
+    // Lane flash
+    if (laneFlash[i] > 0) {
+      ctx.fillStyle = LANE_COLORS[i] + Math.floor(laneFlash[i] * 40).toString(16).padStart(2, '0');
+      ctx.fillRect(lx, 0, laneWidth, H);
+    }
+
+    // Lane number at bottom
+    ctx.fillStyle = '#ffffff30';
+    ctx.font = `bold ${Math.max(14, laneWidth * 0.25)}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(i + 1, laneX[i], H - 15);
+  }
+
+  // Hit zone
+  const hzGrad = ctx.createLinearGradient(0, hitY - hitZoneHeight, 0, hitY + hitZoneHeight);
+  hzGrad.addColorStop(0, 'transparent');
+  hzGrad.addColorStop(0.4, LANE_COLORS[0] + '15');
+  hzGrad.addColorStop(0.5, LANE_COLORS[0] + '25');
+  hzGrad.addColorStop(0.6, LANE_COLORS[0] + '15');
+  hzGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = hzGrad;
+  ctx.fillRect(laneX[0] - laneWidth / 2, hitY - hitZoneHeight, laneWidth * 4, hitZoneHeight * 2);
+
+  // Hit line
+  ctx.strokeStyle = '#ffffff44';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = '#ffffff66';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.moveTo(laneX[0] - laneWidth / 2 + 5, hitY);
+  ctx.lineTo(laneX[3] + laneWidth / 2 - 5, hitY);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Hit targets (empty lanes)
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.arc(laneX[i], hitY, noteRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = LANE_COLORS[i] + '44';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Notes
+  for (const note of notes) {
+    const alpha = note.alpha;
+    const r = noteRadius * note.scale;
+    ctx.globalAlpha = alpha;
+
+    // Glow
+    if (note.glow > 0) {
+      ctx.shadowColor = LANE_COLORS[note.lane];
+      ctx.shadowBlur = 30 * note.glow;
+    }
+
+    // Note circle
+    const nGrad = ctx.createRadialGradient(laneX[note.lane], note.y, 0, laneX[note.lane], note.y, r);
+    nGrad.addColorStop(0, LANE_COLORS[note.lane]);
+    nGrad.addColorStop(0.7, LANE_COLORS[note.lane] + 'cc');
+    nGrad.addColorStop(1, LANE_COLORS[note.lane] + '44');
+    ctx.fillStyle = nGrad;
+    ctx.beginPath();
+    ctx.arc(laneX[note.lane], note.y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = '#ffffff88';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Number
+    ctx.fillStyle = '#000000cc';
+    ctx.font = `bold ${Math.max(16, r * 1.1)}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(note.value, laneX[note.lane], note.y + 1);
+
+    ctx.globalAlpha = 1;
+  }
+
+  // Particles
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Floating texts
+  for (const ft of floatingTexts) {
+    ctx.globalAlpha = ft.life;
+    ctx.fillStyle = ft.color;
+    ctx.font = `bold ${Math.max(16, 22 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = ft.color;
+    ctx.shadowBlur = 10;
+    ctx.fillText(ft.text, ft.x, ft.y);
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+
+  // ─── HUD ───
+  // Score
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${Math.max(20, 28 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(score.toLocaleString(), 15 * devicePixelRatio, 15 * devicePixelRatio);
+
+  // Combo
+  if (combo > 1) {
+    const comboScale = 1 + Math.min(combo * 0.01, 0.5);
+    const comboAlpha = Math.min(combo * 0.1, 1);
+    ctx.globalAlpha = comboAlpha;
+    ctx.fillStyle = combo >= 20 ? '#ffdd44' : combo >= 10 ? '#ffaa22' : '#ffffff';
+    ctx.font = `bold ${Math.max(14, 18 * comboScale * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillText(`${combo}x COMBO`, W - 15 * devicePixelRatio, 15 * devicePixelRatio);
+    ctx.globalAlpha = 1;
+  }
+
+  // Health bar
+  const hbW = Math.min(200, W * 0.35);
+  const hbH = Math.max(12, H * 0.018);
+  const hbX = W / 2 - hbW / 2;
+  const hbY = 12 * devicePixelRatio;
+
+  ctx.fillStyle = '#ffffff15';
+  drawRoundedRect(hbX, hbY, hbW, hbH, hbH / 2);
+  ctx.fill();
+
+  const healthPct = health / MAX_HEALTH;
+  let hbColor;
+  if (healthPct > 0.6) hbColor = '#44ff88';
+  else if (healthPct > 0.3) hbColor = '#ffaa22';
+  else hbColor = '#ff4444';
+
+  if (healthPct > 0) {
+    const hGrad = ctx.createLinearGradient(hbX, 0, hbX + hbW * healthPct, 0);
+    hGrad.addColorStop(0, hbColor);
+    hGrad.addColorStop(1, hbColor + 'aa');
+    ctx.fillStyle = hGrad;
+    drawRoundedRect(hbX, hbY, hbW * healthPct, hbH, hbH / 2);
+    ctx.fill();
+  }
+
+  // Health bar border
+  ctx.strokeStyle = '#ffffff22';
+  ctx.lineWidth = 1;
+  drawRoundedRect(hbX, hbY, hbW, hbH, hbH / 2);
+  ctx.stroke();
+
+  // Pattern info
+  ctx.fillStyle = '#ffffff44';
+  ctx.font = `${Math.max(11, 13 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const patName = patternIndex < 4 ? 'BEGINNER' : patternIndex < 12 ? 'INTERMEDIATE' : 'ADVANCED';
+  ctx.fillText(`Pattern ${patternIndex + 1}/${PATTERNS.length} — ${patName}`, W / 2, hbY + hbH + 6 * devicePixelRatio);
+
+  // Lane indicators at top
+  for (let i = 0; i < 4; i++) {
+    const ix = laneX[i] - laneWidth * 0.3;
+    ctx.fillStyle = LANE_COLORS[i] + '33';
+    drawRoundedRect(ix, 0, laneWidth * 0.6, 30 * devicePixelRatio, 8 * devicePixelRatio);
+    ctx.fill();
+    ctx.fillStyle = LANE_COLORS[i] + '88';
+    ctx.font = `bold ${Math.max(12, 14 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(i + 1, laneX[i], 15 * devicePixelRatio);
+  }
+}
+
+function drawMenu() {
+  // Animated background lanes
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = LANE_COLORS[i] + '08';
+    const lx = laneX[i] - laneWidth / 2;
+    ctx.fillRect(lx, 0, laneWidth, H);
+  }
+
+  // Title
+  const titleY = H * 0.28;
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${Math.max(28, 44 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = '#44bbff';
+  ctx.shadowBlur = 30;
+  ctx.fillText('4-LANE', W / 2, titleY - 20 * devicePixelRatio);
+  ctx.shadowColor = '#ff4466';
+  ctx.fillText('PATTERN TAP', W / 2, titleY + 25 * devicePixelRatio);
+  ctx.shadowBlur = 0;
+
+  // Subtitle
+  ctx.fillStyle = '#ffffff66';
+  ctx.font = `${Math.max(12, 16 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+  ctx.fillText('Press the correct number as it reaches the line', W / 2, titleY + 70 * devicePixelRatio);
+
+  // Key hints
+  const keyY = titleY + 120 * devicePixelRatio;
+  for (let i = 0; i < 4; i++) {
+    const kx = laneX[i];
+    // Circle
+    ctx.beginPath();
+    ctx.arc(kx, keyY, Math.max(20, 28 * devicePixelRatio), 0, Math.PI * 2);
+    ctx.fillStyle = LANE_COLORS[i] + '33';
+    ctx.fill();
+    ctx.strokeStyle = LANE_COLORS[i] + '88';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = LANE_COLORS[i];
+    ctx.font = `bold ${Math.max(16, 22 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(i + 1, kx, keyY);
+  }
+
+  // Instructions
+  const instrY = keyY + 60 * devicePixelRatio;
+  ctx.fillStyle = '#ffffff44';
+  ctx.font = `${Math.max(11, 14 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+  ctx.fillText('Keyboard: 1 2 3 4  |  Mobile: Tap the buttons', W / 2, instrY);
+
+  // High score
+  if (highScore > 0) {
+    ctx.fillStyle = '#ffdd44';
+    ctx.font = `bold ${Math.max(13, 16 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+    ctx.fillText(`★ Best: ${highScore.toLocaleString()}`, W / 2, instrY + 35 * devicePixelRatio);
+  }
+
+  // Start prompt
+  const pulse = 0.5 + 0.5 * Math.sin(gameTime * 0.004);
+  ctx.fillStyle = `rgba(255,255,255,${0.4 + pulse * 0.6})`;
+  ctx.font = `bold ${Math.max(16, 22 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+  ctx.fillText('TAP OR PRESS ENTER TO START', W / 2, H * 0.78);
+}
+
+function drawGameOver() {
+  // Overlay
+  ctx.fillStyle = '#000000cc';
+  ctx.fillRect(0, 0, W, H);
+
+  const cy = H * 0.38;
+
+  // Game Over title
+  ctx.fillStyle = '#ff4466';
+  ctx.font = `bold ${Math.max(24, 40 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = '#ff4466';
+  ctx.shadowBlur = 20;
+  ctx.fillText('GAME OVER', W / 2, cy - 60 * devicePixelRatio);
+  ctx.shadowBlur = 0;
+
+  // Score
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${Math.max(20, 32 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+  ctx.fillText(`${score.toLocaleString()}`, W / 2, cy - 10 * devicePixelRatio);
+
+  ctx.fillStyle = '#ffffff66';
+  ctx.font = `${Math.max(12, 14 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+  ctx.fillText('SCORE', W / 2, cy + 20 * devicePixelRatio);
+
+  // Stats
+  const statsY = cy + 60 * devicePixelRatio;
+  ctx.font = `${Math.max(12, 15 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+  const stats = [
+    `Max Combo: ${maxCombo}x`,
+    `Perfect: ${perfects}  |  Good: ${goods}  |  Miss: ${misses}`,
+    `Pattern Reached: ${patternIndex + 1}`,
+  ];
+  for (let i = 0; i < stats.length; i++) {
+    ctx.fillStyle = '#ffffff88';
+    ctx.fillText(stats[i], W / 2, statsY + i * 28 * devicePixelRatio);
+  }
+
+  // High score
+  if (score >= highScore && score > 0) {
+    ctx.fillStyle = '#ffdd44';
+    ctx.font = `bold ${Math.max(14, 18 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+    ctx.fillText('★ NEW HIGH SCORE! ★', W / 2, statsY + 110 * devicePixelRatio);
+  } else {
+    ctx.fillStyle = '#ffffff44';
+    ctx.font = `${Math.max(12, 14 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+    ctx.fillText(`Best: ${highScore.toLocaleString()}`, W / 2, statsY + 110 * devicePixelRatio);
+  }
+
+  // Restart prompt
+  const pulse = 0.5 + 0.5 * Math.sin(gameTime * 0.004);
+  ctx.fillStyle = `rgba(255,255,255,${0.4 + pulse * 0.6})`;
+  ctx.font = `bold ${Math.max(14, 18 * devicePixelRatio)}px 'Segoe UI', sans-serif`;
+  ctx.fillText('TAP OR PRESS ENTER TO RETRY', W / 2, H * 0.75);
+}
+
+// ─── GAME LOOP ───
+function loop(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const dt = Math.min(timestamp - lastTime, 50);
+  lastTime = timestamp;
+
+  gameTime += dt;
+
+  update(dt);
+  draw();
+
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

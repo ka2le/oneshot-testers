@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PATTERN TAP</title>
+    <style>
+        :root {
+            --bg-color: #0a0a12;
+            --lane-1: #ff2d55;
+            --lane-2: #007aff;
+            --lane-3: #5856d6;
+            --lane-4: #34c759;
+            --text-color: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text-color);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            height: 100%;
+            max-height: 800px;
+            background: linear-gradient(180deg, #1a1a2e 0%, #0a0a12 100%);
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(10, 10, 18, 0.85);
+            z-index: 10;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .hidden { display: none !important; }
+
+        h1 {
+            font-size: 3rem;
+            margin: 0;
+            letter-spacing: 4px;
+            background: linear-gradient(to bottom, #fff, #888);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 10px 20px rgba(255,255,255,0.2);
+        }
+
+        .btn {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(45deg, #ff2d55, #5856d6);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(255, 45, 85, 0.4);
+            transition: transform 0.1s;
+        }
+
+        .btn:active { transform: scale(0.95); }
+
+        #hud {
+            position: absolute;
+            top: 40px;
+            left: 0;
+            width: 100%;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .stat-box { text-align: center; }
+        .stat-label { font-size: 0.7rem; text-transform: uppercase; opacity: 0.7; }
+        .stat-value { font-size: 1.5rem; font-weight: bold; }
+
+        #combo-container {
+            position: absolute;
+            top: 40%;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #combo-text {
+            font-size: 4rem;
+            font-weight: 900;
+            font-style: italic;
+            opacity: 0;
+            transform: scale(0.5);
+            transition: all 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #judgment-text {
+            position: absolute;
+            top: 60%;
+            width: 100%;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .health-bar-container {
+            position: absolute;
+            bottom: 120px;
+            left: 20px;
+            right: 20px;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        #health-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to right, #ff2d55, #ffcc00, #34c759);
+            transition: width 0.3s ease;
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.8rem;
+            opacity: 0.4;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="hud">
+        <div class="stat-box">
+            <div class="stat-label">Score</div>
+            <div id="score-val" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Level</div>
+            <div id="level-val" class="stat-value">1</div>
+        </div>
+    </div>
+
+    <div id="combo-container">
+        <div id="combo-text">0</div>
+        <div style="font-size: 0.8rem; letter-spacing: 2px;">COMBO</div>
+    </div>
+
+    <div id="judgment-text">PERFECT</div>
+
+    <div class="health-bar-container">
+        <div id="health-bar"></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="overlay">
+        <h1>PATTERN<br>TAP</h1>
+        <p style="opacity: 0.7; margin-top: 10px;">Master the sequence. Don't miss.</p>
+        <button class="btn" onclick="startGame()">START GAME</button>
+        <div class="controls-hint">Keys 1-4 or Tap Lanes</div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="overlay hidden">
+        <h1 style="background: linear-gradient(to bottom, #ff2d55, #5856d6); -webkit-background-clip: text;">GAME OVER</h1>
+        <div class="stat-label" style="margin-top: 20px;">Final Score</div>
+        <div id="final-score" class="stat-value" style="font-size: 3rem;">0</div>
+        <button class="btn" onclick="startGame()">TRY AGAIN</button>
+    </div>
+</div>
+
+<script>
+/** @type {HTMLCanvasElement} */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('game-container');
+
+// Game Settings
+const CONFIG = {
+    laneCount: 4,
+    colors: ['#ff2d55', '#007aff', '#5856d6', '#34c759'],
+    hitZoneY: 0.85, // % from top
+    perfectWindow: 0.05, // % of screen height
+    goodWindow: 0.12,
+    initialNoteSpeed: 5,
+    maxNoteSpeed: 12,
+    spawnIntervalBase: 800, // ms
+};
+
+// Game State
+let gameState = 'MENU';
+let score = 0;
+let combo = 0;
+let health = 100;
+let level = 1;
+let notes = [];
+let particles = [];
+let lastTime = 0;
+let spawnTimer = 0;
+let currentSpeed = CONFIG.initialNoteSpeed;
+let laneWidth = 0;
+let canvasHeight = 0;
+let canvasWidth = 0;
+let screenShake = 0;
+
+// Pattern Engine
+const PATTERNS = [
+    // Beginner
+    [[1,1,1,1], [2,2,2,2], [3,3,3,3], [4,4,4,4], [1,2,1,2], [4,3,4,3]],
+    // Intermediate
+    [[1,2,3,4], [4,3,2,1], [1,3,2,4], [2,4,1,3], [1,1,2,2], [4,4,3,3]],
+    // Advanced
+    [[1,2,1,3,1,4], [4,3,4,2,4,1], [1,4,2,3,1,4], [2,2,3,3,4,4,1,1]],
+    // Expert
+    [[1,3,2,4,1,3,2,4], [4,2,3,1,4,2,3,1], [1,4,1,4,2,3,2,3]]
+];
+
+let patternQueue = [];
+let currentPattern = [];
+let patternIndex = 0;
+
+// Classes
+class Note {
+    constructor(lane, value, speed) {
+        this.lane = lane;
+        this.value = value;
+        this.y = -50;
+        this.speed = speed;
+        this.hit = false;
+        this.missed = false;
+    }
+
+    update(dt) {
+        this.y += this.speed * (dt / 16);
+        // Check if missed
+        if (this.y > canvasHeight * CONFIG.hitZoneY + 50 && !this.hit && !this.missed) {
+            this.missed = true;
+            handleMiss();
+        }
+    }
+
+    draw() {
+        const x = this.lane * laneWidth;
+        const size = laneWidth * 0.6;
+        const cx = x + laneWidth/2;
+        const cy = this.y;
+
+        ctx.save();
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = CONFIG.colors[this.lane - 1];
+        ctx.fillStyle = CONFIG.colors[this.lane - 1];
+        
+        // Draw Rounded Rect/Circle for Note
+        ctx.beginPath();
+        ctx.arc(cx, cy, size/2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw Number
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'white';
+        ctx.font = `bold ${size/1.5}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.value, cx, cy);
+        ctx.restore();
+    }
+}
+
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.vx = (Math.random() - 0.5) * 10;
+        this.vy = (Math.random() - 0.5) * 10;
+        this.alpha = 1;
+        this.life = 1.0;
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= 0.02;
+        this.alpha = this.life;
+    }
+
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// Core Logic
+function resize() {
+    const rect = container.getBoundingClientRect();
+    canvasWidth = rect.width;
+    canvasHeight = rect.height;
+    canvas.width = canvasWidth * window.devicePixelRatio;
+    canvas.height = canvasHeight * window.devicePixelRatio;
+    canvas.style.width = `${canvasWidth}px`;
+    canvas.style.height = `${canvasHeight}px`;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    laneWidth = canvasWidth / CONFIG.laneCount;
+}
+
+window.addEventListener('resize', resize);
+resize();
+
+function startGame() {
+    score = 0;
+    combo = 0;
+    health = 100;
+    level = 1;
+    notes = [];
+    particles = [];
+    currentSpeed = CONFIG.initialNoteSpeed;
+    patternQueue = [];
+    patternIndex = 0;
+    gameState = 'PLAYING';
+    
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('game-over-screen').classList.add('hidden');
+    updateHUD();
+    
+    // Prepare first pattern
+    nextPattern();
+}
+
+function nextPattern() {
+    // Select pattern based on level
+    const patternSetIdx = Math.min(Math.floor((level-1) / 2), PATTERNS.length - 1);
+    const pool = PATTERNS[patternSetIdx];
+    const pattern = pool[Math.floor(Math.random() * pool.length)];
+    
+    // Queue the pattern
+    patternQueue = [...pattern];
+    // We'll use a timer to spawn them
+}
+
+function handleHit(lane) {
+    // Find the closest note in that lane
+    const hitZoneY = canvasHeight * CONFIG.hitZoneY;
+    let closestNote = null;
+    let minDiff = Infinity;
+
+    notes.forEach(note => {
+        if (note.lane === lane && !note.hit) {
+            const diff = Math.abs(note.y - hitZoneY);
+            if (diff < minDiff) {
+                minDiff = diff;
+                closestNote = note;
+            }
+        }
+    });
+
+    if (closestNote && minDiff < canvasHeight * CONFIG.goodWindow) {
+        closestNote.hit = true;
+        
+        // Scoring
+        const isPerfect = minDiff < canvasHeight * CONFIG.perfectWindow;
+        const points = isPerfect ? 100 : 50;
+        const comboBonus = Math.floor(combo / 5) * 10;
+        
+        score += points + comboBonus;
+        combo++;
+        
+        showJudgment(isPerfect ? "PERFECT" : "GOOD", isPerfect ? "#fff" : "#aaa");
+        createExplosion(closestNote.lane * laneWidth + laneWidth/2, closestNote.y, CONFIG.colors[closestNote.lane - 1]);
+        
+        // Visual Feedback
+        flashLane(closestNote.lane - 1);
+        updateHUD();
+        
+        // Check pattern progression
+        // In this engine, we check if the note we hit was the "intended" next one in pattern
+        // but for simplicity, we just consume the queue
+        if (patternQueue.length > 0) {
+            // We don't strictly enforce order for fun, but we use it to trigger next patterns
+        }
+
+        // Level up logic
+        if (score > level * 2000) {
+            level++;
+            currentSpeed = Math.min(currentSpeed + 0.5, CONFIG.maxNoteSpeed);
+            nextPattern();
+        }
+
+    } else {
+        // Wrong key or too early/late
+        handleMiss();
+    }
+}
+
+function handleMiss() {
+    combo = 0;
+    health -= 15;
+    screenShake = 10;
+    showJudgment("MISS", "#ff2d55");
+    updateHUD();
+    
+    if (health <= 0) {
+        gameOver();
+    }
+}
+
+function gameOver() {
+    gameState = 'GAMEOVER';
+    document.getElementById('game-over-screen').classList.remove('hidden');
+    document.getElementById('final-score').innerText = score;
+}
+
+function updateHUD() {
+    document.getElementById('score-val').innerText = score;
+    document.getElementById('level-val').innerText = level;
+    document.getElementById('health-bar').style.width = `${Math.max(0, health)}%`;
+    
+    const comboEl = document.getElementById('combo-text');
+    comboEl.innerText = combo;
+    if (combo > 1) {
+        comboEl.style.opacity = 1;
+        comboEl.style.transform = 'scale(1.2)';
+        setTimeout(() => comboEl.style.transform = 'scale(1)', 50);
+    } else {
+        comboEl.style.opacity = 0;
+    }
+}
+
+function showJudgment(text, color) {
+    const el = document.getElementById('judgment-text');
+    el.innerText = text;
+    el.style.color = color;
+    el.style.opacity = 1;
+    el.style.transform = 'translateY(-20px)';
+    
+    setTimeout(() => {
+        el.style.opacity = 0;
+        el.style.transform = 'translateY(0)';
+    }, 400);
+}
+
+function createExplosion(x, y, color) {
+    for (let i = 0; i < 12; i++) {
+        particles.push(new Particle(x, y, color));
+    }
+}
+
+function flashLane(laneIdx) {
+    // This is handled visually in the draw loop via a temporary flash state if we wanted
+    // For now, we just use the particles
+}
+
+// Game Loop
+function loop(timestamp) {
+    const dt = timestamp - lastTime;
+    lastTime = timestamp;
+
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    if (gameState === 'PLAYING') {
+        // Screen Shake
+        if (screenShake > 0) {
+            ctx.save();
+            ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+            screenShake *= 0.9;
+        }
+
+        // Draw Lanes
+        for (let i = 0; i < CONFIG.laneCount; i++) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(i * laneWidth, 0, laneWidth, canvasHeight);
+            
+            // Subtle lane color tint
+            ctx.fillStyle = `${CONFIG.colors[i]}11`;
+            ctx.fillRect(i * laneWidth, 0, laneWidth, canvasHeight);
+        }
+
+        // Draw Hit Zone
+        const hzY = canvasHeight * CONFIG.hitZoneY;
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, hzY);
+        ctx.lineTo(canvasWidth, hzY);
+        ctx.stroke();
+
+        // Spawn Logic
+        spawnTimer -= dt;
+        if (spawnTimer <= 0) {
+            if (patternQueue.length > 0) {
+                const val = patternQueue.shift();
+                notes.push(new Note(val, val, currentSpeed));
+                // Speed up spawning slightly as level increases
+                spawnTimer = Math.max(250, CONFIG.spawnIntervalBase - (level * 50));
+            } else {
+                nextPattern();
+                spawnTimer = 500; // gap between patterns
+            }
+        }
+
+        // Update & Draw Notes
+        for (let i = notes.length - 1; i >= 0; i--) {
+            notes[i].update(dt);
+            notes[i].draw();
+            if (notes[i].hit || notes[i].missed) {
+                notes.splice(i, 1);
+            }
+        }
+
+        // Update & Draw Particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+            particles[i].update();
+            particles[i].draw();
+            if (particles[i].life <= 0) particles.splice(i, 1);
+        }
+
+        if (screenShake > 0) ctx.restore();
+    }
+
+    requestAnimationFrame(loop);
+}
+
+// Inputs
+window.addEventListener('keydown', (e) => {
+    if (gameState !== 'PLAYING') return;
+    const key = e.key;
+    if (['1', '2', '3', '4'].includes(key)) {
+        handleHit(parseInt(key));
+    }
+});
+
+// Touch/Click support
+container.addEventListener('touchstart', (e) => {
+    if (gameState !== 'PLAYING') return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const touchX = touch.clientX - rect.left;
+    const lane = Math.floor(touchX / laneWidth);
+    if (lane >= 0 && lane < 4) {
+        handleHit(lane + 1);
+    }
+}, { passive: false });
+
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>

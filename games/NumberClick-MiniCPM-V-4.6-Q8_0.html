@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number Grid Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 50px;
+            background-color: #e0f7fa;
+            color: #333;
+        }
+        .grid-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 300px;
+            box-shadow: 0 4px 8px #ccc;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 50px);
+            grid-gap: 10px;
+        }
+        .number {
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .number.lighted {
+            transform: scale(1.2);
+            cursor: default;
+        }
+        .score {
+            margin-top: 20px;
+            font-size: 18px;
+            color: green;
+        }
+        .over {
+            color: red;
+            font-size: 20px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Number Grid Game</h1>
+    <div class="grid-container">
+        <div class="grid">
+            <div class="number" id="num7">7</div>
+            <div class="number" id="num8">8</div>
+            <div class="number" id="num9">9</div>
+            <div class="number" id="num4">4</div>
+            <div class="number" id="num5">5</div>
+            <div class="number" id="num6">6</div>
+            <div class="number" id="num1">1</div>
+            <div class="number" id="num2">2</div>
+            <div class="number" id="num3">3</div>
+        </div>
+    </div>
+    <button id="lightButton">Light a Number</button>
+    <div class="score" id="score">Score: 0</div>
+    <div class="over" id="overMessage">Game Over!</div>
+
+    <script>
+        // Define the grid with numbers
+        const grid = [
+            ["7", "8", "9"],
+            ["4", "5", "6"],
+            ["1", "2", "3"]
+        ];
+
+        // Initialize score and over message
+        let score = 0;
+        let overMessage = document.getElementById("overMessage");
+
+        // Initialize the button to light a number
+        const lightButton = document.getElementById("lightButton");
+
+        // Function to light a number
+        function lightNumber(number) {
+            // Check if the number is in the grid
+            const gridIndex = grid.findIndex(row => row.includes(number));
+            if (gridIndex !== -1) {
+                // Light the number and add to score
+                document.getElementById(`num${number}`).classList.add("lighted");
+                score++;
+                document.getElementById("score").textContent = `Score: ${score}`;
+                overMessage.textContent = ""; // Clear over message
+            } else {
+                // Show error message if number is not in grid
+                document.getElementById("overMessage").textContent = "Number not in grid!";
+            }
+        }
+
+        // Add event listener to the button to light numbers
+        lightButton.addEventListener("click", lightNumber);
+
+        // Game over condition
+        const overCondition = 3; // If 3 numbers are lit, game over
+        document.addEventListener("click", function() {
+            // Check if the button was pressed within the last 3 seconds
+            const currentTime = new Date().getTime();
+            const lastClickTime = new Date().getTime();
+            if (currentTime - lastClickTime > 3000) {
+                // Check if all numbers are lit
+                const numLights = grid.map(row => row.join(",")).every(num => document.getElementById(`num${num}`).classList.contains("lighted"));
+                if (numLights) {
+                    document.getElementById("overMessage").textContent = "Game Over!";
+                }
+            }
+        });
+
+        // Update the button to light the next number
+        lightButton.addEventListener("click", () => {
+            const numbersToLight = ["7", "8", "9", "4", "5", "6", "1", "2", "3"];
+            const randomIndex = numbersToLight[Math.floor(Math.random() * numbersToLight.length)];
+            lightNumber(randomIndex);
+        });
+    </script>
+</body>
+</html>

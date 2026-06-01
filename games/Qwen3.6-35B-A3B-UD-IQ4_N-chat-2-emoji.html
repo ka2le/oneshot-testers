@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emoji Catcher</title>
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --hud-bg: #16213e;
+            --text-color: #ffffff;
+            --good-color: #4cc9f0;
+            --bad-color: #f72585;
+            --accent: #fca311;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none; /* Prevent text selection */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- HUD (Heads Up Display) --- */
+        #hud {
+            height: 100px;
+            background-color: var(--hud-bg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        .hud-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hud-title {
+            font-size: 0.9rem;
+            opacity: 0.7;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .hud-content {
+            font-size: 1.8rem;
+            font-weight: bold;
+            display: flex;
+            gap: 10px;
+        }
+
+        .good-list { color: var(--good-color); }
+        .bad-list { color: var(--bad-color); }
+
+        #score-display {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--accent);
+            text-shadow: 0 0 10px rgba(252, 163, 17, 0.5);
+            min-width: 100px;
+            text-align: center;
+        }
+
+        /* --- Game Area --- */
+        #game-area {
+            flex-grow: 1;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        /* The popping emoji */
+        .emoji-target {
+            position: absolute;
+            font-size: 3rem;
+            cursor: pointer;
+            transition: transform 0.1s;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 5;
+        }
+
+        .emoji-target:active {
+            transform: scale(0.9);
+        }
+
+        /* --- Screens (Start / Game Over) --- */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            backdrop-filter: blur(5px);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        p {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.5;
+        }
+
+        button {
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            background-color: var(--good-color);
+            color: #000;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s;
+            font-weight: bold;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            background-color: #fff;
+        }
+
+        /* --- Animations --- */
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes popOut {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .popped {
+            animation: popOut 0.2s forwards !important;
+            pointer-events: none; /* Prevent double clicking */
+        }
+
+        /* Heart Styles */
+        .heart {
+            color: #ff4d4d;
+            font-size: 2rem;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div class="hud-panel">
+            <div class="hud-title">Good (Click Me)</div>
+            <div class="hud-content good-list" id="good-list">...</div>
+        </div>
+        
+        <div class="hud-panel">
+            <div class="hud-title">Score</div>
+            <div id="score-display">0</div>
+        </div>
+
+        <div class="hud-panel">
+            <div class="hud-title">Bad (Avoid)</div>
+            <div class="hud-content bad-list" id="bad-list">...</div>
+        </div>
+
+        <div class="hud-panel">
+            <div class="hud-title">Lives</div>
+            <div class="hud-content" id="lives-display">
+                <span class="heart">❤️</span>
+                <span class="heart">❤️</span>
+                <span class="heart">❤️</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Game Area -->
+    <div id="game-area"></div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="overlay">
+        <h1>Emoji Chaos</h1>
+        <p>
+            Emojis will pop up randomly.<br>
+            Check the <b style="color:var(--good-color)">Left Panel</b> to see which ones give points.<br>
+            Check the <b style="color:var(--bad-color)">Right Panel</b> to see which ones hurt you!<br>
+            Click Good, Avoid Bad.
+        </p>
+        <button onclick="startGame()">Play Now</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="overlay hidden">
+        <h1>Game Over</h1>
+        <p>Your Final Score: <span id="final-score" style="color:var(--accent); font-weight:bold;">0</span></p>
+        <button onclick="startGame()">Try Again</button>
+    </div>
+
+    <script>
+        // --- Game Configuration ---
+        const TOTAL_EMOJIS = 10;
+        const GOOD_COUNT = 5;
+        const SPAWN_RATE_MS = 800; // New emoji every 0.8 seconds
+        const LIFETIME_MS = 2000;  // Emoji stays for 2 seconds before disappearing
+        
+        // Full list of available emojis
+        const EMOJI_POOL = ['😀', '😂', '🥰', '😎', '🤩', '🤯', '🤢', '🤖', '👻', '👽'];
+
+        // --- State Variables ---
+        let score = 0;
+        let lives = 3;
+        let gameActive = false;
+        let spawnInterval;
+        let goodEmojis = [];
+        let badEmojis = [];
+        
+        // --- DOM Elements ---
+        const gameArea = document.getElementById('game-area');
+        const scoreDisplay = document.getElementById('score-display');
+        const livesDisplay = document.getElementById('lives-display');
+        const goodListDisplay = document.getElementById('good-list');
+        const badListDisplay = document.getElementById('bad-list');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        // --- Initialization ---
+        function startGame() {
+            // Reset State
+            score = 0;
+            lives = 3;
+            gameActive = true;
+            updateScore();
+            updateLives();
+
+            // UI Reset
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            gameArea.innerHTML = ''; // Clear any existing emojis
+
+            // Generate Round Config
+            generateRoundEmojis();
+            updateHUDLists();
+
+            // Start Spawning
+            spawnInterval = setInterval(spawnEmoji, SPAWN_RATE_MS);
+        }
+
+        function generateRoundEmojis() {
+            // Shuffle the pool
+            const shuffled = [...EMOJI_POOL].sort(() => 0.5 - Math.random());
+            
+            // Split into Good (first 5) and Bad (last 5)
+            goodEmojis = shuffled.slice(0, GOOD_COUNT);
+            badEmojis = shuffled.slice(GOOD_COUNT, TOTAL_EMOJIS);
+        }
+
+        function updateHUDLists() {
+            goodListDisplay.innerHTML = goodEmojis.join(' ');
+            badListDisplay.innerHTML = badEmojis.join(' ');
+        }
+
+        // --- Game Loop Logic ---
+        function spawnEmoji() {
+            if (!gameActive) return;
+
+            // Pick a random emoji from the total pool
+            const allCurrentEmojis = [...goodEmojis, ...badEmojis];
+            const emojiChar = allCurrentEmojis[Math.floor(Math.random() * allCurrentEmojis.length)];
+            
+            // Determine type
+            const isGood = goodEmojis.includes(emojiChar);
+
+            // Create Element
+            const el = document.createElement('div');
+            el.classList.add('emoji-target');
+            el.textContent = emojiChar;
+            el.dataset.type = isGood ? 'good' : 'bad';
+
+            // Random Position
+            // Subtract approx 60px to keep it inside bounds (emoji width)
+            const maxX = gameArea.clientWidth - 60;
+            const maxY = gameArea.clientHeight - 60;
+            
+            const randomX = Math.max(0, Math.random() * maxX);
+            const randomY = Math.max(0, Math.random() * maxY);
+
+            el.style.left = `${randomX}px`;
+            el.style.top = `${randomY}px`;
+
+            // Event Listeners
+            el.addEventListener('mousedown', () => handleEmojiClick(el, isGood));
+            el.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Prevent double firing on some devices
+                handleEmojiClick(el, isGood);
+            });
+
+            gameArea.appendChild(el);
+
+            // Auto remove after lifetime
+            setTimeout(() => {
+                if (el.parentNode) {
+                    el.remove();
+                }
+            }, LIFETIME_MS);
+        }
+
+        function handleEmojiClick(el, isGood) {
+            if (!gameActive || el.classList.contains('popped')) return;
+
+            // Mark as popped to prevent double clicks
+            el.classList.add('popped');
+
+            if (isGood) {
+                score += 10;
+                // Optional: Visual flair for points could go here
+            } else {
+                lives--;
+                // Screen shake effect
+                document.body.style.transform = "translateX(5px)";
+                setTimeout(() => document.body.style.transform = "translateX(0)", 50);
+            }
+
+            updateScore();
+            updateLives();
+            
+            // Remove element immediately on click
+            setTimeout(() => el.remove(), 200);
+
+            if (lives <= 0) {
+                endGame();
+            }
+        }
+
+        function updateScore() {
+            scoreDisplay.textContent = score;
+        }
+
+        function updateLives() {
+            let hearts = '';
+            for (let i = 0; i < lives; i++) {
+                hearts += '<span class="heart">❤️</span>';
+            }
+            livesDisplay.innerHTML = hearts;
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(spawnInterval);
+            finalScoreDisplay.textContent = score;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+    </script>
+</body>
+</html>

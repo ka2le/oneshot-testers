@@ -1,0 +1,1763 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Neon Numpad Rush</title>
+
+  <style>
+    :root {
+      --bg-a: #070516;
+      --bg-b: #15113a;
+      --bg-c: #081d38;
+      --glass: rgba(255, 255, 255, 0.105);
+      --glass-strong: rgba(255, 255, 255, 0.18);
+      --white: #ffffff;
+      --muted: rgba(255, 255, 255, 0.72);
+      --hot: #ff2bd6;
+      --cyan: #31f7ff;
+      --lime: #7dff6a;
+      --gold: #ffe45e;
+      --danger: #ff315a;
+      --purple: #8b5cff;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+      --radius-xl: 34px;
+      --radius-lg: 24px;
+      --radius-md: 18px;
+      --tile-size: min(25.5vw, 116px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      overflow-x: hidden;
+      background:
+        radial-gradient(circle at 12% 15%, rgba(255, 43, 214, 0.38), transparent 26%),
+        radial-gradient(circle at 82% 4%, rgba(49, 247, 255, 0.30), transparent 26%),
+        radial-gradient(circle at 50% 115%, rgba(125, 255, 106, 0.18), transparent 32%),
+        linear-gradient(135deg, var(--bg-a), var(--bg-b) 48%, var(--bg-c));
+      font-family:
+        Inter, ui-rounded, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      color: var(--white);
+    }
+
+    body {
+      position: relative;
+      display: grid;
+      place-items: center;
+      padding: 18px 14px calc(18px + var(--safe-bottom));
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: auto;
+      width: 42vmax;
+      height: 42vmax;
+      border-radius: 999px;
+      filter: blur(38px);
+      opacity: 0.36;
+      pointer-events: none;
+      z-index: 0;
+      animation: floatBlob 8s ease-in-out infinite alternate;
+    }
+
+    body::before {
+      left: -15vmax;
+      top: -13vmax;
+      background: conic-gradient(from 90deg, var(--hot), var(--purple), var(--cyan), var(--hot));
+    }
+
+    body::after {
+      right: -18vmax;
+      bottom: -17vmax;
+      background: conic-gradient(from 200deg, var(--lime), var(--cyan), var(--purple), var(--lime));
+      animation-duration: 10s;
+      animation-delay: -2s;
+    }
+
+    @keyframes floatBlob {
+      from {
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+
+      to {
+        transform: translate3d(4vmax, 3vmax, 0) scale(1.08) rotate(18deg);
+      }
+    }
+
+    .stars {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.42;
+      background-image:
+        radial-gradient(circle, rgba(255, 255, 255, 0.9) 0 1px, transparent 1.5px),
+        radial-gradient(circle, rgba(49, 247, 255, 0.8) 0 1px, transparent 1.5px);
+      background-size: 70px 70px, 115px 115px;
+      background-position: 0 0, 28px 45px;
+      mask-image: linear-gradient(to bottom, black, transparent 82%);
+      animation: starDrift 14s linear infinite;
+    }
+
+    @keyframes starDrift {
+      to {
+        background-position: 70px 140px, 143px 275px;
+      }
+    }
+
+    .phone {
+      position: relative;
+      z-index: 2;
+      width: min(100%, 470px);
+      min-height: min(860px, calc(100vh - 28px));
+      display: grid;
+      align-content: center;
+      gap: 14px;
+    }
+
+    .game-card {
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius-xl);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.055)),
+        rgba(4, 4, 14, 0.58);
+      box-shadow:
+        var(--shadow),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+        inset 0 -70px 120px rgba(49, 247, 255, 0.06);
+      backdrop-filter: blur(24px) saturate(160%);
+    }
+
+    .game-card::before {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      background:
+        linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.30), transparent),
+        conic-gradient(from 180deg, var(--hot), var(--cyan), var(--lime), var(--purple), var(--hot));
+      opacity: 0.32;
+      filter: blur(18px);
+      animation: borderSpin 5s linear infinite;
+      pointer-events: none;
+    }
+
+    .game-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+      background-size: 22px 22px;
+      mask-image: radial-gradient(circle at 50% 36%, black, transparent 70%);
+      opacity: 0.28;
+      pointer-events: none;
+    }
+
+    @keyframes borderSpin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .inner {
+      position: relative;
+      z-index: 1;
+      padding: 22px 18px 18px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .brand {
+      display: grid;
+      gap: 3px;
+    }
+
+    .kicker {
+      width: max-content;
+      padding: 5px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.17);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.075);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 8vw, 43px);
+      line-height: 0.92;
+      letter-spacing: -0.07em;
+      text-transform: uppercase;
+      text-shadow:
+        0 0 20px rgba(255, 43, 214, 0.55),
+        0 0 34px rgba(49, 247, 255, 0.35);
+    }
+
+    h1 span {
+      display: block;
+      color: transparent;
+      background: linear-gradient(90deg, var(--cyan), var(--lime), var(--gold), var(--hot));
+      -webkit-background-clip: text;
+      background-clip: text;
+      filter: drop-shadow(0 0 18px rgba(49, 247, 255, 0.36));
+    }
+
+    .level-pill {
+      min-width: 84px;
+      padding: 10px 12px;
+      border-radius: 18px;
+      text-align: center;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255, 228, 94, 0.35), transparent 60%),
+        rgba(255, 255, 255, 0.09);
+      border: 1px solid rgba(255, 255, 255, 0.17);
+      box-shadow: inset 0 0 26px rgba(255, 228, 94, 0.08);
+    }
+
+    .level-pill small {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      font-weight: 900;
+    }
+
+    .level-pill strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 26px;
+      line-height: 1;
+      color: var(--gold);
+      text-shadow: 0 0 18px rgba(255, 228, 94, 0.45);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr 0.85fr;
+      gap: 9px;
+      margin-bottom: 12px;
+    }
+
+    .stat {
+      position: relative;
+      overflow: hidden;
+      padding: 12px 12px 11px;
+      min-height: 70px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.085);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: inset 0 0 34px rgba(255, 255, 255, 0.03);
+    }
+
+    .stat::after {
+      content: "";
+      position: absolute;
+      inset: -40% auto auto -20%;
+      width: 70%;
+      height: 130%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.13), transparent);
+      transform: rotate(18deg);
+      animation: statShine 3.2s ease-in-out infinite;
+      opacity: 0.45;
+    }
+
+    @keyframes statShine {
+      0%,
+      60% {
+        transform: translateX(-140%) rotate(18deg);
+      }
+
+      100% {
+        transform: translateX(260%) rotate(18deg);
+      }
+    }
+
+    .label {
+      display: block;
+      position: relative;
+      z-index: 1;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .value {
+      display: block;
+      position: relative;
+      z-index: 1;
+      margin-top: 3px;
+      font-size: clamp(21px, 7vw, 33px);
+      font-weight: 1000;
+      letter-spacing: -0.05em;
+      line-height: 1;
+    }
+
+    .value.score {
+      color: var(--cyan);
+      text-shadow: 0 0 18px rgba(49, 247, 255, 0.55);
+    }
+
+    .value.combo {
+      color: var(--hot);
+      text-shadow: 0 0 18px rgba(255, 43, 214, 0.55);
+    }
+
+    .value.speed {
+      color: var(--lime);
+      text-shadow: 0 0 18px rgba(125, 255, 106, 0.45);
+    }
+
+    .mini-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 11px;
+      padding-inline: 2px;
+    }
+
+    .high-score,
+    .hits {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .high-score strong,
+    .hits strong {
+      color: var(--white);
+      font-size: 13px;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
+    }
+
+    .lives {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .heart {
+      width: 21px;
+      height: 21px;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      filter:
+        drop-shadow(0 0 8px rgba(255, 49, 90, 0.7))
+        drop-shadow(0 0 18px rgba(255, 49, 90, 0.4));
+      transform-origin: center;
+      animation: heartPulse 1.2s ease-in-out infinite;
+    }
+
+    .heart:nth-child(2) {
+      animation-delay: -0.2s;
+    }
+
+    .heart:nth-child(3) {
+      animation-delay: -0.4s;
+    }
+
+    .heart.lost {
+      opacity: 0.22;
+      filter: grayscale(1);
+      transform: scale(0.82);
+      animation: none;
+    }
+
+    @keyframes heartPulse {
+      50% {
+        transform: scale(1.13);
+      }
+    }
+
+    .timer-wrap {
+      position: relative;
+      margin: 8px 0 15px;
+      padding: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.075);
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.20);
+    }
+
+    .timer-track {
+      height: 14px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.32);
+    }
+
+    .timer-fill {
+      width: 100%;
+      height: 100%;
+      transform-origin: left center;
+      transform: scaleX(1);
+      border-radius: 999px;
+      background:
+        linear-gradient(90deg, var(--lime), var(--gold), var(--hot));
+      box-shadow:
+        0 0 16px rgba(255, 228, 94, 0.55),
+        0 0 28px rgba(255, 43, 214, 0.28);
+    }
+
+    .grid-wrap {
+      position: relative;
+      padding: 13px;
+      border-radius: 31px;
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.045)),
+        rgba(0, 0, 0, 0.21);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      box-shadow:
+        inset 0 0 46px rgba(49, 247, 255, 0.055),
+        0 18px 48px rgba(0, 0, 0, 0.25);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .tile {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border: 0;
+      border-radius: 25px;
+      color: white;
+      font: inherit;
+      font-weight: 1000;
+      font-size: clamp(32px, 12vw, 58px);
+      letter-spacing: -0.05em;
+      cursor: pointer;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        radial-gradient(circle at 35% 16%, rgba(255, 255, 255, 0.26), transparent 30%),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.075)),
+        rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow:
+        inset 0 0 28px rgba(255, 255, 255, 0.05),
+        inset 0 -14px 30px rgba(0, 0, 0, 0.28),
+        0 14px 26px rgba(0, 0, 0, 0.22);
+      text-shadow: 0 0 18px rgba(255, 255, 255, 0.35);
+      transform: translateZ(0);
+      transition:
+        transform 120ms ease,
+        filter 120ms ease,
+        box-shadow 120ms ease,
+        border-color 120ms ease;
+    }
+
+    .tile::before {
+      content: "";
+      position: absolute;
+      inset: -45%;
+      z-index: -1;
+      background:
+        conic-gradient(
+          from 180deg,
+          transparent,
+          rgba(49, 247, 255, 0.28),
+          transparent,
+          rgba(255, 43, 214, 0.22),
+          transparent
+        );
+      opacity: 0;
+      transition: opacity 160ms ease;
+      animation: tileSpin 2.8s linear infinite;
+    }
+
+    .tile::after {
+      content: "";
+      position: absolute;
+      inset: 7px;
+      border-radius: 19px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      pointer-events: none;
+    }
+
+    .tile:active {
+      transform: scale(0.96);
+    }
+
+    @media (hover: hover) {
+      .tile:hover {
+        transform: translateY(-2px);
+        box-shadow:
+          inset 0 0 28px rgba(255, 255, 255, 0.07),
+          inset 0 -14px 30px rgba(0, 0, 0, 0.28),
+          0 18px 32px rgba(0, 0, 0, 0.27);
+      }
+    }
+
+    @keyframes tileSpin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .tile.active {
+      transform: scale(1.055);
+      border-color: rgba(255, 255, 255, 0.48);
+      background:
+        radial-gradient(circle at 38% 18%, rgba(255, 255, 255, 0.55), transparent 26%),
+        radial-gradient(circle at 50% 92%, rgba(255, 43, 214, 0.30), transparent 42%),
+        linear-gradient(145deg, rgba(49, 247, 255, 0.65), rgba(139, 92, 255, 0.46)),
+        rgba(255, 255, 255, 0.16);
+      box-shadow:
+        0 0 0 6px rgba(49, 247, 255, 0.12),
+        0 0 30px rgba(49, 247, 255, 0.82),
+        0 0 64px rgba(255, 43, 214, 0.52),
+        inset 0 0 34px rgba(255, 255, 255, 0.20),
+        inset 0 -16px 30px rgba(0, 0, 0, 0.21);
+      animation: activeTile 560ms ease-in-out infinite alternate;
+    }
+
+    .tile.active::before {
+      opacity: 1;
+    }
+
+    @keyframes activeTile {
+      from {
+        filter: saturate(1.25) brightness(1.08);
+      }
+
+      to {
+        filter: saturate(1.8) brightness(1.32);
+      }
+    }
+
+    .tile.correct {
+      animation: correctPop 360ms cubic-bezier(.2, 1.8, .24, 1);
+      background:
+        radial-gradient(circle at 36% 18%, rgba(255, 255, 255, 0.52), transparent 30%),
+        linear-gradient(145deg, rgba(125, 255, 106, 0.72), rgba(49, 247, 255, 0.50));
+      box-shadow:
+        0 0 28px rgba(125, 255, 106, 0.9),
+        inset 0 0 26px rgba(255, 255, 255, 0.22);
+    }
+
+    @keyframes correctPop {
+      0% {
+        transform: scale(1);
+      }
+
+      55% {
+        transform: scale(1.16) rotate(-2deg);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    .tile.wrong {
+      animation: wrongShake 340ms ease-in-out;
+      background:
+        radial-gradient(circle at 36% 18%, rgba(255, 255, 255, 0.36), transparent 28%),
+        linear-gradient(145deg, rgba(255, 49, 90, 0.80), rgba(255, 43, 214, 0.38));
+      box-shadow:
+        0 0 28px rgba(255, 49, 90, 0.85),
+        inset 0 0 26px rgba(255, 255, 255, 0.16);
+    }
+
+    @keyframes wrongShake {
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      18% {
+        transform: translateX(-8px) rotate(-3deg);
+      }
+
+      36% {
+        transform: translateX(8px) rotate(3deg);
+      }
+
+      54% {
+        transform: translateX(-5px) rotate(-2deg);
+      }
+
+      72% {
+        transform: translateX(5px) rotate(2deg);
+      }
+    }
+
+    .ripple {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      left: var(--x);
+      top: var(--y);
+      border-radius: 50%;
+      pointer-events: none;
+      background: rgba(255, 255, 255, 0.55);
+      transform: translate(-50%, -50%) scale(0);
+      animation: ripple 520ms ease-out forwards;
+      mix-blend-mode: screen;
+    }
+
+    @keyframes ripple {
+      to {
+        transform: translate(-50%, -50%) scale(10);
+        opacity: 0;
+      }
+    }
+
+    .message-strip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 45px;
+      margin-top: 13px;
+      padding: 10px 14px;
+      border-radius: 19px;
+      background: rgba(255, 255, 255, 0.078);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: rgba(255, 255, 255, 0.88);
+      text-align: center;
+      font-size: 14px;
+      font-weight: 850;
+      letter-spacing: -0.01em;
+      box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.03);
+    }
+
+    .achievements {
+      position: relative;
+      z-index: 1;
+      margin-top: 14px;
+      padding: 13px;
+      border-radius: 26px;
+      background: rgba(0, 0, 0, 0.22);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .achievements-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 9px;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-weight: 1000;
+    }
+
+    .badge-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .badge {
+      position: relative;
+      min-height: 68px;
+      padding: 10px 8px;
+      border-radius: 18px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      opacity: 0.45;
+      filter: grayscale(0.6);
+    }
+
+    .badge.unlocked {
+      opacity: 1;
+      filter: none;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255, 228, 94, 0.24), transparent 56%),
+        rgba(255, 255, 255, 0.10);
+      border-color: rgba(255, 228, 94, 0.36);
+      box-shadow:
+        inset 0 0 22px rgba(255, 228, 94, 0.08),
+        0 0 18px rgba(255, 228, 94, 0.12);
+    }
+
+    .badge-icon {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+      margin-bottom: 5px;
+    }
+
+    .badge-title {
+      display: block;
+      font-size: 11px;
+      font-weight: 1000;
+      letter-spacing: -0.01em;
+      line-height: 1.05;
+    }
+
+    .badge-desc {
+      display: block;
+      margin-top: 3px;
+      color: rgba(255, 255, 255, 0.58);
+      font-size: 9px;
+      font-weight: 750;
+      line-height: 1.1;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      background:
+        radial-gradient(circle at 50% 24%, rgba(255, 43, 214, 0.27), transparent 38%),
+        radial-gradient(circle at 50% 84%, rgba(49, 247, 255, 0.22), transparent 42%),
+        rgba(5, 4, 16, 0.74);
+      backdrop-filter: blur(16px);
+      transition:
+        opacity 220ms ease,
+        transform 220ms ease,
+        visibility 220ms ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      transform: scale(1.04);
+      pointer-events: none;
+      visibility: hidden;
+    }
+
+    .panel {
+      width: min(100%, 360px);
+      padding: 24px 18px 18px;
+      text-align: center;
+      border-radius: 32px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.07)),
+        rgba(0, 0, 0, 0.32);
+      box-shadow:
+        0 28px 84px rgba(0, 0, 0, 0.45),
+        inset 0 0 40px rgba(255, 255, 255, 0.045);
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: clamp(34px, 10vw, 54px);
+      line-height: 0.88;
+      letter-spacing: -0.08em;
+      text-transform: uppercase;
+      text-shadow:
+        0 0 18px rgba(255, 43, 214, 0.58),
+        0 0 38px rgba(49, 247, 255, 0.34);
+    }
+
+    .panel h2 span {
+      display: block;
+      color: transparent;
+      background: linear-gradient(90deg, var(--gold), var(--hot), var(--cyan));
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+
+    .panel p {
+      margin: 12px auto 15px;
+      max-width: 28ch;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.36;
+    }
+
+    .panel-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 15px 0;
+    }
+
+    .panel-stat {
+      padding: 10px 8px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .panel-stat small {
+      display: block;
+      color: var(--muted);
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 1000;
+    }
+
+    .panel-stat strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .big-button {
+      position: relative;
+      width: 100%;
+      min-height: 58px;
+      border: 0;
+      border-radius: 22px;
+      color: #080511;
+      cursor: pointer;
+      font: inherit;
+      font-size: 17px;
+      font-weight: 1000;
+      letter-spacing: -0.02em;
+      text-transform: uppercase;
+      overflow: hidden;
+      background: linear-gradient(90deg, var(--lime), var(--cyan), var(--hot), var(--gold));
+      background-size: 240% 100%;
+      box-shadow:
+        0 12px 26px rgba(49, 247, 255, 0.24),
+        0 0 32px rgba(255, 43, 214, 0.22);
+      animation: buttonGlow 2.2s ease-in-out infinite alternate;
+      transition: transform 130ms ease;
+    }
+
+    .big-button:active {
+      transform: scale(0.97);
+    }
+
+    .big-button::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.48), transparent);
+      transform: translateX(-120%);
+      animation: buttonSweep 2s ease-in-out infinite;
+    }
+
+    @keyframes buttonGlow {
+      from {
+        background-position: 0% 50%;
+      }
+
+      to {
+        background-position: 100% 50%;
+      }
+    }
+
+    @keyframes buttonSweep {
+      0%,
+      48% {
+        transform: translateX(-120%);
+      }
+
+      100% {
+        transform: translateX(120%);
+      }
+    }
+
+    .tiny {
+      margin-top: 12px;
+      color: rgba(255, 255, 255, 0.58);
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    .toast-zone {
+      position: fixed;
+      z-index: 20;
+      left: 50%;
+      bottom: calc(18px + var(--safe-bottom));
+      width: min(calc(100% - 24px), 430px);
+      display: grid;
+      gap: 8px;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+
+    .toast {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+      border-radius: 20px;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(255, 228, 94, 0.24), transparent 42%),
+        rgba(10, 8, 28, 0.86);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow:
+        0 16px 44px rgba(0, 0, 0, 0.38),
+        0 0 32px rgba(255, 228, 94, 0.10);
+      backdrop-filter: blur(18px);
+      animation: toastIn 2.25s ease forwards;
+    }
+
+    .toast .emoji {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 22px;
+    }
+
+    .toast strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 1000;
+    }
+
+    .toast span {
+      display: block;
+      margin-top: 2px;
+      color: rgba(255, 255, 255, 0.66);
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    @keyframes toastIn {
+      0% {
+        opacity: 0;
+        transform: translateY(22px) scale(0.96);
+      }
+
+      12%,
+      82% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      100% {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+      }
+    }
+
+    .floating-points {
+      position: fixed;
+      z-index: 15;
+      left: var(--x);
+      top: var(--y);
+      pointer-events: none;
+      color: var(--gold);
+      font-weight: 1000;
+      font-size: 24px;
+      text-shadow:
+        0 0 12px rgba(255, 228, 94, 0.85),
+        0 0 26px rgba(255, 43, 214, 0.35);
+      animation: pointsFloat 820ms ease-out forwards;
+    }
+
+    @keyframes pointsFloat {
+      to {
+        opacity: 0;
+        transform: translate(-12px, -70px) scale(1.25) rotate(-5deg);
+      }
+    }
+
+    .confetti {
+      position: fixed;
+      z-index: 16;
+      left: var(--x);
+      top: var(--y);
+      width: 9px;
+      height: 13px;
+      pointer-events: none;
+      border-radius: 3px;
+      background: var(--c);
+      box-shadow: 0 0 14px var(--c);
+      animation: confettiFly 900ms ease-out forwards;
+    }
+
+    @keyframes confettiFly {
+      to {
+        opacity: 0;
+        transform:
+          translate(
+            calc(cos(var(--a)) * var(--d)),
+            calc(sin(var(--a)) * var(--d) + 70px)
+          )
+          rotate(var(--r));
+      }
+    }
+
+    .screen-shake {
+      animation: screenShake 360ms ease-in-out;
+    }
+
+    @keyframes screenShake {
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      20% {
+        transform: translateX(-7px);
+      }
+
+      40% {
+        transform: translateX(6px);
+      }
+
+      60% {
+        transform: translateX(-4px);
+      }
+
+      80% {
+        transform: translateX(3px);
+      }
+    }
+
+    .danger-flash {
+      animation: dangerFlash 300ms ease-out;
+    }
+
+    @keyframes dangerFlash {
+      0% {
+        box-shadow:
+          var(--shadow),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 0 0 rgba(255, 49, 90, 0);
+      }
+
+      45% {
+        box-shadow:
+          var(--shadow),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 0 70px rgba(255, 49, 90, 0.62);
+      }
+
+      100% {
+        box-shadow:
+          var(--shadow),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 0 0 rgba(255, 49, 90, 0);
+      }
+    }
+
+    @media (max-width: 390px) {
+      body {
+        padding-inline: 10px;
+      }
+
+      .inner {
+        padding: 18px 13px 14px;
+      }
+
+      .stats {
+        gap: 7px;
+      }
+
+      .stat {
+        padding: 10px 9px;
+        min-height: 63px;
+      }
+
+      .grid-wrap {
+        padding: 10px;
+      }
+
+      .grid {
+        gap: 8px;
+      }
+
+      .tile {
+        border-radius: 21px;
+      }
+
+      .badge-row {
+        gap: 6px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="stars" aria-hidden="true"></div>
+
+  <main class="phone" id="phone">
+    <section class="game-card" id="gameCard" aria-label="Neon Numpad Rush game">
+      <div class="inner">
+        <header class="topbar">
+          <div class="brand">
+            <div class="kicker">Reflex Arcade</div>
+            <h1>Neon <span>Numpad Rush</span></h1>
+          </div>
+
+          <div class="level-pill" aria-label="Current level">
+            <small>Level</small>
+            <strong id="level">1</strong>
+          </div>
+        </header>
+
+        <section class="stats" aria-label="Game stats">
+          <div class="stat">
+            <span class="label">Score</span>
+            <span class="value score" id="score">0</span>
+          </div>
+
+          <div class="stat">
+            <span class="label">Combo</span>
+            <span class="value combo" id="combo">x0</span>
+          </div>
+
+          <div class="stat">
+            <span class="label">Speed</span>
+            <span class="value speed" id="speed">1.25s</span>
+          </div>
+        </section>
+
+        <div class="mini-row">
+          <div class="high-score">🏆 Best <strong id="bestScore">0</strong></div>
+          <div class="hits">⚡ Hits <strong id="hits">0</strong></div>
+          <div class="lives" aria-label="Lives">
+            <span class="heart" id="heart0">♥</span>
+            <span class="heart" id="heart1">♥</span>
+            <span class="heart" id="heart2">♥</span>
+          </div>
+        </div>
+
+        <div class="timer-wrap" aria-hidden="true">
+          <div class="timer-track">
+            <div class="timer-fill" id="timerFill"></div>
+          </div>
+        </div>
+
+        <section class="grid-wrap">
+          <div class="grid" id="grid" aria-label="Number grid">
+            <button class="tile" data-number="7" aria-label="7">7</button>
+            <button class="tile" data-number="8" aria-label="8">8</button>
+            <button class="tile" data-number="9" aria-label="9">9</button>
+            <button class="tile" data-number="4" aria-label="4">4</button>
+            <button class="tile" data-number="5" aria-label="5">5</button>
+            <button class="tile" data-number="6" aria-label="6">6</button>
+            <button class="tile" data-number="1" aria-label="1">1</button>
+            <button class="tile" data-number="2" aria-label="2">2</button>
+            <button class="tile" data-number="3" aria-label="3">3</button>
+          </div>
+        </section>
+
+        <div class="message-strip" id="message">
+          Tap the glowing number before the timer drains.
+        </div>
+
+        <section class="achievements" aria-label="Achievements">
+          <div class="achievements-head">
+            <span>Achievements</span>
+            <span id="achievementCount">0/6</span>
+          </div>
+          <div class="badge-row" id="badgeRow"></div>
+        </section>
+      </div>
+
+      <section class="overlay" id="overlay">
+        <div class="panel">
+          <h2 id="overlayTitle">Ready <span>To Rush?</span></h2>
+          <p id="overlayText">
+            Hit the lit number. Every correct tap makes the game faster.
+            Three misses and the run explodes.
+          </p>
+
+          <div class="panel-stats">
+            <div class="panel-stat">
+              <small>Score</small>
+              <strong id="finalScore">0</strong>
+            </div>
+            <div class="panel-stat">
+              <small>Best</small>
+              <strong id="finalBest">0</strong>
+            </div>
+            <div class="panel-stat">
+              <small>Combo</small>
+              <strong id="finalCombo">0</strong>
+            </div>
+          </div>
+
+          <button class="big-button" id="startButton" type="button">
+            Start Game
+          </button>
+
+          <div class="tiny">
+            Keyboard works too: press 1–9.
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div class="toast-zone" id="toastZone" aria-live="polite" aria-atomic="true"></div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const NUMBERS = [7, 8, 9, 4, 5, 6, 1, 2, 3];
+
+      const STORAGE = {
+        bestScore: "neon-numpad-rush-best-score",
+        achievements: "neon-numpad-rush-achievements"
+      };
+
+      const ACHIEVEMENTS = [
+        {
+          id: "first-hit",
+          icon: "✨",
+          title: "First Spark",
+          desc: "Land 1 hit",
+          test: state => state.hits >= 1
+        },
+        {
+          id: "combo-10",
+          icon: "🔥",
+          title: "Hot Hands",
+          desc: "Reach x10",
+          test: state => state.bestCombo >= 10
+        },
+        {
+          id: "score-250",
+          icon: "💎",
+          title: "Gem Hunter",
+          desc: "Score 250",
+          test: state => state.score >= 250
+        },
+        {
+          id: "score-750",
+          icon: "👑",
+          title: "Neon Royalty",
+          desc: "Score 750",
+          test: state => state.score >= 750
+        },
+        {
+          id: "speed-550",
+          icon: "⚡",
+          title: "Hyper Mode",
+          desc: "Sub 0.55s",
+          test: state => state.roundMs <= 550
+        },
+        {
+          id: "perfect-25",
+          icon: "🛡️",
+          title: "Untouchable",
+          desc: "25 hits, 0 misses",
+          test: state => state.hits >= 25 && state.misses === 0
+        }
+      ];
+
+      const state = {
+        active: false,
+        score: 0,
+        hits: 0,
+        misses: 0,
+        combo: 0,
+        bestCombo: 0,
+        level: 1,
+        roundMs: 1250,
+        minRoundMs: 315,
+        activeNumber: null,
+        previousNumber: null,
+        deadline: 0,
+        bestScore: readInt(STORAGE.bestScore, 0),
+        unlocked: readSet(STORAGE.achievements),
+        timeoutId: null,
+        rafId: null,
+        inputLocked: false
+      };
+
+      const el = {
+        phone: document.getElementById("phone"),
+        card: document.getElementById("gameCard"),
+        grid: document.getElementById("grid"),
+        tiles: [...document.querySelectorAll(".tile")],
+        score: document.getElementById("score"),
+        combo: document.getElementById("combo"),
+        speed: document.getElementById("speed"),
+        level: document.getElementById("level"),
+        hits: document.getElementById("hits"),
+        bestScore: document.getElementById("bestScore"),
+        timerFill: document.getElementById("timerFill"),
+        message: document.getElementById("message"),
+        overlay: document.getElementById("overlay"),
+        overlayTitle: document.getElementById("overlayTitle"),
+        overlayText: document.getElementById("overlayText"),
+        startButton: document.getElementById("startButton"),
+        finalScore: document.getElementById("finalScore"),
+        finalBest: document.getElementById("finalBest"),
+        finalCombo: document.getElementById("finalCombo"),
+        badgeRow: document.getElementById("badgeRow"),
+        achievementCount: document.getElementById("achievementCount"),
+        toastZone: document.getElementById("toastZone"),
+        hearts: [
+          document.getElementById("heart0"),
+          document.getElementById("heart1"),
+          document.getElementById("heart2")
+        ]
+      };
+
+      function readInt(key, fallback) {
+        const value = Number.parseInt(localStorage.getItem(key), 10);
+        return Number.isFinite(value) ? value : fallback;
+      }
+
+      function readSet(key) {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+          return new Set(Array.isArray(parsed) ? parsed : []);
+        } catch {
+          return new Set();
+        }
+      }
+
+      function saveAchievements() {
+        localStorage.setItem(STORAGE.achievements, JSON.stringify([...state.unlocked]));
+      }
+
+      function randomItem(array) {
+        return array[Math.floor(Math.random() * array.length)];
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function vibrate(pattern) {
+        if ("vibrate" in navigator) {
+          navigator.vibrate(pattern);
+        }
+      }
+
+      function formatSpeed(ms) {
+        return `${(ms / 1000).toFixed(2)}s`;
+      }
+
+      function getTile(number) {
+        return el.tiles.find(tile => Number(tile.dataset.number) === number);
+      }
+
+      function clearTimers() {
+        window.clearTimeout(state.timeoutId);
+        window.cancelAnimationFrame(state.rafId);
+        state.timeoutId = null;
+        state.rafId = null;
+      }
+
+      function clearTileClasses() {
+        for (const tile of el.tiles) {
+          tile.classList.remove("active", "correct", "wrong");
+        }
+      }
+
+      function updateUI() {
+        el.score.textContent = state.score.toLocaleString();
+        el.combo.textContent = `x${state.combo}`;
+        el.speed.textContent = formatSpeed(state.roundMs);
+        el.level.textContent = state.level;
+        el.hits.textContent = state.hits.toLocaleString();
+        el.bestScore.textContent = state.bestScore.toLocaleString();
+
+        for (let i = 0; i < el.hearts.length; i++) {
+          el.hearts[i].classList.toggle("lost", i < state.misses);
+        }
+
+        const unlockedCount = ACHIEVEMENTS.filter(a => state.unlocked.has(a.id)).length;
+        el.achievementCount.textContent = `${unlockedCount}/${ACHIEVEMENTS.length}`;
+
+        for (const badge of el.badgeRow.querySelectorAll(".badge")) {
+          badge.classList.toggle("unlocked", state.unlocked.has(badge.dataset.id));
+        }
+      }
+
+      function renderAchievements() {
+        el.badgeRow.innerHTML = "";
+
+        for (const achievement of ACHIEVEMENTS) {
+          const badge = document.createElement("div");
+          badge.className = "badge";
+          badge.dataset.id = achievement.id;
+          badge.innerHTML = `
+            <span class="badge-icon">${achievement.icon}</span>
+            <span class="badge-title">${achievement.title}</span>
+            <span class="badge-desc">${achievement.desc}</span>
+          `;
+          el.badgeRow.appendChild(badge);
+        }
+
+        updateUI();
+      }
+
+      function showOverlay({ title, accent, text, button }) {
+        el.overlayTitle.innerHTML = `${title} <span>${accent}</span>`;
+        el.overlayText.textContent = text;
+        el.startButton.textContent = button;
+        el.finalScore.textContent = state.score.toLocaleString();
+        el.finalBest.textContent = state.bestScore.toLocaleString();
+        el.finalCombo.textContent = state.bestCombo.toLocaleString();
+        el.overlay.classList.remove("hidden");
+      }
+
+      function hideOverlay() {
+        el.overlay.classList.add("hidden");
+      }
+
+      function setMessage(text) {
+        el.message.textContent = text;
+      }
+
+      function startGame() {
+        clearTimers();
+        clearTileClasses();
+
+        state.active = true;
+        state.score = 0;
+        state.hits = 0;
+        state.misses = 0;
+        state.combo = 0;
+        state.bestCombo = 0;
+        state.level = 1;
+        state.roundMs = 1250;
+        state.activeNumber = null;
+        state.previousNumber = null;
+        state.inputLocked = false;
+
+        el.timerFill.style.transform = "scaleX(1)";
+        hideOverlay();
+        setMessage("Go! Chase the glow.");
+        updateUI();
+
+        toast("🚀", "Run started", "Hit the lit number. Speed rises after every hit.");
+        nextRound();
+      }
+
+      function nextRound() {
+        if (!state.active) return;
+
+        clearTimers();
+        clearTileClasses();
+        state.inputLocked = false;
+
+        const choices = NUMBERS.filter(number => number !== state.previousNumber);
+        const next = randomItem(choices.length ? choices : NUMBERS);
+
+        state.activeNumber = next;
+        state.previousNumber = next;
+
+        const tile = getTile(next);
+        tile.classList.add("active");
+
+        state.deadline = performance.now() + state.roundMs;
+        runTimerBar();
+
+        state.timeoutId = window.setTimeout(() => {
+          registerMiss("Too slow! Miss added.");
+        }, state.roundMs);
+      }
+
+      function runTimerBar() {
+        const total = state.roundMs;
+
+        const tick = now => {
+          if (!state.active) return;
+
+          const remaining = clamp((state.deadline - now) / total, 0, 1);
+          el.timerFill.style.transform = `scaleX(${remaining})`;
+
+          if (remaining > 0) {
+            state.rafId = window.requestAnimationFrame(tick);
+          }
+        };
+
+        state.rafId = window.requestAnimationFrame(tick);
+      }
+
+      function handleNumberInput(number, event) {
+        if (!state.active || state.inputLocked) return;
+
+        const tile = getTile(number);
+
+        if (event && event.type === "pointerdown") {
+          spawnRipple(tile, event);
+        }
+
+        if (number === state.activeNumber) {
+          registerHit(tile);
+        } else {
+          tile.classList.add("wrong");
+          registerMiss(`Wrong key! It was ${state.activeNumber}.`);
+        }
+      }
+
+      function registerHit(tile) {
+        if (!state.active || state.inputLocked) return;
+
+        state.inputLocked = true;
+        clearTimers();
+
+        const previousMs = state.roundMs;
+        state.hits += 1;
+        state.combo += 1;
+        state.bestCombo = Math.max(state.bestCombo, state.combo);
+        state.level = 1 + Math.floor(state.hits / 6);
+
+        const multiplier = 1 + Math.floor(state.combo / 8);
+        const speedBonus = Math.max(0, Math.round((1300 - state.roundMs) / 45));
+        const points = (10 * multiplier) + speedBonus + Math.floor(state.combo / 3);
+
+        state.score += points;
+
+        const speedDrop = 32 + Math.min(24, Math.floor(state.combo / 2));
+        state.roundMs = Math.max(state.minRoundMs, Math.floor(state.roundMs - speedDrop));
+
+        clearTileClasses();
+        tile.classList.add("correct");
+
+        const rect = tile.getBoundingClientRect();
+        spawnPoints(`+${points}`, rect.left + rect.width / 2, rect.top + rect.height / 2);
+        vibrate(18);
+
+        if (state.combo % 5 === 0) {
+          confettiBurst(rect.left + rect.width / 2, rect.top + rect.height / 2, 20);
+          toast("🔥", `${state.combo} combo`, `Multiplier pressure is building.`);
+        }
+
+        if (previousMs > 550 && state.roundMs <= 550) {
+          toast("⚡", "Hyper speed", "You crossed into sub 0.55s territory.");
+          confettiBurst(window.innerWidth / 2, window.innerHeight / 2, 36);
+        }
+
+        checkAchievements();
+        updateUI();
+        setMessage(getHitMessage(points));
+
+        window.setTimeout(nextRound, 145);
+      }
+
+      function registerMiss(text) {
+        if (!state.active || state.inputLocked) return;
+
+        state.inputLocked = true;
+        clearTimers();
+
+        state.misses += 1;
+        state.combo = 0;
+
+        const activeTile = getTile(state.activeNumber);
+        clearTileClasses();
+
+        if (activeTile) {
+          activeTile.classList.add("wrong");
+        }
+
+        el.phone.classList.remove("screen-shake");
+        el.card.classList.remove("danger-flash");
+        void el.phone.offsetWidth;
+        el.phone.classList.add("screen-shake");
+        el.card.classList.add("danger-flash");
+
+        vibrate([35, 30, 45]);
+
+        updateUI();
+
+        if (state.misses >= 3) {
+          gameOver();
+          return;
+        }
+
+        setMessage(`${text} ${3 - state.misses} life${3 - state.misses === 1 ? "" : "s"} left.`);
+        window.setTimeout(nextRound, 520);
+      }
+
+      function gameOver() {
+        state.active = false;
+        clearTimers();
+        clearTileClasses();
+        el.timerFill.style.transform = "scaleX(0)";
+
+        const oldBest = state.bestScore;
+
+        if (state.score > state.bestScore) {
+          state.bestScore = state.score;
+          localStorage.setItem(STORAGE.bestScore, String(state.bestScore));
+        }
+
+        updateUI();
+
+        const newBest = state.bestScore > oldBest;
+        if (newBest) {
+          confettiBurst(window.innerWidth / 2, window.innerHeight * 0.35, 58);
+          toast("🏆", "New high score", `${state.bestScore.toLocaleString()} points.`);
+        }
+
+        showOverlay({
+          title: "Game",
+          accent: "Over",
+          text: newBest
+            ? "New personal best! The neon grid bows before your reflexes."
+            : "Three misses. The grid wins this round.",
+          button: "Play Again"
+        });
+      }
+
+      function getHitMessage(points) {
+        if (state.combo >= 25) return `ABSURD! +${points} points. Combo x${state.combo}.`;
+        if (state.combo >= 15) return `Laser focus! +${points} points. Combo x${state.combo}.`;
+        if (state.combo >= 8) return `Heating up! +${points} points. Combo x${state.combo}.`;
+        return `Nice hit! +${points} points.`;
+      }
+
+      function checkAchievements() {
+        for (const achievement of ACHIEVEMENTS) {
+          if (!state.unlocked.has(achievement.id) && achievement.test(state)) {
+            state.unlocked.add(achievement.id);
+            saveAchievements();
+            toast(achievement.icon, "Achievement unlocked", achievement.title);
+            confettiBurst(window.innerWidth / 2, window.innerHeight * 0.28, 44);
+          }
+        }
+      }
+
+      function toast(icon, title, text) {
+        const node = document.createElement("div");
+        node.className = "toast";
+        node.innerHTML = `
+          <div class="emoji">${icon}</div>
+          <div>
+            <strong>${title}</strong>
+            <span>${text}</span>
+          </div>
+        `;
+
+        el.toastZone.appendChild(node);
+
+        window.setTimeout(() => {
+          node.remove();
+        }, 2300);
+      }
+
+      function spawnRipple(tile, event) {
+        const rect = tile.getBoundingClientRect();
+        const ripple = document.createElement("span");
+        ripple.className = "ripple";
+        ripple.style.setProperty("--x", `${event.clientX - rect.left}px`);
+        ripple.style.setProperty("--y", `${event.clientY - rect.top}px`);
+        tile.appendChild(ripple);
+
+        window.setTimeout(() => ripple.remove(), 540);
+      }
+
+      function spawnPoints(text, x, y) {
+        const node = document.createElement("div");
+        node.className = "floating-points";
+        node.textContent = text;
+        node.style.setProperty("--x", `${x}px`);
+        node.style.setProperty("--y", `${y}px`);
+        document.body.appendChild(node);
+
+        window.setTimeout(() => node.remove(), 850);
+      }
+
+      function confettiBurst(x, y, amount = 24) {
+        const colors = ["#31f7ff", "#ff2bd6", "#7dff6a", "#ffe45e", "#8b5cff", "#ffffff"];
+
+        for (let i = 0; i < amount; i++) {
+          const piece = document.createElement("div");
+          piece.className = "confetti";
+
+          const angle = Math.random() * Math.PI * 2;
+          const distance = 65 + Math.random() * 120;
+          const rotation = `${Math.round(Math.random() * 520 - 260)}deg`;
+          const color = colors[Math.floor(Math.random() * colors.length)];
+
+          piece.style.setProperty("--x", `${x}px`);
+          piece.style.setProperty("--y", `${y}px`);
+          piece.style.setProperty("--a", `${angle}rad`);
+          piece.style.setProperty("--d", `${distance}px`);
+          piece.style.setProperty("--r", rotation);
+          piece.style.setProperty("--c", color);
+
+          document.body.appendChild(piece);
+          window.setTimeout(() => piece.remove(), 950);
+        }
+      }
+
+      el.startButton.addEventListener("click", startGame);
+
+      for (const tile of el.tiles) {
+        tile.addEventListener("pointerdown", event => {
+          const number = Number(tile.dataset.number);
+          handleNumberInput(number, event);
+        });
+      }
+
+      window.addEventListener("keydown", event => {
+        if (event.repeat) return;
+
+        if (event.key === "Enter" || event.key === " ") {
+          if (!state.active && !el.overlay.classList.contains("hidden")) {
+            event.preventDefault();
+            startGame();
+          }
+          return;
+        }
+
+        if (/^[1-9]$/.test(event.key)) {
+          event.preventDefault();
+          handleNumberInput(Number(event.key));
+        }
+      });
+
+      renderAchievements();
+      updateUI();
+
+      showOverlay({
+        title: "Ready",
+        accent: "To Rush?",
+        text: "Hit the lit number. Every correct tap makes the game faster. Three misses and the run explodes.",
+        button: "Start Game"
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨ Emoji Dash! 🚀</title>
+    <style>
+        /* ---------------------- */
+        /* GLOBAL STYLES & UI */
+        /* ---------------------- */
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #ff99cc, #663399); /* Fun gradient background */
+            color: #333;
+            overflow: hidden;
+        }
+
+        #game-container {
+            width: 90%;
+            max-width: 800px;
+            height: 500px;
+            background-color: #fff;
+            border: 8px solid #4CAF50; /* Green border for vibrancy */
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden; /* Important for keeping game elements inside */
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        /* ---------------------- */
+        /* STATS BOARD */
+        /* ---------------------- */
+        #stats {
+            display: flex;
+            justify-content: space-around;
+            width: 90%;
+            max-width: 800px;
+            margin-bottom: 15px;
+            padding: 10px 0;
+            font-size: 1.2em;
+            font-weight: bold;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-item {
+            padding: 5px 15px;
+            border-radius: 8px;
+        }
+        #score-display { background-color: #f1c40f; color: #333; }
+        #lives-display { background-color: #e74c3c; color: white; }
+
+        /* ---------------------- */
+        /* GAME ELEMENTS */
+        /* ---------------------- */
+
+        #player {
+            position: absolute;
+            font-size: 40px;
+            transition: transform 0.1s linear; /* Smooth movement */
+            user-select: none;
+            z-index: 10;
+        }
+
+        .item {
+            position: absolute;
+            font-size: 30px;
+            cursor: pointer;
+            transition: transform 0.1s ease-out;
+            user-select: none;
+            z-index: 5;
+        }
+
+        .good {
+            animation: pulse 1.5s infinite alternate;
+            filter: drop-shadow(0 0 5px #2ecc71); /* Green glow */
+        }
+
+        .bad {
+            animation: shake 0.2s infinite;
+            filter: drop-shadow(0 0 5px #e74c3c); /* Red glow */
+        }
+
+        /* ---------------------- */
+        /* UI MESSAGES */
+        /* ---------------------- */
+
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            border-radius: 20px;
+            z-index: 20;
+        }
+
+        h1 {
+            font-size: 3em;
+            color: #3498db;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 1.5em;
+            cursor: pointer;
+            background-color: #f39c12;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 5px #e67e22;
+        }
+
+        button:hover {
+            background-color: #e67e22;
+        }
+
+        button:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px #e67e22;
+        }
+
+        /* ---------------------- */
+        /* KEYFRAME ANIMATIONS */
+        /* ---------------------- */
+
+        @keyframes pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.15); }
+        }
+
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="stats">
+        <div class="stat-item" id="lives-display">❤️ Lives: 3</div>
+        <div class="stat-item" id="score-display">🌟 Score: 0</div>
+    </div>
+
+    <div id="game-container">
+        <!-- Start Screen -->
+        <div id="start-screen">
+            <h1>✨ Emoji Dash! 🏃</h1>
+            <p>Collect the 🍬 (Sweet Treats) to score points!</p>
+            <p>Avoid the 💣 (Bombs) to keep your lives safe!</p>
+            <button onclick="startGame()">Start Game! 🚀</button>
+        </div>
+
+        <!-- Game Over Screen (Hidden initially) -->
+        <div id="game-over-screen" style="display: none;">
+            <h1>💥 GAME OVER! 😔</h1>
+            <p id="final-score" style="font-size: 1.5em; margin-bottom: 20px;">Your score: 0</p>
+            <button onclick="resetGame()">Play Again!</button>
+        </div>
+
+        <!-- Player Avatar -->
+        <div id="player">🏃</div>
+
+        <!-- Items will be inserted here by JavaScript -->
+    </div>
+
+    <script>
+        // =====================================================
+        // 🕹️ GAME STATE VARIABLES
+        // =====================================================
+        const gameContainer = document.getElementById('game-container');
+        const player = document.getElementById('player');
+        const scoreDisplay = document.getElementById('score-display');
+        const livesDisplay = document.getElementById('lives-display');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        const GAME_WIDTH = gameContainer.offsetWidth;
+        const GAME_HEIGHT = gameContainer.offsetHeight;
+
+        let score = 0;
+        let lives = 3;
+        let gameLoopInterval;
+        let itemSpawnInterval;
+        let isRunning = false;
+
+        // Player state
+        const playerPos = { x: GAME_WIDTH / 2 - 20, y: GAME_HEIGHT / 2 - 20, size: 40 };
+
+        // =====================================================
+        // 🚀 GAME FUNCTIONS
+        // =====================================================
+
+        /** Updates the UI elements with current game stats */
+        function updateUI() {
+            scoreDisplay.textContent = `🌟 Score: ${score}`;
+            livesDisplay.textContent = `❤️ Lives: ${lives}`;
+        }
+
+        /** Sets up the initial player position and listeners */
+        function setupPlayer() {
+            player.style.left = playerPos.x + 'px';
+            player.style.top = playerPos.y + 'px';
+            
+            // Movement handling
+            document.addEventListener('keydown', handleMovement);
+        }
+
+        /** Handles player movement based on keyboard input */
+        function handleMovement(event) {
+            if (!isRunning) return;
+
+            const moveSpeed = 15;
+            let newX = playerPos.x;
+            let newY = playerPos.y;
+
+            switch (event.key) {
+                case 'ArrowUp':
+                case 'w':
+                    newY -= moveSpeed;
+                    break;
+                case 'ArrowDown':
+                case 's':
+                    newY += moveSpeed;
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                    newX -= moveSpeed;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    newX += moveSpeed;
+                    break;
+                default:
+                    return;
+            }
+
+            // Boundary checks
+            playerPos.x = Math.max(0, Math.min(newX, GAME_WIDTH - playerPos.size));
+            playerPos.y = Math.max(0, Math.min(newY, GAME_HEIGHT - playerPos.size));
+
+            // Apply movement to the DOM element
+            player.style.left = playerPos.x + 'px';
+            player.style.top = playerPos.y + 'px';
+        }
+
+        /** Creates and spawns a new collectible or dangerous item */
+        function spawnItem() {
+            if (!isRunning) return;
+
+            const itemElement = document.createElement('div');
+            const itemSize = 30;
+            
+            // Randomly choose if it's good (🍬) or bad (💣)
+            const isGood = Math.random() > 0.4; // 60% chance of good item
+            const emoji = isGood ? '🍬' : '💣';
+            const className = isGood ? 'good' : 'bad';
+            const pointValue = isGood ? 10 : -1;
+
+            itemElement.className = `item ${className}`;
+            itemElement.textContent = emoji;
+            itemElement.style.width = itemSize + 'px';
+            itemElement.style.height = itemSize + 'px';
+            
+            // Spawn randomly within the boundaries
+            const spawnX = Math.random() * (GAME_WIDTH - itemSize);
+            const spawnY = Math.random() * (GAME_HEIGHT - itemSize);
+
+            itemElement.style.left = spawnX + 'px';
+            itemElement.style.top = spawnY + 'px';
+            
+            // Store item data on the element for collision checks
+            itemElement.dataset.type = isGood ? 'good' : 'bad';
+            itemElement.dataset.value = pointValue;
+
+            gameContainer.appendChild(itemElement);
+
+            // Add collision listener
+            itemElement.addEventListener('click', function() {
+                handleCollision(itemElement);
+            });
+        }
+
+        /** Handles the collision logic when an item is clicked */
+        function handleCollision(itemElement) {
+            if (!isRunning) return;
+
+            const type = itemElement.dataset.type;
+            const value = parseInt(itemElement.dataset.value);
+
+            if (type === 'good') {
+                score += value;
+            } else if (type === 'bad') {
+                lives -= 1;
+            }
+
+            // Remove the item from the DOM
+            itemElement.remove();
+            updateUI();
+
+            // Check for game over condition
+            if (lives <= 0) {
+                endGame();
+            }
+        }
+
+        /** Main function to start the game */
+        function startGame() {
+            // Reset state
+            score = 0;
+            lives = 3;
+            isRunning = true;
+            
+            // Clear existing items
+            document.querySelectorAll('.item').forEach(item => item.remove());
+            
+            // Hide start screen, show game elements
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            
+            // Reset player position
+            playerPos.x = GAME_WIDTH / 2 - 20;
+            playerPos.y = GAME_HEIGHT / 2 - 20;
+            player.style.left = playerPos.x + 'px';
+            player.style.top = playerPos.y + 'px';
+
+            updateUI();
+            setupPlayer(); // Ensure listeners are set up
+
+            // Start loops
+            itemSpawnInterval = setInterval(spawnItem, 1500); // Spawns item every 1.5 seconds
+            
+            // (No continuous game loop needed for click-based collection)
+            console.log("Game Started!");
+        }
+
+        /** Function to end the game and display results */
+        function endGame() {
+            isRunning = false;
+            clearInterval(itemSpawnInterval);
+            
+            // Remove listeners to stop movement
+            document.removeEventListener('keydown', handleMovement);
+            
+            // Show game over screen
+            finalScoreDisplay.textContent = `Your final score: ${score}`;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        /** Resets all game variables and returns to the start screen */
+        function resetGame() {
+            clearInterval(itemSpawnInterval);
+            // Cleanup any remaining items
+            document.querySelectorAll('.item').forEach(item => item.remove());
+            
+            isRunning = false;
+            startScreen.style.display = 'flex';
+            gameOverScreen.style.display = 'none';
+
+            // Reset stats (optional, but good practice)
+            score = 0;
+            lives = 3;
+            updateUI();
+            
+            // Ensure player is visible but inactive
+            player.style.display = 'none';
+        }
+
+        // Initial setup on load
+        window.onload = () => {
+            // Adjust game container size on window resize (important for responsiveness)
+            window.addEventListener('resize', () => {
+                 // Re-calculate dimensions if necessary, though for this version, we rely on CSS dimensions
+            });
+            updateUI(); // Set initial UI state
+            player.style.display = 'none'; // Hide player until game starts
+        };
+
+    </script>
+</body>
+</html>
