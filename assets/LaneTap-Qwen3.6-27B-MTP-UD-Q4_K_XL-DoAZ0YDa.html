@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>4-Lane Pattern Tap</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a1a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    user-select: none;
+  }
+  canvas {
+    border-radius: 12px;
+    box-shadow: 0 0 60px rgba(100, 100, 255, 0.15);
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// --- Responsive sizing ---
+const BASE_W = 480;
+const BASE_H = 720;
+let scale = 1;
+
+function resize() {
+  const maxH = window.innerHeight * 0.95;
+  const maxW = window.innerWidth * 0.95;
+  scale = Math.min(maxW / BASE_W, maxH / BASE_H, 1.2);
+  canvas.width = BASE_W * scale;
+  canvas.height = BASE_H * scale;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- Colors ---
+const LANE_COLORS = [
+  '#ff4060', // 1 - red-pink
+  '#40c4ff', // 2 - blue
+  '#69ff50', // 3 - green
+  '#ffaa20', // 4 - orange
+];
+const LANE_GLOW = [
+  'rgba(255,64,96,',
+  'rgba(64,196,255,',
+  'rgba(105,255,80,',
+  'rgba(255,170,32,',
+];
+
+// --- Patterns ---
+const PATTERNS = [
+  // Beginner
+  [1,2,3,4],
+  [1,1,2,2,3,3,4,4],
+  [1,2,1,2,3,4,3,4],
+  [1,3,2,4],
+  [1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4],
+  [1,2,3,4,1,2,3,4],
+  [1,4,2,3],
+  [1,1,2,3,3,4,4],
+  // Intermediate
+  [1,2,3,4,4,3,2,1],
+  [1,3,1,4,2,3,2,4],
+  [1,2,1,3,1,4,2,3],
+  [4,3,2,1,2,3,4],
+  [1,1,2,2,1,1,3,3,4,4,3,3,2,2,1,1],
+  [1,3,2,4,1,3,2,4],
+  [2,1,4,3,2,1,4,3],
+  [1,2,3,1,4,3,2,1,4,3,2],
+  // Advanced
+  [1,2,1,3,1,4,2,3,2,4,3,4],
+  [4,3,2,1,3,4,1,2,4,3,2,1],
+  [1,1,2,1,3,1,4,2,3,4,1,2],
+  [1,3,2,4,3,1,4,2,1,3,2,4],
+  [1,2,3,4,3,2,1,4,2,3,1,4],
+  [2,3,4,1,3,2,1,4,4,1,2,3],
+];
+
+// --- Game State ---
+let state = 'MENU'; // MENU, PLAYING, GAME_OVER
+let score = 0;
+let combo = 0;
+let maxCombo = 0;
+let lives = 5;
+const MAX_LIVES = 5;
+let notes = [];
+let particles = [];
+let shakeTimer = 0;
+let shakeIntensity = 0;
+let patternIndex = 0;
+let patternQueue = [];
+let patternRepeat = 0;
+let notesSpawnedInPattern = 0;
+let spawnTimer = 0;
+let gameTime = 0;
+let difficulty = 1;
+let hitEffects = [];
+let laneFlash = [0, 0, 0, 0];
+let menuPulse = 0;
+let lastTime = 0;
+let highScore = parseInt(localStorage.getItem('patternTapHigh') || '0');
+let ratingTexts = [];
+let bgStars = [];
+let comboPopup = null;
+
+// Init bg stars
+for (let i = 0; i < 60; i++) {
+  bgStars.push({
+    x: Math.random() * BASE_W,
+    y: Math.random() * BASE_H,
+    r: Math.random() * 1.5 + 0.5,
+    a: Math.random() * 0.5 + 0.1,
+    speed: Math.random() * 0.3 + 0.1,
+  });
+}
+
+// --- Note class ---
+function createNote(lane, y) {
+  return {
+    lane: lane, // 1-4
+    y: y || -30,
+    hit: false,
+    missed: false,
+    alpha: 1,
+    scale: 1,
+  };
+}
+
+// --- Particle system ---
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 4 + 2;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2,
+      life: 1,
+      decay: Math.random() * 0.03 + 0.02,
+      color,
+      size: Math.random() * 4 + 2,
+    });
+  }
+}
+
+function spawnHitEffect(x, y, color, rating) {
+  hitEffects.push({
+    x, y, color, rating,
+    life: 1,
+    scale: 0.5,
+  });
+}
+
+function addRatingText(x, y, text, color) {
+  ratingTexts.push({
+    x, y, text, color,
+    life: 1,
+    vy: -2,
+  });
+}
+
+// --- Pattern management ---
+function loadNextPattern() {
+  // Pick pattern based on difficulty
+  let availablePatterns;
+  if (difficulty <= 2) {
+    availablePatterns = PATTERNS.slice(0, 8);
+  } else if (difficulty <= 4) {
+    availablePatterns = PATTERNS.slice(0, 16);
+  } else {
+    availablePatterns = PATTERNS;
+  }
+
+  // Try to pick a different one
+  let idx;
+  do {
+    idx = Math.floor(Math.random() * availablePatterns.length);
+  } while (availablePatterns[idx] === patternQueue && availablePatterns.length > 1);
+
+  patternQueue = availablePatterns[idx];
+  patternRepeat = Math.max(2, 5 - Math.floor(difficulty / 2));
+  notesSpawnedInPattern = 0;
+  spawnTimer = 60; // small delay before starting
+
+  // Show pattern preview
+  showPatternPreview(patternQueue);
+}
+
+let patternPreview = [];
+let patternPreviewAlpha = 0;
+let patternPreviewTimer = 0;
+
+function showPatternPreview(pattern) {
+  patternPreview = [...pattern];
+  patternPreviewAlpha = 1;
+  patternPreviewTimer = 120;
+}
+
+function getSpawnInterval() {
+  // Faster as difficulty increases
+  const base = 55;
+  const min = 22;
+  return Math.max(min, base - (difficulty - 1) * 5);
+}
+
+function getFallSpeed() {
+  return 2.5 + (difficulty - 1) * 0.35;
+}
+
+// --- Input ---
+const keys = {};
+const keysJustPressed = {};
+
+window.addEventListener('keydown', (e) => {
+  const k = e.key;
+  if (['1','2','3','4'].includes(k)) {
+    e.preventDefault();
+    if (!keys[k]) {
+      keysJustPressed[k] = true;
+      handleInput(parseInt(k));
+    }
+    keys[k] = true;
+    laneFlash[parseInt(k) - 1] = 1;
+  }
+  if (k === ' ' || k === 'Enter') {
+    e.preventDefault();
+    if (state === 'MENU') startGame();
+    else if (state === 'GAME_OVER') { state = 'MENU'; }
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  keys[e.key] = false;
+});
+
+function handleInput(lane) {
+  if (state !== 'PLAYING') return;
+
+  const hitY = BASE_H * 0.82;
+  const perfectWindow = 30;
+  const goodWindow = 60;
+  const missWindow = 80;
+
+  // Find closest note in this lane
+  let bestNote = null;
+  let bestDist = Infinity;
+
+  for (const note of notes) {
+    if (note.lane === lane && !note.hit && !note.missed) {
+      const dist = Math.abs(note.y - hitY);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestNote = note;
+      }
+    }
+  }
+
+  if (!bestNote || bestDist > missWindow) {
+    // Wrong press - penalty
+    combo = 0;
+    shakeTimer = 10;
+    shakeIntensity = 5;
+    addRatingText(
+      BASE_W / 2, BASE_H * 0.75,
+      'MISS', '#ff4060'
+    );
+    return;
+  }
+
+  bestNote.hit = true;
+
+  const laneX = getLaneX(lane);
+  const color = LANE_COLORS[lane - 1];
+
+  if (bestDist <= perfectWindow) {
+    score += 100 * Math.max(1, Math.floor(combo / 5) + 1);
+    combo++;
+    spawnParticles(laneX, hitY, color, 15);
+    spawnHitEffect(laneX, hitY, color, 'PERFECT');
+    addRatingText(laneX, hitY - 20, 'PERFECT', '#fff');
+  } else if (bestDist <= goodWindow) {
+    score += 50 * Math.max(1, Math.floor(combo / 5) + 1);
+    combo++;
+    spawnParticles(laneX, hitY, color, 8);
+    spawnHitEffect(laneX, hitY, color, 'GOOD');
+    addRatingText(laneX, hitY - 20, 'GOOD', '#ccc');
+  } else {
+    score += 25;
+    combo++;
+    addRatingText(laneX, hitY - 20, 'OK', '#999');
+  }
+
+  if (combo > maxCombo) maxCombo = combo;
+
+  // Combo popup
+  if (combo > 0 && combo % 5 === 0) {
+    comboPopup = { text: combo + 'x COMBO!', life: 1, y: BASE_H * 0.5 };
+    setTimeout(() => { comboPopup = null; }, 1500);
+  }
+}
+
+function getLaneX(lane) {
+  const laneW = BASE_W / 4;
+  return laneW * (lane - 1) + laneW / 2;
+}
+
+// --- Game functions ---
+function startGame() {
+  state = 'PLAYING';
+  score = 0;
+  combo = 0;
+  maxCombo = 0;
+  lives = MAX_LIVES;
+  notes = [];
+  particles = [];
+  hitEffects = [];
+  ratingTexts = [];
+  patternPreview = [];
+  patternPreviewAlpha = 0;
+  patternPreviewTimer = 0;
+  difficulty = 1;
+  patternIndex = 0;
+  gameTime = 0;
+  spawnTimer = 90;
+  loadNextPattern();
+}
+
+function update(dt) {
+  gameTime += dt;
+
+  // Update difficulty every 30 seconds
+  difficulty = 1 + Math.floor(gameTime / 15000); // every 15 seconds
+  difficulty = Math.min(difficulty, 8);
+
+  if (state === 'MENU') {
+    menuPulse += dt * 0.003;
+    return;
+  }
+
+  if (state === 'GAME_OVER') return;
+
+  // --- Pattern spawning ---
+  if (patternPreviewTimer > 0) {
+    patternPreviewTimer -= dt;
+    if (patternPreviewTimer <= 0) {
+      patternPreviewAlpha = 0;
+    }
+  }
+
+  if (spawnTimer > 0) {
+    spawnTimer -= dt;
+  } else if (patternQueue.length > 0 && notesSpawnedInPattern < patternQueue.length) {
+    // Check if we can spawn (not too many notes on screen)
+    const activeNotes = notes.filter(n => !n.hit && !n.missed).length;
+    if (activeNotes < 8) {
+      const lane = patternQueue[notesSpawnedInPattern];
+      notes.push(createNote(lane));
+      notesSpawnedInPattern++;
+
+      if (notesSpawnedInPattern >= patternQueue.length) {
+        // Pattern complete, wait a bit then repeat or new
+        const waitTime = 60 + Math.max(20, 80 - difficulty * 5);
+        spawnTimer = waitTime * (patternRepeat > 1 ? 1 : 2);
+        patternRepeat--;
+        if (patternRepeat <= 0) {
+          loadNextPattern();
+        } else {
+          notesSpawnedInPattern = 0;
+        }
+      }
+    }
+  }
+
+  // --- Update notes ---
+  const speed = getFallSpeed();
+  const hitY = BASE_H * 0.82;
+
+  for (const note of notes) {
+    if (!note.hit && !note.missed) {
+      note.y += speed;
+
+      // Missed
+      if (note.y > hitY + 80) {
+        note.missed = true;
+        note.alpha = 0;
+        combo = 0;
+        lives--;
+        shakeTimer = 15;
+        shakeIntensity = 8;
+        addRatingText(getLaneX(note.lane), hitY - 20, 'MISS', '#ff4060');
+        spawnParticles(getLaneX(note.lane), hitY, '#ff4060', 5);
+
+        if (lives <= 0) {
+          state = 'GAME_OVER';
+          if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('patternTapHigh', highScore);
+          }
+        }
+      }
+    } else if (note.hit) {
+      note.alpha -= 0.08;
+      note.scale += 0.05;
+    } else if (note.missed) {
+      note.alpha -= 0.05;
+    }
+  }
+
+  // Cleanup
+  notes = notes.filter(n => n.alpha > -0.1);
+
+  // --- Update particles ---
+  for (const p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.1;
+    p.life -= p.decay;
+  }
+  particles = particles.filter(p => p.life > 0);
+
+  // --- Update hit effects ---
+  for (const e of hitEffects) {
+    e.life -= 0.03;
+    e.scale = Math.min(1, e.scale + 0.1);
+  }
+  hitEffects = hitEffects.filter(e => e.life > 0);
+
+  // --- Update rating texts ---
+  for (const r of ratingTexts) {
+    r.y += r.vy;
+    r.life -= 0.025;
+  }
+  ratingTexts = ratingTexts.filter(r => r.life > 0);
+
+  // --- Update lane flash ---
+  for (let i = 0; i < 4; i++) {
+    laneFlash[i] = Math.max(0, laneFlash[i] - 0.05);
+  }
+
+  // --- Update shake ---
+  if (shakeTimer > 0) shakeTimer--;
+
+  // --- Update bg stars ---
+  for (const s of bgStars) {
+    s.y += s.speed;
+    if (s.y > BASE_H) { s.y = 0; s.x = Math.random() * BASE_W; }
+  }
+}
+
+// --- Drawing ---
+function draw() {
+  ctx.save();
+
+  // Shake effect
+  if (shakeTimer > 0) {
+    const sx = (Math.random() - 0.5) * shakeIntensity * (shakeTimer / 15);
+    const sy = (Math.random() - 0.5) * shakeIntensity * (shakeTimer / 15);
+    ctx.translate(sx, sy);
+  }
+
+  // Background
+  const grad = ctx.createLinearGradient(0, 0, 0, BASE_H);
+  grad.addColorStop(0, '#0a0a1a');
+  grad.addColorStop(1, '#12122a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(-10, -10, BASE_W + 20, BASE_H + 20);
+
+  // Stars
+  for (const s of bgStars) {
+    ctx.globalAlpha = s.a;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  if (state === 'MENU') {
+    drawMenu();
+    ctx.restore();
+    return;
+  }
+
+  if (state === 'GAME_OVER') {
+    drawGameOver();
+    ctx.restore();
+    return;
+  }
+
+  // --- Lanes ---
+  const laneW = BASE_W / 4;
+  for (let i = 0; i < 4; i++) {
+    const x = i * laneW;
+
+    // Lane background
+    ctx.fillStyle = LANE_GLOW[i] + '0.03)';
+    ctx.fillRect(x, 0, laneW, BASE_H);
+
+    // Lane flash
+    if (laneFlash[i] > 0) {
+      ctx.fillStyle = LANE_GLOW[i] + (laneFlash[i] * 0.15) + ')';
+      ctx.fillRect(x, 0, laneW, BASE_H);
+    }
+
+    // Lane divider
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, BASE_H);
+    ctx.stroke();
+
+    // Lane label at bottom
+    ctx.fillStyle = LANE_GLOW[i] + (0.3 + laneFlash[i] * 0.7) + ')';
+    ctx.font = 'bold 16px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(i + 1), x + laneW / 2, BASE_H - 15);
+  }
+
+  // Rightmost divider
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.beginPath();
+  ctx.moveTo(BASE_W, 0);
+  ctx.lineTo(BASE_W, BASE_H);
+  ctx.stroke();
+
+  // --- Hit zone ---
+  const hitY = BASE_H * 0.82;
+  const hitH = 60;
+
+  // Hit zone glow
+  const hitGrad = ctx.createLinearGradient(0, hitY - hitH / 2, 0, hitY + hitH / 2);
+  hitGrad.addColorStop(0, 'rgba(255,255,255,0)');
+  hitGrad.addColorStop(0.5, 'rgba(255,255,255,0.06)');
+  hitGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hitGrad;
+  ctx.fillRect(0, hitY - hitH / 2, BASE_W, hitH);
+
+  // Hit line
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, hitY);
+  ctx.lineTo(BASE_W, hitY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Hit zone markers per lane
+  for (let i = 0; i < 4; i++) {
+    const cx = getLaneX(i + 1);
+    ctx.strokeStyle = LANE_GLOW[i] + (0.2 + laneFlash[i] * 0.5) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, hitY, 22, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // --- Hit effects (rings) ---
+  for (const e of hitEffects) {
+    ctx.globalAlpha = e.life;
+    ctx.strokeStyle = e.color;
+    ctx.lineWidth = 3;
+    const radius = 20 * e.scale + (1 - e.life) * 30;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // --- Notes ---
+  for (const note of notes) {
+    if (note.alpha <= 0) continue;
+    const cx = getLaneX(note.lane);
+    const color = LANE_COLORS[note.lane - 1];
+    const r = note.hit ? 15 * note.scale : 18;
+
+    ctx.globalAlpha = Math.max(0, note.alpha);
+
+    // Glow
+    if (!note.hit && !note.missed) {
+      const glowGrad = ctx.createRadialGradient(cx, note.y, 0, cx, note.y, 35);
+      glowGrad.addColorStop(0, LANE_GLOW[note.lane - 1] + '0.3)');
+      glowGrad.addColorStop(1, LANE_GLOW[note.lane - 1] + '0)');
+      ctx.fillStyle = glowGrad;
+      ctx.beginPath();
+      ctx.arc(cx, note.y, 35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Note circle
+    ctx.fillStyle = note.hit ? color : color;
+    ctx.beginPath();
+    ctx.arc(cx, note.y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner highlight
+    if (!note.hit && !note.missed) {
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.beginPath();
+      ctx.arc(cx - 3, note.y - 3, r * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Number
+    ctx.fillStyle = note.hit ? 'rgba(0,0,0,0.5)' : '#fff';
+    ctx.font = `bold ${note.hit ? 14 : 18}px "Segoe UI", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(note.lane, cx, note.y);
+
+    ctx.globalAlpha = 1;
+  }
+
+  // --- Particles ---
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // --- Rating texts ---
+  for (const r of ratingTexts) {
+    ctx.globalAlpha = r.life;
+    ctx.fillStyle = r.color;
+    ctx.font = `bold 20px "Segoe UI", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(r.text, r.x, r.y);
+  }
+  ctx.globalAlpha = 1;
+
+  // --- Pattern preview ---
+  if (patternPreviewAlpha > 0 && patternPreview.length > 0) {
+    drawPatternPreview();
+  }
+
+  // --- HUD ---
+  drawHUD();
+
+  // --- Combo popup ---
+  if (comboPopup) {
+    ctx.globalAlpha = Math.min(1, comboPopup.life);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 28px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = '#ffaa20';
+    ctx.shadowBlur = 20;
+    ctx.fillText(comboPopup.text, BASE_W / 2, comboPopup.y);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    comboPopup.life -= 0.015;
+  }
+
+  ctx.restore();
+}
+
+function drawPatternPreview() {
+  const alpha = Math.min(1, patternPreviewAlpha);
+  ctx.globalAlpha = alpha * 0.7;
+
+  const y = 80;
+  const laneW = BASE_W / 4;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(20, y - 30, BASE_W - 40, 50);
+
+  ctx.font = '14px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#aaa';
+  ctx.fillText('PATTERN', BASE_W / 2, y - 15);
+
+  const maxShow = 12;
+  const toShow = patternPreview.slice(0, maxShow);
+  const totalW = toShow.length * 28;
+  let startX = (BASE_W - totalW) / 2 + 14;
+
+  for (let i = 0; i < toShow.length; i++) {
+    const val = toShow[i];
+    ctx.fillStyle = LANE_COLORS[val - 1];
+    ctx.beginPath();
+    ctx.arc(startX + i * 28, y + 8, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(val, startX + i * 28, y + 8);
+  }
+
+  if (patternPreview.length > maxShow) {
+    ctx.fillStyle = '#888';
+    ctx.font = '12px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('...', startX + toShow.length * 28 + 10, y + 8);
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+function drawHUD() {
+  // Score
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 24px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(score.toLocaleString(), 20, 35);
+
+  ctx.fillStyle = '#888';
+  ctx.font = '12px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText('SCORE', 20, 18);
+
+  // Combo
+  if (combo > 1) {
+    const comboScale = 1 + Math.sin(gameTime * 0.005) * 0.05;
+    ctx.save();
+    ctx.translate(BASE_W - 20, 35);
+    ctx.scale(comboScale, comboScale);
+    ctx.fillStyle = combo >= 10 ? '#ffaa20' : combo >= 5 ? '#40c4ff' : '#aaa';
+    ctx.font = 'bold 22px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(combo + 'x', 0, 0);
+    ctx.restore();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '12px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('COMBO', BASE_W - 20, 18);
+  }
+
+  // Lives
+  for (let i = 0; i < MAX_LIVES; i++) {
+    const x = 20 + i * 28;
+    const y = 55;
+    if (i < lives) {
+      ctx.fillStyle = '#ff4060';
+      drawHeart(x, y, 8);
+    } else {
+      ctx.fillStyle = '#333';
+      drawHeart(x, y, 8);
+    }
+  }
+
+  // Difficulty indicator
+  ctx.fillStyle = '#555';
+  ctx.font = '11px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('SPEED ' + '█'.repeat(Math.min(difficulty, 8)) + '░'.repeat(Math.max(0, 8 - difficulty)), BASE_W / 2, BASE_H - 8);
+}
+
+function drawHeart(x, y, size) {
+  ctx.beginPath();
+  const topY = y - size * 0.4;
+  ctx.moveTo(x, y + size * 0.4);
+  ctx.bezierCurveTo(x - size * 0.5, y - size * 0.1, x - size, topY, x, topY - size * 0.5);
+  ctx.bezierCurveTo(x + size, topY - size * 0.5, x + size * 0.5, y - size * 0.1, x, y + size * 0.4);
+  ctx.fill();
+}
+
+function drawMenu() {
+  // Title
+  const titleY = BASE_H * 0.3;
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 40px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = '#40c4ff';
+  ctx.shadowBlur = 30;
+  ctx.fillText('PATTERN TAP', BASE_W / 2, titleY);
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#888';
+  ctx.font = '16px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText('4-Lane Rhythm Game', BASE_W / 2, titleY + 30);
+
+  // Animated keys
+  const keyY = BASE_H * 0.5;
+  const keys = ['1', '2', '3', '4'];
+  const laneW = BASE_W / 4;
+
+  for (let i = 0; i < 4; i++) {
+    const cx = getLaneX(i + 1);
+    const pulse = Math.sin(menuPulse + i * 0.8) * 0.3 + 0.7;
+    const r = 25 * pulse;
+
+    ctx.fillStyle = LANE_GLOW[i] + (0.15 + Math.sin(menuPulse + i * 0.8) * 0.1) + ')';
+    ctx.beginPath();
+    ctx.arc(cx, keyY, r + 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = LANE_COLORS[i];
+    ctx.beginPath();
+    ctx.arc(cx, keyY, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(keys[i], cx, keyY);
+  }
+
+  // Instructions
+  ctx.fillStyle = '#aaa';
+  ctx.font = '14px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Press keys 1-4 when notes reach the hit line', BASE_W / 2, keyY + 70);
+
+  // Start prompt
+  const blink = Math.sin(menuPulse * 2) * 0.4 + 0.6;
+  ctx.globalAlpha = blink;
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 20px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText('PRESS SPACE TO START', BASE_W / 2, BASE_H * 0.78);
+  ctx.globalAlpha = 1;
+
+  // High score
+  if (highScore > 0) {
+    ctx.fillStyle = '#ffaa20';
+    ctx.font = '14px "Segoe UI", system-ui, sans-serif';
+    ctx.fillText('HIGH SCORE: ' + highScore.toLocaleString(), BASE_W / 2, BASE_H * 0.88);
+  }
+}
+
+function drawGameOver() {
+  // Darken
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fillRect(0, 0, BASE_W, BASE_H);
+
+  const cy = BASE_H * 0.35;
+
+  ctx.fillStyle = '#ff4060';
+  ctx.font = 'bold 36px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('GAME OVER', BASE_W / 2, cy);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 28px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText(score.toLocaleString(), BASE_W / 2, cy + 50);
+
+  ctx.fillStyle = '#aaa';
+  ctx.font = '14px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText('FINAL SCORE', BASE_W / 2, cy + 30);
+
+  ctx.fillStyle = '#888';
+  ctx.font = '16px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText('Max Combo: ' + maxCombo + 'x', BASE_W / 2, cy + 85);
+
+  if (score >= highScore && score > 0) {
+    ctx.fillStyle = '#ffaa20';
+    ctx.font = 'bold 18px "Segoe UI", system-ui, sans-serif';
+    ctx.fillText('★ NEW HIGH SCORE ★', BASE_W / 2, cy + 115);
+  }
+
+  const blink = Math.sin(gameTime * 0.004) * 0.4 + 0.6;
+  ctx.globalAlpha = blink;
+  ctx.fillStyle = '#fff';
+  ctx.font = '18px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText('PRESS SPACE FOR MENU', BASE_W / 2, BASE_H * 0.75);
+  ctx.globalAlpha = 1;
+}
+
+// --- Game Loop ---
+function gameLoop(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const dt = Math.min(timestamp - lastTime, 50); // cap delta
+  lastTime = timestamp;
+
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
