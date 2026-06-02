@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Botanical Harmony - Tower Defence</title>
+  <style>
+    :root {
+      --bg: #f2f7f2; --panel: #ffffff; --panel2: #e8f5e9; --text: #2e4a2e; --muted: #6b8e6b;
+      --accent: #81c784; --accent2: #4caf50; --good: #66bb6a; --bad: #ef5350;
+      --line: #c8e6c9; --shadow: rgba(0,0,0,.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: radial-gradient(circle at 50% 0%, #fdfbfb 0%, #ebedee 100%);
+      color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; overflow: hidden;
+    }
+    button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .5; filter: grayscale(.5); }
+    .app { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
+    .topbar {
+      display: grid; grid-template-columns: minmax(300px, 1fr) minmax(560px, 1.45fr) minmax(280px, .85fr); gap: 10px;
+      padding: 10px; background: rgba(255, 255, 255, 0.95);
+      border-bottom: 2px solid var(--line); box-shadow: 0 4px 16px var(--shadow); z-index: 3;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .logo {
+      width: 48px; height: 48px; display: grid; place-items: center; border-radius: 16px;
+      background: linear-gradient(145deg, #a8e063, #56ab2f);
+      box-shadow: 0 5px 18px rgba(86,171,47,.25), inset 0 2px 6px rgba(255,255,255,.4);
+      font-size: 28px;
+    }
+    h1 { margin: 0; font-size: 20px; line-height: 1.05; letter-spacing: .2px; color: #1b5e20; }
+    .subtitle { margin-top: 4px; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; align-content: center; }
+    .stat {
+      min-width: 86px; padding: 7px 9px; border-radius: 12px; background: #f1f8e9;
+      border: 1px solid #c8e6c9; box-shadow: inset 0 1px 0 rgba(255,255,255,.5);
+    }
+    .stat.wide { min-width: 150px; }
+    .stat b { display: block; color: #2e7d32; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stat span { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-content: center; justify-content: flex-end; }
+    .primary, .secondary, .danger, .tiny {
+      border-radius: 12px; padding: 9px 12px; background: linear-gradient(180deg, #81c784, #4caf50);
+      color: white; font-weight: 800; box-shadow: 0 4px 12px rgba(76,175,80,.25), inset 0 1px 0 rgba(255,255,255,.3);
+      text-shadow: 0 1px 1px rgba(0,0,0,0.1);
+    }
+    .secondary {
+      background: #f1f8e9; color: #1b5e20; text-shadow: none;
+      border: 1px solid #a5d6a7; font-weight: 700; box-shadow: inset 0 1px 0 rgba(255,255,255,.5);
+    }
+    .danger { background: linear-gradient(180deg, #ff8a80, #e53935); box-shadow: 0 4px 12px rgba(229,57,53,.25); }
+    .tiny { padding: 5px 8px; border-radius: 9px; font-size: 12px; white-space: nowrap; }
+    .gameShell { min-height: 0; display: grid; grid-template-columns: 1fr 370px; gap: 10px; padding: 10px; }
+    .boardWrap {
+      min-width: 0; min-height: 0; position: relative; border-radius: 22px; overflow: hidden;
+      border: 2px solid var(--line); background: #dcedc8; box-shadow: 0 8px 24px var(--shadow);
+    }
+    canvas { width: 100%; height: 100%; display: block; background: #e8f5e9; }
+    .boardSell {
+      position: absolute; z-index: 12; display: none; min-width: 118px; padding: 7px 10px; border-radius: 999px;
+      background: linear-gradient(180deg, #fff59d, #fbc02d); color: #424242; font-size: 12px; font-weight: 900;
+      border: 1px solid rgba(255,255,255,.5); box-shadow: 0 6px 14px rgba(0,0,0,.15);
+      transform: translate(-50%, 0);
+    }
+    .boardSell.show { display: block; }
+    .boardTargets {
+      position: absolute; z-index: 13; display: none; gap: 5px; padding: 5px; border-radius: 999px;
+      background: rgba(255,255,255,.9); border: 1px solid var(--line); box-shadow: 0 6px 14px rgba(0,0,0,.1);
+      transform: translate(-50%, 0);
+    }
+    .boardTargets.show { display: flex; }
+    .targetBtn {
+      width: 31px; height: 31px; display: grid; place-items: center; border-radius: 50%;
+      background: #f1f8e9; border: 1px solid #c8e6c9; font-size: 16px; transition: .2s ease;
+    }
+    .targetBtn.active {
+      background: linear-gradient(180deg, #a8e063, #56ab2f); color: white;
+      box-shadow: 0 0 0 2px rgba(86,171,47,.2); border-color: transparent;
+    }
+    .floatMsg {
+      position: absolute; left: 14px; bottom: 14px; max-width: 520px; padding: 9px 12px; border-radius: 14px;
+      background: rgba(46,74,46,.85); border: 1px solid rgba(255,255,255,.2); color: white;
+      font-size: 13px; pointer-events: none; opacity: 0; transform: translateY(8px); transition: .2s ease;
+    }
+    .floatMsg.show { opacity: 1; transform: translateY(0); }
+    .toast {
+      position: absolute; top: 84px; left: 50%; transform: translateX(-50%); padding: 10px 14px; border-radius: 14px;
+      background: rgba(46,74,46,.95); border: 1px solid rgba(255,255,255,.2); box-shadow: 0 10px 28px rgba(0,0,0,.2);
+      color: #e8f5e9; font-weight: 800; z-index: 10; opacity: 0; pointer-events: none; transition: .2s ease;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(6px); }
+    .sidebar { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
+    .panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 18px; 
+      box-shadow: 0 6px 20px var(--shadow); overflow: hidden;
+    }
+    .towerPanel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .panelHeader {
+      padding: 11px 12px; border-bottom: 1px solid var(--line); background: #fdfdfd;
+      display: flex; justify-content: space-between; align-items: center; gap: 10px; flex: 0 0 auto;
+    }
+    .panelHeader h2 { margin: 0; font-size: 15px; letter-spacing: .2px; color: #1b5e20; }
+    .panelBody { padding: 12px; }
+    .towerPanel .panelBody { min-height: 0; overflow: auto; }
+    .towerList { display: grid; gap: 8px; }
+    .towerCard {
+      border-radius: 15px; background: #f9fcf9; border: 1px solid #dcedc8;
+      transition: .15s ease; overflow: hidden;
+    }
+    .towerCard.selected { outline: 2px solid var(--accent); background: #f1f8e9; }
+    .towerHeader {
+      width: 100%; display: grid; grid-template-columns: 40px 1fr auto; gap: 9px; align-items: center; padding: 8px;
+      background: transparent; text-align: left;
+    }
+    .towerIcon {
+      width: 40px; height: 40px; display: grid; place-items: center; border-radius: 13px;
+      background: white; font-size: 24px; border: 1px solid #c8e6c9; box-shadow: 0 2px 4px rgba(0,0,0,.04);
+    }
+    .towerHeader h3 { margin: 0; font-size: 13px; color: #1b5e20; }
+    .towerHeader p { margin: 2px 0 0; color: var(--muted); font-size: 10.5px; line-height: 1.25; }
+    .price { font-weight: 900; color: #388e3c; white-space: nowrap; font-size: 12px; }
+    .towerDetails {
+      display: none; padding: 9px; border-top: 1px solid #dcedc8; background: white;
+    }
+    .towerCard.selected .towerDetails { display: grid; gap: 8px; }
+    .detailGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .detailPill {
+      padding: 6px 7px; border-radius: 10px; background: #f1f8e9; color: var(--muted); font-size: 11px;
+      border: 1px solid #c8e6c9;
+    }
+    .detailPill b { display: block; color: #2e7d32; font-size: 12px; margin-top: 1px; }
+    .upgradeRow {
+      display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px; border-radius: 12px;
+      background: #fdfdfd; border: 1px solid #dcedc8;
+    }
+    .upgradeRow b { font-size: 12px; color: #1b5e20; }
+    .upgradeRow span { display: block; color: var(--muted); font-size: 10.5px; margin-top: 2px; line-height: 1.25; }
+    .help { color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .footer {
+      padding: 8px 12px; color: #7cb342; font-size: 12px; display: flex; justify-content: space-between; gap: 12px;
+      background: rgba(255,255,255,.9); border-top: 1px solid var(--line);
+    }
+    @media (max-width: 980px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100vh; }
+      .topbar { grid-template-columns: 1fr; }
+      .actions { justify-content: flex-start; }
+      .gameShell { grid-template-columns: 1fr; }
+      .boardWrap { height: 62vh; min-height: 430px; }
+      .sidebar { overflow: visible; }
+      .towerPanel .panelBody { overflow: visible; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🌸</div>
+        <div>
+          <h1>Botanical Harmony</h1>
+          <div class="subtitle">Cute critters are visiting. Bloom gently.</div>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="actions">
+        <button class="primary" id="startWaveBtn">Start Day</button>
+        <button class="secondary" id="speedBtn">Pace: 1x</button>
+        <button class="secondary" id="pauseBtn">Pause</button>
+        <button class="danger" id="restartBtn">Replant</button>
+      </div>
+    </header>
+
+    <main class="gameShell">
+      <section class="boardWrap" id="boardWrap">
+        <canvas id="game" width="1180" height="680"></canvas>
+        <div class="boardTargets" id="boardTargets">
+          <button class="targetBtn" data-target-mode="first" title="Target first">⏩</button>
+          <button class="targetBtn" data-target-mode="last" title="Target last">⏪</button>
+          <button class="targetBtn" data-target-mode="hp" title="Target highest HP">❤️</button>
+        </div>
+        <button class="boardSell" id="boardSellBtn">Uproot</button>
+        <div class="floatMsg" id="floatMsg"></div>
+        <div class="toast" id="toast"></div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="panel towerPanel">
+          <div class="panelHeader"><h2>Garden Plants</h2><span class="help">Select → plant / nurture</span></div>
+          <div class="panelBody">
+            <div class="towerList" id="towerList"></div>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <span>Selected plants can target first, last, or highest HP using the icons above them.</span>
+      <span>Turtles alternate: 🐢 vulnerable, 🪨 hiding (invulnerable).</span>
+    </footer>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const statsEl = document.getElementById("stats");
+      const towerListEl = document.getElementById("towerList");
+      const floatMsgEl = document.getElementById("floatMsg");
+      const toastEl = document.getElementById("toast");
+      const startWaveBtn = document.getElementById("startWaveBtn");
+      const speedBtn = document.getElementById("speedBtn");
+      const pauseBtn = document.getElementById("pauseBtn");
+      const restartBtn = document.getElementById("restartBtn");
+      const boardSellBtn = document.getElementById("boardSellBtn");
+      const boardTargetsEl = document.getElementById("boardTargets");
+
+      const W = canvas.width, H = canvas.height;
+      const TWO_PI = Math.PI * 2;
+      const MAX_UPGRADE_LEVEL = 5;
+      const blockedRadius = 46;
+      
+      // Meandering path through the garden
+      const path = [{x:-34,y:358}, {x:155,y:358}, {x:155,y:130}, {x:365,y:130}, {x:365,y:520}, {x:635,y:520}, {x:635,y:220}, {x:892,y:220}, {x:892,y:430}, {x:1215,y:430}];
+      
+      // Pre-calculate path segments
+      let totalPathLength = 0;
+      for (let i = 0; i < path.length - 1; i++) {
+        const dx = path[i+1].x - path[i].x;
+        const dy = path[i+1].y - path[i].y;
+        path[i].dist = Math.hypot(dx, dy);
+        totalPathLength += path[i].dist;
+      }
+
+      const targetModes = {
+        first: { icon:"⏩", name:"First" },
+        last: { icon:"⏪", name:"Last" },
+        hp: { icon:"❤️", name:"Highest HP" }
+      };
+
+      const enemyTypes = {
+        normal: { key:"normal", name:"Bunny", emoji:"🐰", hp:1, speed:1, reward:1, size:34, lifeCost:1, priority:0, color:"#82ef7b" },
+        runner: { key:"runner", name:"Field Mouse", emoji:"🐭", hp:.46, speed:2.95, reward:1.18, size:28, lifeCost:1, priority:28, color:"#9ce8ff" },
+        tank: { key:"tank", name:"Grizzly Cub", emoji:"🐻", hp:4.75, speed:.55, reward:2.05, size:44, lifeCost:2, priority:62, color:"#d8a35e" },
+        swarm: { key:"swarm", name:"Little Chick", emoji:"🐥", hp:.32, speed:1.42, reward:.44, size:25, lifeCost:1, priority:-14, color:"#f3e08a" },
+        healer: { key:"healer", name:"Calico Cat", emoji:"🐱", hp:1.45, speed:.86, reward:1.8, size:36, lifeCost:1, priority:80, color:"#7ee08b" },
+        shielder: { key:"shielder", name:"Shy Turtle", emoji:"🐢", hp:1.9, speed:.92, reward:1.75, size:36, lifeCost:1, priority:75, color:"#66b7ff" },
+        candy: { key:"candy", name:"Bluebird", emoji:"🐦", hp:.82, speed:1.55, reward:2.4, size:31, lifeCost:2, priority:120, color:"#ff9eea" },
+        boss: { key:"boss", name:"Gentle Elephant", emoji:"🐘", hp:8.25, speed:.55, reward:6.2, size:51, lifeCost:4, priority:150, color:"#ff6b6b" }
+      };
+
+      const towerTypes = {
+        arrow: { key:"arrow", name:"Daisy Shooter", emoji:"🌼", cost:70, range:145, damage:22, fireRate:1.72, splash:0, auraDps:0, color:"#fff176", family:"single" },
+        dynamite: { key:"dynamite", name:"Pollen Puff", emoji:"🌻", cost:125, range:126, damage:25, fireRate:.52, splash:58, auraDps:0, color:"#ffb74d", family:"aoe" },
+        rad: { key:"rad", name:"Aura Lotus", emoji:"🪷", cost:110, range:103, damage:0, fireRate:0, splash:0, auraDps:12, color:"#f48fb1", family:"aura" },
+        sun: { key:"sun", name:"Solar Bloom", emoji:"🏵️", cost:700, range:166, damage:154, fireRate:1.48, splash:0, auraDps:0, color:"#ffca28", family:"single" },
+        bomb: { key:"bomb", name:"Seed Pod", emoji:"🌰", cost:1200, range:142, damage:175, fireRate:.36, splash:82, auraDps:0, color:"#8d6e63", family:"aoe" },
+        bio: { key:"bio", name:"Healing Spores", emoji:"🍄", cost:1050, range:123, damage:0, fireRate:0, splash:0, auraDps:84, color:"#e57373", family:"aura" }
+      };
+
+      const upgradeDefs = {
+        damage: { name:"Potency", label:"Power", baseCost:55, scale:1.74 },
+        range: { name:"Reach", label:"Range", baseCost:45, scale:1.68 },
+        speed: { name:"Bloom", label:"Speed", baseCost:50, scale:1.72 }
+      };
+
+      let state, statMods, lastT = performance.now(), raf = 0;
+      let selectedBuildType = null;
+      let selectedTowerId = null;
+      let mouse = { x:0, y:0, inside:false };
+
+      function freshMods() {
+        return Object.fromEntries(Object.keys(towerTypes).map(k => [k, { damage:1, range:1, fireRate:1, auraDps:1, levels:{damage:0, range:0, speed:0} }]));
+      }
+
+      function reset() {
+        if(raf) cancelAnimationFrame(raf);
+        statMods = freshMods();
+        state = {
+          cash: 165, lives: 16, wave: 0, waveName: wavePlan(1).name, score: 0, paused: false, gameOver: false, victory: false,
+          speedIndex: 0, speedOptions: [1, 1.5, 2.5], towers: [], enemies: [], projectiles: [], particles: [],
+          spawnQueue: [], waveActive: false, spawnTimer: 0, nextId: 1
+        };
+        selectedBuildType = null;
+        selectedTowerId = null;
+        lastT = performance.now();
+        renderAll();
+        toast("Plant seeds before Day 1");
+        raf = requestAnimationFrame(loop);
+      }
+
+      function statFor(type, field) {
+        const base = towerTypes[type], mods = statMods[type];
+        if (field === "damage") return base.damage * mods.damage;
+        if (field === "range") return base.range * mods.range;
+        if (field === "fireRate") return base.fireRate * mods.fireRate;
+        if (field === "auraDps") return base.auraDps * mods.auraDps;
+        return base[field];
+      }
+
+      function upgradeCost(type, attr) {
+        const tower = towerTypes[type], lvl = statMods[type].levels[attr];
+        const premiumPenalty = tower.cost >= 700 ? .78 : 1;
+        return Math.round(upgradeDefs[attr].baseCost * (tower.cost / 80) * premiumPenalty * Math.pow(upgradeDefs[attr].scale, lvl));
+      }
+
+      function upgradePreview(type, attr) {
+        const tower = towerTypes[type];
+        if (attr === "damage") return tower.family === "aura" ? `Aura ${fmt(statFor(type,"auraDps"))}/s` : `Damage ${fmt(statFor(type,"damage"))}`;
+        if (attr === "range") return `Range ${fmt(statFor(type,"range"))}`;
+        if (attr === "speed") return tower.family === "aura" ? `Aura ${fmt(statFor(type,"auraDps"))}/s` : `Rate ${fmt(statFor(type,"fireRate"))}/s`;
+      }
+
+      function sellValue(tower) { return Math.floor(towerTypes[tower.type].cost * .5); }
+      function fmt(n) { return Math.round(n * 10) / 10; }
+      function clamp(v,min,max) { return Math.max(min, Math.min(max, v)); }
+      function lerp(a,b,t) { return a + (b-a)*t; }
+
+      function wavePlan(num) {
+        const enemies = [];
+        let cursor = 0;
+
+        const add = (kind, count, spacing, firstDelay=.38) => {
+          for (let i = 0; i < count; i++) enemies.push(makeEnemy(kind, num, cursor++, i === 0 ? firstDelay : spacing));
+        };
+        const burst = (kind, packs, packSize, intra=.07, gap=.48) => {
+          for (let p = 0; p < packs; p++) for (let i = 0; i < packSize; i++) enemies.push(makeEnemy(kind, num, cursor++, i === 0 ? gap : intra));
+        };
+
+        if (num % 9 === 0) {
+          add("candy", 3 + Math.floor(num / 3), .72, .42);
+          return { name:"Flock of Birds", enemies };
+        }
+
+        const base = 8 + Math.floor(num * 2.22);
+        const style = num === 1 ? "starter" : num % 8;
+        let name = "Mixed Critters";
+
+        if (style === "starter") {
+          name = "Morning Dew";
+          add("normal", 10, .56, .32);
+          burst("swarm", 1, 7, .09, .75);
+        } else if (style === 2) {
+          name = "Bunny Hop";
+          add("normal", Math.floor(base * .34), .5, .32);
+          burst("swarm", 4 + Math.floor(num / 5), 8 + Math.floor(num / 7), .065, .46);
+          if (num >= 10) add("healer", 1 + Math.floor(num / 10), .95, .55);
+        } else if (style === 3) {
+          name = "Mouse Dash";
+          add("runner", 10 + Math.floor(num * 1.05), .245, .32);
+          burst("swarm", 2, 7, .07, .48);
+        } else if (style === 4) {
+          name = "Bear Necessities";
+          add("tank", 4 + Math.floor(num * .5), .78, .35);
+          add("normal", Math.floor(base * .45), .43, .4);
+          if (num >= 8) add("healer", 1 + Math.floor(num / 8), .9, .55);
+        } else if (style === 5) {
+          name = "Slow and Steady";
+          add("shielder", 5 + Math.floor(num * .45), .54, .36);
+          add("runner", 4 + Math.floor(num / 2), .255, .5);
+          if (num >= 13) add("tank", 2 + Math.floor(num / 7), .78, .65);
+        } else if (style === 6) {
+          name = "Feline Friends";
+          add("healer", 3 + Math.floor(num / 4), .7, .34);
+          add("normal", Math.floor(base * .58), .39, .42);
+          burst("swarm", 3 + Math.floor(num / 7), 7, .07, .5);
+        } else if (style === 7) {
+          name = "Forest Gathering";
+          add("runner", 7 + Math.floor(num / 2), .255, .3);
+          add("tank", 3 + Math.floor(num / 5), .72, .58);
+          add("shielder", 3 + Math.floor(num / 6), .52, .65);
+          burst("swarm", 3 + Math.floor(num / 7), 7, .07, .5);
+        } else {
+          name = "Grand Petting Zoo";
+          add("normal", Math.floor(base * .4), .4, .3);
+          add("runner", 6 + Math.floor(num / 2.3), .25, .45);
+          add("tank", 2 + Math.floor(num / 5), .72, .58);
+          add("healer", 1 + Math.floor(num / 6), .8, .62);
+          add("shielder", 2 + Math.floor(num / 6), .5, .7);
+          burst("swarm", 3 + Math.floor(num / 7), 7, .07, .5);
+        }
+
+        if (num % 5 === 0) {
+          name = "Elephant Parade";
+          add("boss", 1 + Math.floor(num / 15), 1.05, .75);
+          add("tank", 2 + Math.floor(num / 6), .7, .58);
+          add("healer", 1 + Math.floor(num / 10), .82, .62);
+          add("shielder", 2 + Math.floor(num / 8), .52, .68);
+        }
+
+        return { name, enemies };
+      }
+
+      function makeEnemy(kind, wave, index, delay) {
+        const type = enemyTypes[kind] || enemyTypes.normal;
+        const late = Math.max(0, wave - 8);
+        const hpBase = 36 * Math.pow(1.235, wave - 1) + wave * 8.5 + late * late * .55;
+        const speedBase = 56 + Math.min(78, wave * 3.35);
+        const rewardBase = 10 + Math.max(0, wave - 7) * .44 + Math.max(0, wave - 14) * .55;
+        return {
+          kind, label:type.name, emoji:type.emoji,
+          hp:Math.round(hpBase * type.hp),
+          speed:speedBase * type.speed,
+          reward:Math.max(3, Math.round(rewardBase * type.reward)),
+          lifeCost:type.lifeCost,
+          healDps:kind === "healer" ? 4 + wave * 1.05 + Math.max(0, wave - 12) * .9 : 0,
+          direct:kind === "candy",
+          delay
+        };
+      }
+
+      function startWave() {
+        if (state.gameOver || state.waveActive) return;
+        const plan = wavePlan(state.wave + 1);
+        state.wave++;
+        state.waveName = plan.name;
+        state.waveActive = true;
+        state.spawnQueue = plan.enemies;
+        state.spawnTimer = 0;
+        startWaveBtn.disabled = true;
+        renderAll();
+        toast(`Day ${state.wave}: ${plan.name}`);
+      }
+
+      function spawnEnemy(spec) {
+        const p = spec.direct ? {x:-42,y:86} : path[0];
+        const end = {x:W+42,y:430};
+        const directDistance = Math.hypot(end.x - p.x, end.y - p.y);
+        state.enemies.push({
+          id:state.nextId++, x:p.x, y:p.y, baseY:p.y, hp:spec.hp, maxHp:spec.hp, speed:spec.speed, reward:spec.reward,
+          emoji:spec.emoji, kind:spec.kind, label:spec.label, lifeCost:spec.lifeCost, healDps:spec.healDps,
+          seg:0, progress:0, slow:0, burn:0, burnDps:0, burnSource:0, age:0, reached:false,
+          direct:spec.direct, directStart:p, directEnd:end, directProgress:0, directDistance
+        });
+      }
+
+      function isInvulnerable(enemy) {
+        return enemy.kind === "shielder" && Math.floor(enemy.age / 2) % 2 === 1;
+      }
+
+      function shieldEmoji(enemy) {
+        return isInvulnerable(enemy) ? "🪨" : "🐢";
+      }
+
+      function travelScore(enemy) {
+        return enemy.direct ? 2500 + enemy.directProgress * 2500 : enemy.seg * 1000 + enemy.progress * 1000;
+      }
+
+      function renderStats() {
+        statsEl.innerHTML = [
+          ["💧", state.cash, "Nectar", ""],
+          ["🌿", state.lives, "Garden Health", ""],
+          ["☀️", state.wave || 1, state.waveActive ? "Current Day" : "Next Day", ""],
+          ["🌸", state.waveName || "Morning Dew", state.waveActive ? "Now visiting" : "Day style", "wide"],
+          ["✨", state.score, "Harmony Score", ""],
+          ["🪴", state.towers.length, "Plants", ""]
+        ].map(([icon,val,label,klass]) => `<div class="stat ${klass}"><b>${icon} ${val}</b><span>${label}</span></div>`).join("");
+        speedBtn.textContent = `Pace: ${state.speedOptions[state.speedIndex]}x`;
+        pauseBtn.textContent = state.paused ? "Resume" : "Pause";
+        startWaveBtn.disabled = state.waveActive || state.gameOver;
+      }
+
+      function renderTowerList() {
+        const activeTower = state.towers.find(t => t.id === selectedTowerId);
+        towerListEl.innerHTML = Object.values(towerTypes).map(t => {
+          const selected = selectedBuildType === t.key || (!selectedBuildType && activeTower && activeTower.type === t.key);
+          const role = t.family === "aura" ? `Aura ${fmt(statFor(t.key,"auraDps"))}/s` : t.splash ? `AOE ${fmt(statFor(t.key,"damage"))} · ${fmt(statFor(t.key,"fireRate"))}/s` : `Shot ${fmt(statFor(t.key,"damage"))} · ${fmt(statFor(t.key,"fireRate"))}/s`;
+          const selectedInfo = activeTower && activeTower.type === t.key ? `<div class="detailPill">Target<b>${targetModes[activeTower.targetMode || "first"].icon} ${targetModes[activeTower.targetMode || "first"].name}</b></div>` : "";
+          return `
+            <div class="towerCard ${selected ? "selected" : ""}">
+              <button class="towerHeader" data-build="${t.key}">
+                <div class="towerIcon">${t.emoji}</div>
+                <div><h3>${t.name}</h3><p>${role} · R ${fmt(statFor(t.key,"range"))}</p></div>
+                <div class="price">💧${t.cost}</div>
+              </button>
+              <div class="towerDetails">
+                <div class="detailGrid">
+                  <div class="detailPill">${t.family === "aura" ? "Aura DPS" : "Potency"}<b>${fmt(t.family === "aura" ? statFor(t.key,"auraDps") : statFor(t.key,"damage"))}</b></div>
+                  <div class="detailPill">Reach<b>${fmt(statFor(t.key,"range"))}</b></div>
+                  <div class="detailPill">${t.family === "aura" ? "Tick type" : "Bloom rate"}<b>${t.family === "aura" ? "Aura" : `${fmt(statFor(t.key,"fireRate"))}/s`}</b></div>
+                  ${selectedInfo || `<div class="detailPill">Mode<b>${selectedBuildType === t.key ? "Plant" : "Nurture"}</b></div>`}
+                </div>
+                ${renderUpgradeRows(t.key)}
+              </div>
+            </div>
+          `;
+        }).join("");
+        towerListEl.querySelectorAll("[data-build]").forEach(btn => btn.addEventListener("click", () => {
+          selectedBuildType = btn.dataset.build;
+          selectedTowerId = null;
+          renderAll();
+          floatMsg(`${towerTypes[selectedBuildType].name} selected.`);
+        }));
+        towerListEl.querySelectorAll("[data-upgrade]").forEach(btn => btn.addEventListener("click", e => {
+          e.stopPropagation();
+          buyUpgrade(btn.dataset.type, btn.dataset.upgrade);
+        }));
+      }
+
+      function renderUpgradeRows(type) {
+        return Object.entries(upgradeDefs).map(([attr, def]) => {
+          const lvl = statMods[type].levels[attr], maxed = lvl >= MAX_UPGRADE_LEVEL, cost = upgradeCost(type, attr);
+          const disabled = state.cash < cost || maxed;
+          return `
+            <div class="upgradeRow">
+              <div><b>${def.name} Lv.${lvl}/${MAX_UPGRADE_LEVEL}</b><span>${upgradePreview(type, attr)}</span></div>
+              <button class="tiny" data-type="${type}" data-upgrade="${attr}" ${disabled ? "disabled" : ""}>${maxed ? "Max" : `💧${cost}`}</button>
+            </div>
+          `;
+        }).join("");
+      }
+
+      function renderBoardControls() {
+        const tower = state.towers.find(t => t.id === selectedTowerId);
+        if (!tower) {
+          boardSellBtn.classList.remove("show");
+          boardTargetsEl.classList.remove("show");
+          return;
+        }
+
+        const topPct = tower.y / H * 100;
+        boardSellBtn.textContent = `Uproot +💧${sellValue(tower)}`;
+        boardSellBtn.style.left = `${tower.x / W * 100}%`;
+        boardSellBtn.style.top = `${topPct}%`;
+        boardSellBtn.style.transform = topPct > 86 ? "translate(-50%, -64px)" : "translate(-50%, 34px)";
+        boardSellBtn.classList.add("show");
+
+        boardTargetsEl.style.left = `${tower.x / W * 100}%`;
+        boardTargetsEl.style.top = `${topPct}%`;
+        boardTargetsEl.style.transform = topPct < 12 ? "translate(-50%, 42px)" : "translate(-50%, -52px)";
+        boardTargetsEl.classList.add("show");
+        boardTargetsEl.querySelectorAll("[data-target-mode]").forEach(btn => {
+          btn.classList.toggle("active", btn.dataset.targetMode === (tower.targetMode || "first"));
+        });
+      }
+
+      function renderAll() {
+        renderStats();
+        renderTowerList();
+        renderBoardControls();
+      }
+
+      function buyUpgrade(type, attr) {
+        const cost = upgradeCost(type, attr), mods = statMods[type];
+        if (mods.levels[attr] >= MAX_UPGRADE_LEVEL || state.cash < cost) return;
+        state.cash -= cost;
+        mods.levels[attr]++;
+        if (attr === "damage") {
+          if (towerTypes[type].family === "aura") mods.auraDps *= 1.22;
+          else mods.damage *= 1.22;
+        }
+        if (attr === "range") mods.range *= 1.12;
+        if (attr === "speed") {
+          if (towerTypes[type].family === "aura") mods.auraDps *= 1.14;
+          else mods.fireRate *= 1.18;
+        }
+        toast(`${towerTypes[type].name}: ${upgradeDefs[attr].label} Lv.${mods.levels[attr]}`);
+        renderAll();
+      }
+
+      function sellSelected() {
+        const idx = state.towers.findIndex(t => t.id === selectedTowerId);
+        if (idx < 0) return;
+        const tower = state.towers[idx];
+        state.cash += sellValue(tower);
+        state.towers.splice(idx,1);
+        selectedTowerId = null;
+        toast(`Reclaimed 💧${sellValue(tower)}`);
+        renderAll();
+      }
+
+      function toastMsg(text) {
+        toastEl.textContent = text;
+        toastEl.classList.add("show");
+        clearTimeout(toastMsg._t);
+        toastMsg._t = setTimeout(() => toastEl.classList.remove("show"), 1250);
+      }
+      
+      // Map global toast to our wrapper to avoid shadowing inside functions occasionally
+      const toast = toastMsg;
+
+      function floatMsg(text) {
+        floatMsgEl.textContent = text;
+        floatMsgEl.classList.add("show");
+        clearTimeout(floatMsg._t);
+        floatMsg._t = setTimeout(() => floatMsgEl.classList.remove("show"), 2000);
+      }
+
+      function getMouse(evt) {
+        const rect = canvas.getBoundingClientRect();
+        return { x:(evt.clientX - rect.left) * W / rect.width, y:(evt.clientY - rect.top) * H / rect.height };
+      }
+
+      function pointToSegment(p,a,b) {
+        const dx=b.x-a.x, dy=b.y-a.y, len2=dx*dx+dy*dy;
+        if (!len2) return Math.hypot(p.x-a.x,p.y-a.y);
+        const t=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/len2,0,1);
+        return Math.hypot(p.x-(a.x+dx*t), p.y-(a.y+dy*t));
+      }
+
+      function nearPath(x,y) {
+        let best = Infinity;
+        for (let i = 0; i < path.length - 1; i++) best = Math.min(best, pointToSegment({x,y}, path[i], path[i+1]));
+        return best;
+      }
+
+      function canBuildAt(x,y) {
+        if (x < 34 || y < 34 || x > W - 34 || y > H - 34) return { ok:false, reason:"Too close to the garden edge." };
+        if (nearPath(x,y) < blockedRadius) return { ok:false, reason:"Critters need that path." };
+        for (const t of state.towers) if (Math.hypot(t.x-x, t.y-y) < 54) return { ok:false, reason:"Too close to another plant." };
+        return { ok:true, reason:"" };
+      }
+
+      function buildTower(x,y) {
+        if (!selectedBuildType) { selectedTowerId = null; renderAll(); return; }
+        const type = towerTypes[selectedBuildType], valid = canBuildAt(x,y);
+        if (!valid.ok) { floatMsg(valid.reason); return; }
+        if (state.cash < type.cost) { floatMsg(`Need 💧${type.cost - state.cash} more nectar.`); return; }
+        state.cash -= type.cost;
+        const tower = { id:state.nextId++, type:selectedBuildType, x, y, cooldown:0, angle:0, kills:0, pulse:0, targetMode:"first" };
+        state.towers.push(tower);
+        selectedTowerId = tower.id;
+        selectedBuildType = null;
+        renderAll();
+      }
+
+      function selectTowerAt(x,y) {
+        let best = null, bestD = 999;
+        for (const t of state.towers) {
+          const d = Math.hypot(t.x-x,t.y-y);
+          if (d < 28 && d < bestD) { best = t; bestD = d; }
+        }
+        if (best) {
+          selectedTowerId = best.id;
+          selectedBuildType = null;
+          renderAll();
+          return true;
+        }
+        return false;
+      }
+
+      // Event Listeners
+      canvas.addEventListener("mousemove", e => { mouse = { ...getMouse(e), inside:true }; });
+      canvas.addEventListener("mouseleave", () => { mouse.inside = false; });
+      canvas.addEventListener("click", e => {
+        if (state.gameOver) return;
+        const m = getMouse(e);
+        if (!selectTowerAt(m.x,m.y)) buildTower(m.x,m.y);
+      });
+      boardSellBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        sellSelected();
+      });
+      boardTargetsEl.addEventListener("click", e => {
+        const btn = e.target.closest("[data-target-mode]");
+        if (!btn) return;
+        e.stopPropagation();
+        const tower = state.towers.find(t => t.id === selectedTowerId);
+        if (tower) {
+          tower.targetMode = btn.dataset.targetMode;
+          renderAll();
+        }
+      });
+      startWaveBtn.addEventListener("click", startWave);
+      speedBtn.addEventListener("click", () => {
+        state.speedIndex = (state.speedIndex + 1) % state.speedOptions.length;
+        renderAll();
+      });
+      pauseBtn.addEventListener("click", () => {
+        state.paused = !state.paused;
+        renderAll();
+      });
+      restartBtn.addEventListener("click", reset);
+
+      // Simple core loop mechanics
+      function doDamage(e, dmg) {
+        if(isInvulnerable(e)) return;
+        e.hp -= dmg;
+      }
+
+      function update(dt) {
+        if(state.paused || state.gameOver) return;
+        
+        let multiplier = state.speedOptions[state.speedIndex];
+        let realDt = dt * multiplier;
+
+        // Wave Spawning
+        if (state.waveActive && state.spawnQueue.length > 0) {
+          state.spawnTimer += realDt;
+          while(state.spawnQueue.length > 0 && state.spawnTimer >= state.spawnQueue[0].delay) {
+            state.spawnTimer -= state.spawnQueue[0].delay;
+            spawnEnemy(state.spawnQueue.shift());
+          }
+        } else if (state.waveActive && state.spawnQueue.length === 0 && state.enemies.length === 0) {
+          state.waveActive = false;
+          state.cash += 50 + state.wave * 10; // End of wave nectar
+          renderAll();
+        }
+
+        // Move Enemies
+        for (let i = state.enemies.length - 1; i >= 0; i--) {
+          let e = state.enemies[i];
+          e.age += realDt;
+          
+          if(e.direct) {
+            e.directProgress += (e.speed * realDt) / e.directDistance;
+            e.x = lerp(e.directStart.x, e.directEnd.x, e.directProgress);
+            e.y = lerp(e.directStart.y, e.directEnd.y, e.directProgress);
+            if(e.directProgress >= 1) e.reached = true;
+          } else {
+            let seg = path[e.seg];
+            let next = path[e.seg+1];
+            let distToMove = e.speed * realDt;
+            e.progress += distToMove / seg.dist;
+
+            while(e.progress >= 1) {
+              e.seg++;
+              if(e.seg >= path.length - 1) {
+                e.reached = true;
+                break;
+              }
+              let overflow = (e.progress - 1) * seg.dist;
+              seg = path[e.seg];
+              next = path[e.seg+1];
+              e.progress = overflow / seg.dist;
+            }
+
+            if(!e.reached) {
+              e.x = lerp(seg.x, next.x, e.progress);
+              e.y = lerp(seg.y, next.y, e.progress);
+            }
+          }
+
+          if(e.reached) {
+            state.lives -= e.lifeCost;
+            state.enemies.splice(i, 1);
+            if(state.lives <= 0) {
+              state.lives = 0;
+              state.gameOver = true;
+              toast("The garden was overrun!");
+            }
+            renderAll();
+            continue;
+          }
+
+          if(e.hp <= 0) {
+            state.cash += e.reward;
+            state.score += e.reward * 10;
+            state.enemies.splice(i, 1);
+            renderStats();
+          }
+        }
+
+        // Towers logic
+        for (let t of state.towers) {
+          const type = towerTypes[t.type];
+          const range = statFor(t.type, "range");
+          const dmg = statFor(t.type, "damage");
+          
+          if (type.family === "aura") {
+            const auraDps = statFor(t.type, "auraDps");
+            for(let e of state.enemies) {
+              if(Math.hypot(e.x - t.x, e.y - t.y) <= range) {
+                doDamage(e, auraDps * realDt);
+              }
+            }
+          } else {
+            t.cooldown -= realDt;
+            if(t.cooldown <= 0) {
+              // Find target
+              let targets = state.enemies.filter(e => Math.hypot(e.x - t.x, e.y - t.y) <= range && !isInvulnerable(e));
+              if(targets.length > 0) {
+                let target;
+                if(t.targetMode === "hp") target = targets.reduce((a,b) => a.hp > b.hp ? a : b);
+                else if(t.targetMode === "last") target = targets.reduce((a,b) => travelScore(a) < travelScore(b) ? a : b);
+                else target = targets.reduce((a,b) => travelScore(a) > travelScore(b) ? a : b); // first
+                
+                t.angle = Math.atan2(target.y - t.y, target.x - t.x);
+                state.projectiles.push({ x:t.x, y:t.y, tx:target.x, ty:target.y, speed: 400, dmg: dmg, splash: type.splash, targetId: target.id });
+                t.cooldown = 1 / statFor(t.type, "fireRate");
+              }
+            }
+          }
+        }
+
+        // Move Projectiles
+        for(let i = state.projectiles.length - 1; i >= 0; i--) {
+          let p = state.projectiles[i];
+          let dist = Math.hypot(p.tx - p.x, p.ty - p.y);
+          let move = p.speed * realDt;
+          
+          if(move >= dist) {
+            // Hit
+            if(p.splash) {
+              for(let e of state.enemies) {
+                if(Math.hypot(e.x - p.tx, e.y - p.ty) <= p.splash) doDamage(e, p.dmg);
+              }
+            } else {
+              let t = state.enemies.find(e => e.id === p.targetId);
+              if(t && Math.hypot(t.x - p.tx, t.y - p.ty) < 40) doDamage(t, p.dmg);
+            }
+            state.projectiles.splice(i, 1);
+          } else {
+            p.x += (p.tx - p.x) / dist * move;
+            p.y += (p.ty - p.y) / dist * move;
+          }
+        }
+      }
+
+      function draw() {
+        ctx.clearRect(0,0,W,H);
+        
+        // Draw path
+        ctx.lineWidth = 42;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "#c8e6c9";
+        ctx.beginPath();
+        ctx.moveTo(path[0].x, path[0].y);
+        for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+        ctx.stroke();
+
+        ctx.lineWidth = 36;
+        ctx.strokeStyle = "#f1f8e9";
+        ctx.stroke();
+
+        // Draw towers
+        for(let t of state.towers) {
+          let type = towerTypes[t.type];
+          ctx.font = "28px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          
+          // Selection circle
+          if(t.id === selectedTowerId) {
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, statFor(t.type, "range"), 0, TWO_PI);
+            ctx.fillStyle = "rgba(129, 199, 132, 0.15)";
+            ctx.fill();
+            ctx.strokeStyle = "#81c784";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+
+          // Base
+          ctx.beginPath();
+          ctx.arc(t.x, t.y, 22, 0, TWO_PI);
+          ctx.fillStyle = "#ffffff";
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "#c8e6c9";
+          ctx.stroke();
+
+          ctx.fillText(type.emoji, t.x, t.y + 2);
+        }
+
+        // Draw build preview
+        if (selectedBuildType && mouse.inside) {
+          let type = towerTypes[selectedBuildType];
+          let valid = canBuildAt(mouse.x, mouse.y).ok;
+          ctx.beginPath();
+          ctx.arc(mouse.x, mouse.y, statFor(selectedBuildType, "range"), 0, TWO_PI);
+          ctx.fillStyle = valid ? "rgba(129, 199, 132, 0.2)" : "rgba(229, 115, 115, 0.2)";
+          ctx.fill();
+          
+          ctx.font = "28px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.globalAlpha = 0.6;
+          ctx.fillText(type.emoji, mouse.x, mouse.y + 2);
+          ctx.globalAlpha = 1.0;
+        }
+
+        // Draw enemies
+        for(let e of state.enemies) {
+          ctx.font = `${e.kind === 'boss' ? 36 : 24}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          let emoji = e.kind === "shielder" ? shieldEmoji(e) : e.emoji;
+          ctx.fillText(emoji, e.x, e.y + 2);
+
+          // HP Bar
+          let hpPct = Math.max(0, e.hp / e.maxHp);
+          ctx.fillStyle = "#ef5350";
+          ctx.fillRect(e.x - 12, e.y - 20, 24, 4);
+          ctx.fillStyle = "#66bb6a";
+          ctx.fillRect(e.x - 12, e.y - 20, 24 * hpPct, 4);
+        }
+
+        // Draw projectiles
+        for(let p of state.projectiles) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.splash ? 6 : 4, 0, TWO_PI);
+          ctx.fillStyle = p.splash ? "#ffb74d" : "#fff176";
+          ctx.fill();
+        }
+
+        // Game Over Overlay
+        if(state.gameOver) {
+          ctx.fillStyle = "rgba(255,255,255,0.7)";
+          ctx.fillRect(0,0,W,H);
+          ctx.fillStyle = "#2e4a2e";
+          ctx.font = "bold 48px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("Garden Overrun!", W/2, H/2 - 20);
+          ctx.font = "24px sans-serif";
+          ctx.fillText(`Harmony Score: ${state.score}`, W/2, H/2 + 20);
+        }
+      }
+
+      function loop() {
+        let now = performance.now();
+        let dt = Math.min((now - lastT) / 1000, 0.1);
+        lastT = now;
+        
+        update(dt);
+        draw();
+        
+        raf = requestAnimationFrame(loop);
+      }
+
+      // Init
+      reset();
+
+    })();
+  </script>
+</body>
+</html>
