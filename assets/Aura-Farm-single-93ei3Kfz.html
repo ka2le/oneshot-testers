@@ -1,0 +1,1320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Incremental Aura Farming</title>
+
+  <style>
+@font-face {
+  font-family: "Cormorant";
+  src: url("Cormorant-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --stage-ratio-w: 1086;
+  --stage-ratio-h: 1448;
+  --crop-x: 0px;
+  --safe-top: max(14px, env(safe-area-inset-top));
+  --safe-bottom: max(16px, env(safe-area-inset-bottom));
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #000 url("aura-background.png") center / cover no-repeat;
+  font-family: Cormorant, "Cormorant Garamond", Garamond, Georgia, "Times New Roman", serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+body {
+  position: relative;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: -5vh -5vw;
+  z-index: 0;
+  background: url("aura-background.png") center / cover no-repeat;
+  filter: blur(10px) saturate(1.176) brightness(1.5);
+  transform: scale(1.12);
+  transform-origin: center;
+  opacity: 1;
+  pointer-events: none;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: rgba(0, 0, 0, 0.38);
+  pointer-events: none;
+}
+
+button { font: inherit; -webkit-tap-highlight-color: transparent; }
+
+.game-stage {
+  position: relative;
+  z-index: 2;
+  width: min(100vw, calc(100vh * var(--stage-ratio-w) / var(--stage-ratio-h)));
+  height: 100vh;
+  max-width: 100vw;
+  overflow: hidden;
+  isolation: isolate;
+  background: url("aura-background.png") center / cover no-repeat;
+  box-shadow: 0 0 64px rgba(0, 0, 0, 0.56);
+}
+
+@supports (height: 100dvh) {
+  .game-stage { width: min(100vw, calc(100dvh * var(--stage-ratio-w) / var(--stage-ratio-h))); height: 100dvh; }
+}
+
+@media (max-aspect-ratio: 3 / 4) and (orientation: portrait) {
+  .game-stage { width: 100vw; height: 100vh; max-width: 100vw; background-size: cover; background-position: center center; box-shadow: none; }
+  @supports (height: 100dvh) { .game-stage { height: 100dvh; } }
+}
+
+.scene-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(circle at 50% 42%, rgba(255,255,255,.055), rgba(0,0,0,0) 32%), linear-gradient(to bottom, rgba(0,0,0,.05), rgba(0,0,0,.08) 54%, rgba(0,0,0,.34));
+}
+
+.aura-counter {
+  position: absolute;
+  top: var(--safe-top);
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transform: translateX(-50%);
+  color: #fff;
+  font-size: clamp(18px, 2.45vh, 36px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: .01em;
+  text-shadow: 0 3px 14px rgba(0,0,0,.85), 0 0 16px rgba(255,255,255,.14);
+  pointer-events: none;
+}
+
+.icon-button {
+  position: absolute;
+  top: var(--safe-top);
+  z-index: 45;
+  width: clamp(38px, 5.2vh, 52px);
+  height: clamp(38px, 5.2vh, 52px);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  opacity: .96;
+  filter: drop-shadow(0 3px 10px rgba(0,0,0,.88));
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.icon-button:active { transform: scale(.92); opacity: .76; }
+.fullscreen-button { left: calc(var(--crop-x) + 13px); }
+.menu-button { right: calc(var(--crop-x) + 13px); }
+
+.fullscreen-glyph { position: relative; width: 25px; height: 25px; display: block; }
+.fullscreen-glyph i { position: absolute; width: 9px; height: 9px; border-color: currentColor; border-style: solid; }
+.fullscreen-glyph i:nth-child(1) { top: 2px; left: 2px; border-width: 2px 0 0 2px; }
+.fullscreen-glyph i:nth-child(2) { top: 2px; right: 2px; border-width: 2px 2px 0 0; }
+.fullscreen-glyph i:nth-child(3) { right: 2px; bottom: 2px; border-width: 0 2px 2px 0; }
+.fullscreen-glyph i:nth-child(4) { bottom: 2px; left: 2px; border-width: 0 0 2px 2px; }
+.hamburger-glyph { width: 27px; display: grid; gap: 5px; }
+.hamburger-glyph i { display: block; width: 100%; height: 2px; border-radius: 999px; background: currentColor; }
+
+.particle-layer, .item-layer { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+.item-layer { z-index: 32; }
+
+.masked-icon, .counter-icon, .aura-particle, .item-icon, .stat-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  color: transparent;
+  background: rgba(255,255,255,.96);
+  -webkit-mask: var(--icon-mask) center / contain no-repeat;
+  mask: var(--icon-mask) center / contain no-repeat;
+  text-shadow: none;
+  filter: drop-shadow(0 4px 11px rgba(0,0,0,.82));
+}
+
+.sparkle-icon, .counter-icon, .aura-particle.sparkle, .aura-particle.normal, .aura-particle.camera, .aura-particle.boost, .aura-particle.chill, .stat-icon.sparkle {
+  --icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Ctext x='64' y='91' font-size='94' text-anchor='middle' font-family='Arial, sans-serif'%3E%E2%9C%A8%3C/text%3E%3C/svg%3E");
+  background: linear-gradient(135deg, #fff8b8 0%, #ffe16b 28%, #ffbd2c 55%, #ff8f1f 78%, #fff1a8 100%);
+  filter: drop-shadow(0 0 8px rgba(255,208,70,.78)) drop-shadow(0 3px 11px rgba(0,0,0,.78));
+}
+
+.sweat-icon, .aura-particle.sweat, .stat-icon.sweat {
+  --icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Ctext x='64' y='91' font-size='92' text-anchor='middle' font-family='Arial, sans-serif'%3E%F0%9F%92%A6%3C/text%3E%3C/svg%3E");
+  background: linear-gradient(135deg, #ffb3b3 0%, #ff4545 42%, #d90e19 76%, #ff6a6a 100%);
+  filter: drop-shadow(0 0 8px rgba(255,52,52,.72)) drop-shadow(0 3px 11px rgba(0,0,0,.78));
+}
+
+.chill-icon, .stat-icon.chill {
+  --icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Ctext x='64' y='91' font-size='90' text-anchor='middle' font-family='Arial, sans-serif'%3E%E2%9D%84%EF%B8%8F%3C/text%3E%3C/svg%3E");
+  background: rgba(255,255,255,.96);
+}
+
+.stat-icon.camera {
+  --icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Ccircle cx='64' cy='64' r='45' fill='black'/%3E%3C/svg%3E");
+  background: rgba(255,255,255,.96);
+}
+
+.counter-icon { font-size: 1.04em; }
+.aura-particle { position: absolute; left: 50%; top: 50%; z-index: 34; pointer-events: none; font-size: clamp(19px, 3vh, 35px); line-height: 1; transform-origin: 50% 50%; will-change: transform, opacity; }
+.aura-particle.boost { font-size: clamp(48px, 7.8vh, 90px); filter: drop-shadow(0 0 15px rgba(255,223,112,.96)) drop-shadow(0 0 38px rgba(255,170,30,.58)) drop-shadow(0 6px 16px rgba(0,0,0,.82)); }
+.aura-particle.chill, .aura-particle.sweat { font-size: clamp(24px, 3.7vh, 44px); }
+
+.item-orb {
+  position: absolute;
+  z-index: 35;
+  width: clamp(52px, 7.3vh, 82px);
+  height: clamp(52px, 7.3vh, 82px);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+  animation: itemLife var(--ttl, 10000ms) linear forwards;
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,.74));
+}
+
+.item-orb:active { transform: translate(-50%, -50%) scale(.9); }
+.item-orb::before { content: ""; position: absolute; inset: 8px; border-radius: inherit; background: rgba(255,255,255,.001); }
+.item-icon { position: relative; z-index: 1; font-size: clamp(35px, 5.4vh, 63px); filter: drop-shadow(0 4px 13px rgba(0,0,0,.82)) drop-shadow(0 0 7px rgba(255,255,255,.16)); }
+
+.item-tooltip {
+  position: absolute;
+  left: 50%;
+  top: calc(100% - 4px);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .03em;
+  transform: translateX(-50%) translateY(4px);
+  white-space: nowrap;
+  color: #fff;
+  font-size: clamp(16px, 1.8vh, 20px);
+  font-weight: 400;
+  letter-spacing: .01em;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 2px 12px rgba(0,0,0,.98), 0 0 10px rgba(255,255,255,.12);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.item-orb:hover .item-tooltip, .item-orb:focus-visible .item-tooltip { opacity: 1; transform: translateX(-50%) translateY(0); }
+.stat-icon { width: .95em; height: .95em; vertical-align: -.12em; }
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + clamp(112px, 14vh, 156px));
+  z-index: 50;
+  max-width: min(80%, 560px);
+  transform: translateX(-50%) translateY(8px);
+  color: #fff;
+  font-size: clamp(15px, 2.25vh, 24px);
+  font-weight: 400;
+  line-height: 1.15;
+  text-align: center;
+  letter-spacing: .01em;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 3px 16px rgba(0,0,0,.95), 0 0 14px rgba(255,255,255,.14);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.important { text-shadow: 0 3px 18px rgba(0,0,0,1), 0 0 22px rgba(255,60,60,.48); }
+
+.camera-button {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 22px);
+  z-index: 45;
+  width:  clamp(45px, 7vh, 106px);
+  height:  clamp(45px, 7vh, 106px);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255,255,255,.96);
+  transform: translateX(-50%);
+  cursor: pointer;
+  box-shadow: 0 6px 22px rgba(0,0,0,.42), inset 0 0 0 1px rgba(255,255,255,.7);
+  transition: transform 100ms ease, opacity 100ms ease, box-shadow 100ms ease;
+}
+
+.camera-button::before { content: ""; position: absolute; inset: -7px; border: 2px solid rgba(255,255,255,.92); border-radius: inherit; }
+.camera-button::after { content: ""; position: absolute; inset: 10px; border-radius: inherit; background: rgba(255,255,255,.1); }
+.camera-button:active, .camera-button.pulse { transform: translateX(-50%) scale(.92); box-shadow: 0 3px 16px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.85); }
+
+.camera-flash { position: absolute; inset: 0; z-index: 44; background: radial-gradient(circle at 50% 74%, rgba(255,255,255,.16), rgba(255,255,255,0) 22%); animation: cameraFlash .16s linear; pointer-events: none; }
+
+.idle-meter, .heat-meter, .tier-meter {
+  position: absolute;
+  left: calc(var(--crop-x) + 14px);
+  right: calc(var(--crop-x) + 14px);
+  z-index: 46;
+  height: 2px;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.idle-meter { bottom: calc(var(--safe-bottom) + 5px); }
+.heat-meter { bottom: calc(var(--safe-bottom) + 1px); }
+.tier-meter { top: calc(var(--safe-top) + clamp(35px, 4.6vh, 54px)); height: 2px; opacity: .94; }
+.idle-meter span, .heat-meter span, .tier-meter span { position: absolute; top: 0; height: 100%; width: 0%; border-radius: 999px; }
+.idle-meter span { left: 0; background: rgba(255,255,255,.88); box-shadow: 0 0 8px rgba(255,255,255,.35); }
+.heat-meter span { right: 0; background: rgba(255,44,44,.9); box-shadow: 0 0 10px rgba(255,26,26,.46); }
+.tier-meter span { left: 0; background: linear-gradient(90deg, rgba(255,248,184,.72), rgba(255,184,37,.95), rgba(255,241,168,.8)); box-shadow: 0 0 9px rgba(255,206,70,.42); }
+
+.glow-gold { animation: goldGlow .82s ease; }
+
+@keyframes itemLife {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.72); }
+  8% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  72% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(.82); }
+}
+
+@keyframes cameraFlash { from { opacity: .95; } to { opacity: 0; } }
+
+@keyframes goldGlow {
+  0% { filter: drop-shadow(0 0 0 rgba(255,205,84,0)); }
+  35% { filter: drop-shadow(0 0 16px rgba(255,208,70,.96)) drop-shadow(0 0 28px rgba(255,186,34,.62)); }
+  100% { filter: drop-shadow(0 0 0 rgba(255,205,84,0)); }
+}
+
+@media (max-width: 540px) {
+  .fullscreen-button { left: calc(var(--crop-x) + 10px); }
+  .menu-button { right: calc(var(--crop-x) + 10px); }
+  .idle-meter, .heat-meter, .tier-meter { left: calc(var(--crop-x) + 10px); right: calc(var(--crop-x) + 10px); }
+  .item-tooltip { font-size: 13px; }
+  .toast { max-width: min(86%, 420px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item-orb, .camera-flash { animation-duration: 1ms; }
+  .toast, .icon-button, .camera-button, .item-tooltip { transition-duration: 1ms; }
+}
+
+.boost-sidebar {
+  position: absolute;
+  top: calc(var(--safe-top) + clamp(48px, 6.2vh, 64px));
+  right: calc(var(--crop-x) + 8px);
+  z-index: 47;
+  width: clamp(52px, 7.2vh, 72px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(6px, .9vh, 10px);
+  pointer-events: auto;
+}
+
+.boost-button {
+  --ready: 0;
+  position: relative;
+  width: 100%;
+  min-height: clamp(51px, 7.2vh, 74px);
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  filter: drop-shadow(0 3px 10px rgba(0,0,0,.85));
+  transition: opacity 160ms ease, transform 160ms ease, filter 160ms ease;
+}
+
+.boost-button:active { transform: scale(.92); }
+.boost-button.disabled { cursor: default; }
+.boost-button.disabled .boost-main { opacity: .32; filter: drop-shadow(0 3px 9px rgba(0,0,0,.82)) grayscale(.25); }
+.boost-button.disabled .boost-label { opacity: .58; }
+.boost-button.active .boost-main { opacity: .98; filter: drop-shadow(0 4px 13px rgba(0,0,0,.85)) drop-shadow(0 0 7px rgba(255,255,255,.22)); }
+.boost-icon-wrap {
+  position: relative;
+  width: clamp(38px, 5.7vh, 58px);
+  height: clamp(36px, 5.5vh, 56px);
+  display: grid;
+  place-items: center;
+}
+
+.boost-icon {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(36px, 5.35vh, 58px);
+  background: rgba(255,255,255,.96);
+}
+
+.boost-label {
+  min-height: 1.8em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: .02em;
+  max-width: 100%;
+  color: #fff;
+  font-size: clamp(15px, 1.6vh, 18px);
+  font-weight: 400;
+  line-height: .96;
+  text-align: center;
+  letter-spacing: .01em;
+  text-shadow: 0 2px 10px rgba(0,0,0,.98), 0 0 7px rgba(255,255,255,.12);
+  pointer-events: none;
+}
+
+.boost-label .stat-num {
+  font-size: 1.42em;
+  line-height: .9;
+  margin-right: .05em;
+}
+
+.boost-label .stat-text {
+  display: block;
+  width: 100%;
+  font-size: .96em;
+  line-height: .95;
+}
+
+.block-dust {
+  position: absolute;
+  z-index: 36;
+  width: clamp(4px, .65vh, 7px);
+  height: clamp(4px, .65vh, 7px);
+  border-radius: 999px;
+  background: rgba(190,190,190,.74);
+  box-shadow: 0 0 5px rgba(255,255,255,.16);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+
+@media (max-height: 740px) {
+  .boost-sidebar { top: calc(var(--safe-top) + 43px); gap: 2px; width: clamp(54px, 7.6vh, 70px); }
+  .boost-button { min-height: clamp(50px, 7.2vh, 66px); }
+  .boost-icon-wrap { width: clamp(34px, 5vh, 48px); height: clamp(32px, 4.85vh, 46px); }
+  .boost-icon { font-size: clamp(31px, 4.65vh, 46px); }
+  .boost-label { font-size: clamp(12px, 1.25vh, 12px); min-height: 1.65em; }
+}
+
+@media (max-width: 540px) {
+  .boost-sidebar { right: calc(var(--crop-x) + 6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boost-button { transition-duration: 1ms; }
+}
+
+  </style>
+</head>
+<body>
+  <main id="game" class="game-stage" aria-label="Incremental Aura Farming">
+    <div class="scene-vignette" aria-hidden="true"></div>
+
+    <button id="fullscreenButton" class="icon-button fullscreen-button" type="button" aria-label="Fullscreen">
+      <span class="fullscreen-glyph" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    </button>
+
+    <button id="menuButton" class="icon-button menu-button" type="button" aria-label="Menu">
+      <span class="hamburger-glyph" aria-hidden="true"><i></i><i></i><i></i></span>
+    </button>
+
+    <div class="aura-counter" aria-live="polite" aria-atomic="true">
+      <span class="counter-icon sparkle-icon masked-icon" aria-hidden="true"></span>
+      <span id="auraCounter">0</span>
+    </div>
+
+    <div class="tier-meter" aria-hidden="true"><span id="tierFill"></span></div>
+
+    <nav id="boostSidebar" class="boost-sidebar" aria-label="Aura boosts"></nav>
+    <section id="particleLayer" class="particle-layer" aria-hidden="true"></section>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <button id="cameraButton" class="camera-button" type="button" aria-label="Camera"></button>
+
+    <div class="idle-meter" aria-hidden="true"><span id="idleFill"></span></div>
+    <div class="heat-meter" aria-hidden="true"><span id="heatFill"></span></div>
+  </main>
+  <script>
+(function () {
+  "use strict";
+
+  const U = {
+    clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    },
+
+    rand(min, max) {
+      return min + Math.random() * (max - min);
+    },
+
+    randInt(min, max) {
+      return Math.floor(U.rand(min, max + 1));
+    },
+
+    chance(probability) {
+      return Math.random() < probability;
+    },
+
+    pick(list) {
+      return list[Math.floor(Math.random() * list.length)];
+    },
+
+    weightedPick(list, getWeight) {
+      let total = 0;
+      for (const item of list) total += Math.max(0, Number(getWeight(item)) || 0);
+      if (total <= 0) return U.pick(list);
+      let roll = Math.random() * total;
+      for (const item of list) {
+        roll -= Math.max(0, Number(getWeight(item)) || 0);
+        if (roll <= 0) return item;
+      }
+      return list[list.length - 1];
+    },
+
+    formatWhole(value) {
+      const safe = Math.max(0, Math.floor(Number(value) || 0));
+      return safe.toLocaleString("en-US");
+    },
+
+    formatShortNumber(value) {
+      const safe = Math.max(0, Number(value) || 0);
+      if (safe < 1000) return Math.floor(safe).toLocaleString("en-US");
+      if (safe < 1000000) return `${(safe / 1000).toFixed(safe < 10000 ? 1 : 0)}k`;
+      if (safe < 1000000000) return `${(safe / 1000000).toFixed(safe < 10000000 ? 1 : 0)}m`;
+      return `${(safe / 1000000000).toFixed(1)}b`;
+    },
+
+    formatDecimal(value) {
+      const safe = Number(value) || 0;
+      if (Math.abs(safe) >= 10) return safe.toFixed(0);
+      if (Math.abs(safe) >= 1) return safe.toFixed(1).replace(/\.0$/, "");
+      return safe.toFixed(2).replace(/0$/, "");
+    },
+
+    formatPercent(value, digits) {
+      const pct = (Number(value) || 0) * 100;
+      const fixed = pct.toFixed(digits == null ? (Math.abs(pct) < 10 ? 1 : 0) : digits);
+      return fixed.replace(/\.0$/, "");
+    },
+
+    now() {
+      return Date.now();
+    },
+
+    gaussian(center, spread, min, max) {
+      let spare = 0;
+      let random = 0;
+      for (let i = 0; i < 6; i += 1) random += Math.random();
+      spare = random / 6 - 0.5;
+      return U.clamp(center + spare * spread * 2.8, min, max);
+    }
+  };
+
+  window.AuraUtils = U;
+})();
+
+</script>
+
+  <script>
+(function () {
+  "use strict";
+
+  const AURA = "\u2728";
+  const CAMERA = "\u26AA";
+  const SWEAT = "\ud83d\udca6";
+  const CHILL = "\u2744\ufe0f";
+
+  window.AuraData = {
+    AURA, CAMERA, SWEAT, CHILL,
+
+    constants: {
+      SAVE_KEY: "incrementalAuraFarming.v8",
+      TICK_MS: 50,
+      BASE_CHANCE_PER_TICK: 0.018,
+      MAX_CHANCE_PER_TICK: 0.45,
+      BASE_AURA_PER_SPAWN: 1,
+      BASE_CLICK_POWER: 1,
+      BASE_CHILL_MS: 10000,
+      MIN_CHILL_MS: 4300,
+      CHILL_BASE_AURA: 10,
+      HEAT_DECAY_BASE: 0.03
+    },
+
+    tierThresholds: [0, 100, 300, 800, 2000],
+
+    boostTypes: [
+      { id: "auraFlat", effect: "flat", icons: ["👕", "⌚", "🎸", "❤️", "🕊️"], bases: [10, 40, 80, 200, 500], heat: 0.48, messages: ["Fresh tee. easy aura.", "Wrist watch. timed perfectly.", "Meal prepped. aura fed.", "Heart soft. aura huge.", "Inner peace. outer shine."] },
+      { id: "chance", effect: "chance", icons: ["🧥", "💍", "🏃", "🌴", "🌙"], bases: [0.018, 0.028, 0.04, 0.055, 0.075], heat: 0.52, messages: ["Jacket caught the light.", "Ring glint. odds up.", "Morning run. aura finds you.", "Home base. aura settles in.", "Moon phase. aura magnetic."] },
+      { id: "spawnValue", effect: "spawnValue", icons: ["👟", "👑", "🥤", "🌷", "🌳"], bases: [0.35, 0.75, 1.2, 2, 3.2], heat: 0.5, messages: ["Clean kicks. sparkle stride.", "Crown energy. bigger sparkle.", "Protein shake. sparkle dense.", "Flowers outside. sparkles inside.", "Lotus bloom. sparkles upgraded."] },
+      { id: "clickPower", effect: "clickPower", icons: ["🧢", "🕶️", "🐕", "💃", "🦋"], bases: [1.1, 1.9, 3.2, 5.4, 8.8], heat: 0.52, messages: ["Cap forward. tap cleaner.", "Sunglasses. camera got cooler.", "Dog walk glow-up.", "Long-haired muse. camera blessed.", "Mirror check. honest greatness."] },
+      { id: "heatDecay", effect: "heatDecay", icons: ["🩳", "📿", "💨", "🍁", "🛡️"], bases: [0.015, 0.025, 0.04, 0.06, 0.09], heat: 0.56, messages: ["Soft hands. stank fades.", "Prayer beads. panic drains.", "Cool breeze. thirsty no more.", "Secure attachment. stank down.", "Boundaries up. desperation leaves."] },
+      { id: "chillTimer", effect: "chillTimer", icons: ["🧦", "🎧", "🧘", "🤙", "☁️"], bases: [1, 1.4, 1.8, 2.3, 3], heat: 0.5, messages: ["Cozy socks. timer trimmed.", "Playlist on. waiting shorter.", "Breathing arc activated.", "Open hands. calm arrives sooner.", "Cloud mind. timer melts."] },
+      { id: "chillReward", effect: "chillReward", icons: ["🧸", "🎵", "🧹", "🛏️", "🧠"], bases: [0.18, 0.28, 0.42, 0.65, 1], heat: 0.51, messages: ["Comfort object. stillness pays.", "One song. better waiting.", "Clean room. cleaner reward.", "Eight hours. absurd power.", "Peace learned math."] }
+    ],
+
+    tips: [
+      "Wait. then wait again.", "White bar pays each fill.", "Red bar full = aura zero.", "Side boosts cost 💦.", "Two boosts can wipe.", "Pick one. ignore three.", "✨ never gets spent.", "Higher aura changes icons.", "Random rolls can spike.", "Flat ✨ is bait but tasty.", "Camera scales hard.", "💦 fades over time.", "Stank makes offers tempting.", "Cool means restraint.", "Top gold line changes chapters.", "Hover is optional. text is there.", "Chill reward is steady now.", "No more chill exponential.", "Let some icons stay locked."
+    ],
+
+    jokes: [
+      "Try hard. invisibly.", "Be real... real cool.", "Chill!!!!", "Aura farming. no tiller.", "The sidebar is judging.", "Cool has opportunity cost.", "The red bar smells fear.", "Do less. gain more.", "Loot goblin denied.", "Main character on energy saver.", "That icon is flirting with disaster.", "Pick me energy detected.", "Soft flex. hard penalty.", "The dog arc remains elite.", "No caption. just chapter.", "Your stank bar filed a complaint.", "Stillness is overpowered.", "Need less. glow more.", "The gold bar knows things.", "Cool enough to miss loot.", "Sunglasses indoors. spiritually correct.", "One more boost? dangerous sentence.", "A little mystery, as a stat.", "Do not scare the ✨.", "Your aura has legal counsel.", "Chill streak became chill salary.", "The city is taking notes.", "This build is risk management.", "Silent mode. louder aura.", "The shirt started it all."
+    ]
+  };
+})();
+
+</script>
+
+  <script>
+(function () {
+  "use strict";
+
+  function defaults() {
+    const now = Date.now();
+    return {
+      aura: 0,
+      peakAura: 0,
+      extraChancePerTick: 0,
+      auraPerSpawn: 1,
+      clickPower: 1,
+      chillDurationMs: 10000,
+      chillBoostMultiplier: 1,
+      heat: 0,
+      heatGainMultiplier: 1,
+      heatDecayBonus: 0,
+      chillChain: 0,
+      lastActionAt: now,
+      lastChillBoostAt: now,
+      lastPenaltyAt: 0,
+      lastClickAt: 0,
+      clickChain: 0,
+      itemsTaken: 0,
+      uniqueTaken: [],
+      uniqueMissed: [],
+      mercyCharges: 0,
+      savedAt: now,
+      totals: {
+        naturalSpawns: 0,
+        cameraClicks: 0,
+        chillBoosts: 0,
+        items: 0,
+        penalties: 0
+      }
+    };
+  }
+
+  function mergeState(base, saved) {
+    if (!saved || typeof saved !== "object") return base;
+    const merged = { ...base, ...saved };
+    merged.totals = { ...base.totals, ...(saved.totals || {}) };
+    merged.uniqueTaken = Array.isArray(saved.uniqueTaken) ? saved.uniqueTaken : [];
+    merged.uniqueMissed = Array.isArray(saved.uniqueMissed) ? saved.uniqueMissed : [];
+    return merged;
+  }
+
+  function sanitize(state) {
+    const c = window.AuraData.constants;
+    const now = Date.now();
+    const offlineSeconds = Math.max(0, (now - (Number(state.savedAt) || now)) / 1000);
+
+    state.aura = Math.max(0, Number(state.aura) || 0);
+    state.peakAura = Math.max(state.aura, Number(state.peakAura) || 0);
+    state.extraChancePerTick = Math.max(0, Number(state.extraChancePerTick) || 0);
+    state.auraPerSpawn = Math.max(c.BASE_AURA_PER_SPAWN, Number(state.auraPerSpawn) || c.BASE_AURA_PER_SPAWN);
+    state.clickPower = Math.max(c.BASE_CLICK_POWER, Number(state.clickPower) || c.BASE_CLICK_POWER);
+    state.chillDurationMs = Math.max(c.MIN_CHILL_MS, Number(state.chillDurationMs) || c.BASE_CHILL_MS);
+    state.chillBoostMultiplier = Math.max(1, Number(state.chillBoostMultiplier) || 1);
+    state.heat = Math.max(0, Math.min(0.95, (Number(state.heat) || 0) - offlineSeconds * c.HEAT_DECAY_BASE));
+    state.heatGainMultiplier = Math.max(0.28, Math.min(1, Number(state.heatGainMultiplier) || 1));
+    state.heatDecayBonus = Math.max(0, Number(state.heatDecayBonus) || 0);
+    state.chillChain = 0;
+    state.lastActionAt = now;
+    state.lastChillBoostAt = now;
+    state.lastClickAt = 0;
+    state.clickChain = 0;
+    state.mercyCharges = Math.max(0, Math.floor(Number(state.mercyCharges) || 0));
+    state.savedAt = now;
+    return state;
+  }
+
+  function load() {
+    const c = window.AuraData.constants;
+    let saved = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(c.SAVE_KEY) || "null");
+    } catch (error) {
+      saved = null;
+    }
+    return sanitize(mergeState(defaults(), saved));
+  }
+
+  function save(state) {
+    const c = window.AuraData.constants;
+    try {
+      const copy = { ...state, savedAt: Date.now() };
+      localStorage.setItem(c.SAVE_KEY, JSON.stringify(copy));
+    } catch (error) {
+      /* localStorage can be unavailable in locked-down browsers. */
+    }
+  }
+
+  function reset() {
+    const c = window.AuraData.constants;
+    try { localStorage.removeItem(c.SAVE_KEY); } catch (error) { /* ignore */ }
+    return defaults();
+  }
+
+  window.AuraState = { defaults, load, save, reset };
+})();
+
+</script>
+
+  <script>
+(function () {
+  "use strict";
+
+  const U = window.AuraUtils;
+  const Data = window.AuraData;
+  const refs = {};
+  let toastTimer = 0;
+  let resizeRaf = 0;
+
+  function init() {
+    refs.stage = document.getElementById("game");
+    refs.counter = document.getElementById("auraCounter");
+    refs.counterWrap = document.querySelector(".aura-counter");
+    refs.boostSidebar = document.getElementById("boostSidebar");
+    refs.particleLayer = document.getElementById("particleLayer");
+    refs.toast = document.getElementById("toast");
+    refs.cameraButton = document.getElementById("cameraButton");
+    refs.menuButton = document.getElementById("menuButton");
+    refs.fullscreenButton = document.getElementById("fullscreenButton");
+    refs.idleFill = document.getElementById("idleFill");
+    refs.heatFill = document.getElementById("heatFill");
+    refs.tierFill = document.getElementById("tierFill");
+    refs.idleMeter = refs.idleFill.parentElement;
+    refs.heatMeter = refs.heatFill.parentElement;
+    refs.tierMeter = refs.tierFill.parentElement;
+    syncCrop();
+    window.addEventListener("resize", queueSyncCrop, { passive: true });
+    window.addEventListener("orientationchange", queueSyncCrop, { passive: true });
+  }
+
+  function queueSyncCrop() {
+    if (resizeRaf) cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(syncCrop);
+  }
+
+  function syncCrop() {
+    if (!refs.stage) return;
+    const rect = refs.stage.getBoundingClientRect();
+    refs.stage.style.setProperty("--crop-x", `${Math.max(0, -rect.left)}px`);
+  }
+
+  function metrics() {
+    syncCrop();
+    const rect = refs.stage.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    const visibleLeft = U.clamp(-rect.left, 0, width);
+    const visibleRight = U.clamp(window.innerWidth - rect.left, 0, width);
+    return { rect, width, height, visibleLeft, visibleRight, visibleWidth: Math.max(0, visibleRight - visibleLeft) };
+  }
+
+  function iconMaskUrl(symbol) {
+    const safe = String(symbol || "?").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><text x="64" y="91" font-size="92" text-anchor="middle" font-family="Arial, Apple Color Emoji, Segoe UI Emoji, sans-serif">${safe}</text></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  }
+
+  function createMaskedIcon(symbol, className) {
+    const icon = document.createElement("span");
+    icon.className = `masked-icon ${className || ""}`.trim();
+    icon.setAttribute("aria-hidden", "true");
+    if (symbol && symbol !== Data.AURA && symbol !== Data.SWEAT && symbol !== Data.CHILL) icon.style.setProperty("--icon-mask", iconMaskUrl(symbol));
+    return icon;
+  }
+
+  function setAura(value) { refs.counter.textContent = U.formatWhole(value); }
+
+  function setMeters(idleProgress, heat, tierProgress) {
+    refs.idleFill.style.width = `${U.clamp(idleProgress, 0, 1) * 100}%`;
+    refs.heatFill.style.width = `${U.clamp(heat, 0, 1) * 100}%`;
+    refs.tierFill.style.width = `${U.clamp(tierProgress || 0, 0, 1) * 100}%`;
+  }
+
+  function humanPoint() {
+    const m = metrics();
+    return { x: U.gaussian(m.width * 0.51, m.width * 0.13, m.width * 0.38, m.width * 0.63), y: U.gaussian(m.height * 0.45, m.height * 0.22, m.height * 0.22, m.height * 0.72) };
+  }
+
+  function cameraPoint() {
+    const m = metrics();
+    return { x: m.width * 0.5, y: m.height * 0.86 };
+  }
+
+  function menuPoint() {
+    const m = metrics();
+    return { x: Math.max(m.visibleLeft + 28, m.visibleRight - 28), y: Math.max(24, m.height * 0.05) };
+  }
+
+  function heatPoint() {
+    const m = metrics();
+    return { x: Math.max(m.visibleLeft + 26, Math.min(m.width * 0.85, m.visibleRight - 26)), y: m.height - Math.max(17, m.height * 0.013) };
+  }
+
+  function spawnAura(kind, startPoint) {
+    const m = metrics();
+    const start = startPoint || humanPoint();
+    const target = { x: m.width * 0.5, y: Math.max(26, m.height * 0.043) };
+    const outSign = Math.random() < 0.5 ? -1 : 1;
+    const outX = outSign * U.rand(m.width * 0.022, m.width * 0.096);
+    const up = U.rand(m.height * 0.032, m.height * 0.08);
+    const wiggle = outSign * U.rand(m.width * 0.012, m.width * 0.03);
+    const dx = target.x - start.x;
+    const dy = target.y - start.y;
+    const particle = document.createElement("span");
+    particle.className = `aura-particle ${kind || "normal"}`;
+    particle.style.left = `${start.x}px`;
+    particle.style.top = `${start.y}px`;
+    refs.particleLayer.appendChild(particle);
+    const duration = kind === "boost" ? U.rand(1120, 1420) : U.rand(940, 1180);
+    const scalePeak = kind === "boost" ? 1.18 : 0.98;
+    const animation = particle.animate([
+      { opacity: 0, transform: "translate(-50%, -50%) translate(0, 11px) rotate(-12deg) scale(0.14)", offset: 0 },
+      { opacity: 0.58, transform: `translate(-50%, -50%) translate(${wiggle * 0.4}px, ${-up * 0.2}px) rotate(8deg) scale(0.54)`, offset: 0.16 },
+      { opacity: 1, transform: `translate(-50%, -50%) translate(${outX * 0.42}px, ${-up * 0.68}px) rotate(-10deg) scale(${scalePeak})`, offset: 0.42 },
+      { opacity: 0.98, transform: `translate(-50%, -50%) translate(${outX}px, ${-up * 0.62}px) rotate(6deg) scale(${scalePeak * 0.95})`, offset: 0.56 },
+      { opacity: 0.92, transform: `translate(-50%, -50%) translate(${outX * 0.7}px, ${-up * 0.08}px) rotate(0deg) scale(0.74)`, offset: 0.7 },
+      { opacity: 0, transform: `translate(-50%, -50%) translate(${dx}px, ${dy}px) rotate(16deg) scale(0.22)`, offset: 1 }
+    ], { duration, easing: "cubic-bezier(0.19, 0.78, 0.16, 1)", fill: "forwards" });
+    animation.onfinish = () => particle.remove();
+    animation.oncancel = () => particle.remove();
+  }
+
+  function spawnSweat(amount, startPoint) {
+    const m = metrics();
+    const start = startPoint || cameraPoint();
+    const target = heatPoint();
+    const total = Math.max(1, Math.min(8, Math.ceil((Number(amount) || 0) * 8)));
+    for (let i = 0; i < total; i += 1) {
+      window.setTimeout(() => {
+        const particle = document.createElement("span");
+        const wobble = U.rand(-m.width * 0.06, m.width * 0.06);
+        particle.className = "aura-particle sweat";
+        particle.style.left = `${start.x + U.rand(-10, 10)}px`;
+        particle.style.top = `${start.y + U.rand(-10, 10)}px`;
+        refs.particleLayer.appendChild(particle);
+        const dx = target.x - start.x;
+        const dy = target.y - start.y;
+        const animation = particle.animate([
+          { opacity: 0, transform: "translate(-50%, -50%) scale(0.22)", offset: 0 },
+          { opacity: 1, transform: `translate(-50%, -50%) translate(${wobble}px, -26px) scale(0.92)`, offset: 0.32 },
+          { opacity: 0, transform: `translate(-50%, -50%) translate(${dx}px, ${dy}px) scale(0.22)`, offset: 1 }
+        ], { duration: U.rand(640, 860), easing: "cubic-bezier(.22,.76,.22,1)", fill: "forwards" });
+        animation.onfinish = () => particle.remove();
+        animation.oncancel = () => particle.remove();
+      }, i * 44);
+    }
+  }
+
+  function spawnChillBurst(count) {
+    const m = metrics();
+    const visibleLeft = Math.max(m.visibleLeft + 26, m.width * 0.08);
+    const visibleRight = Math.min(m.visibleRight - 26, m.width * 0.92);
+    const y = m.height - Math.max(15, m.height * 0.014);
+    const total = Math.max(5, Math.min(18, Math.round(count || 8)));
+    for (let i = 0; i < total; i += 1) {
+      const spread = total === 1 ? 0.5 : i / (total - 1);
+      const x = U.rand(visibleLeft + (visibleRight - visibleLeft) * Math.max(0, spread - 0.08), visibleLeft + (visibleRight - visibleLeft) * Math.min(1, spread + 0.08));
+      window.setTimeout(() => spawnAura("chill", { x, y }), i * 34);
+    }
+  }
+
+  function cameraFlash() {
+    refs.cameraButton.classList.add("pulse");
+    window.setTimeout(() => refs.cameraButton.classList.remove("pulse"), 120);
+    const flash = document.createElement("span");
+    flash.className = "camera-flash";
+    refs.stage.appendChild(flash);
+    flash.addEventListener("animationend", () => flash.remove(), { once: true });
+  }
+
+  function flashUpgrade(effect) {
+    const targets = [];
+    if (effect === "flat" || effect === "chance" || effect === "spawnValue") targets.push(refs.counterWrap, refs.tierMeter);
+    if (effect === "clickPower") targets.push(refs.cameraButton);
+    if (effect === "heatDecay") targets.push(refs.heatMeter);
+    if (effect === "chillTimer" || effect === "chillReward") targets.push(refs.idleMeter);
+    for (const target of targets) {
+      if (!target) continue;
+      target.classList.remove("glow-gold");
+      void target.offsetWidth;
+      target.classList.add("glow-gold");
+      window.setTimeout(() => target.classList.remove("glow-gold"), 820);
+    }
+  }
+
+  function renderStat(container, stat) {
+    container.textContent = "";
+    if (!stat) return;
+    if (stat.number) {
+      const number = document.createElement("span");
+      number.className = "stat-num";
+      number.textContent = stat.number;
+      container.appendChild(number);
+    } else if (stat.before) {
+      container.append(document.createTextNode(stat.before));
+    }
+    if (stat.icon === "sparkle") container.appendChild(createMaskedIcon(Data.AURA, "stat-icon sparkle"));
+    if (stat.icon === "camera") container.appendChild(createMaskedIcon(Data.CAMERA, "stat-icon camera"));
+    if (stat.icon === "sweat") container.appendChild(createMaskedIcon(Data.SWEAT, "stat-icon sweat"));
+    if (stat.text) {
+      const text = document.createElement("span");
+      text.className = "stat-text";
+      text.textContent = stat.text;
+      container.appendChild(text);
+    } else if (stat.after) {
+      container.append(document.createTextNode(stat.after));
+    }
+  }
+
+  function renderBoosts(slots, onClick) {
+    refs.boostSidebar.textContent = "";
+    for (const slot of slots) {
+      const button = document.createElement("button");
+      button.className = "boost-button disabled";
+      button.type = "button";
+      button.dataset.boostId = slot.id;
+      button.style.setProperty("--ready", "0");
+      button.innerHTML = '<span class="boost-icon-wrap"><span class="masked-icon boost-icon boost-main" aria-hidden="true"></span></span><span class="boost-label"></span>';
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        onClick(slot.id);
+      });
+      refs.boostSidebar.appendChild(button);
+    }
+    updateBoosts(slots);
+  }
+
+  function updateBoosts(slots) {
+    for (const slot of slots) {
+      const button = refs.boostSidebar.querySelector(`[data-boost-id="${CSS.escape(slot.id)}"]`);
+      if (!button) continue;
+      button.classList.toggle("active", Boolean(slot.available));
+      button.classList.toggle("disabled", !slot.available);
+      button.style.setProperty("--ready", String(U.clamp(slot.ready || 0, 0, 1)));
+      button.setAttribute("aria-label", slot.statLabel || slot.name || slot.id);
+      const icon = button.querySelector(".boost-main");
+      if (icon && slot.icon) icon.style.setProperty("--icon-mask", iconMaskUrl(slot.icon));
+      const label = button.querySelector(".boost-label");
+      renderStat(label, slot.stat);
+    }
+  }
+
+  function boostPoint(id) {
+    const button = refs.boostSidebar && refs.boostSidebar.querySelector(`[data-boost-id="${CSS.escape(id)}"]`);
+    const stageRect = refs.stage.getBoundingClientRect();
+    if (!button) return cameraPoint();
+    const rect = button.getBoundingClientRect();
+    return { x: rect.left - stageRect.left + rect.width * 0.5, y: rect.top - stageRect.top + rect.height * 0.42 };
+  }
+
+  function popBlockDust(id) {
+    const point = boostPoint(id);
+    for (let i = 0; i < 7; i += 1) {
+      const dust = document.createElement("span");
+      dust.className = "block-dust";
+      dust.style.left = `${point.x}px`;
+      dust.style.top = `${point.y}px`;
+      refs.particleLayer.appendChild(dust);
+      const dx = U.rand(-22, 22);
+      const dy = U.rand(-26, 18);
+      const animation = dust.animate([
+        { opacity: 0.72, transform: "translate(-50%, -50%) scale(0.7)" },
+        { opacity: 0, transform: `translate(-50%, -50%) translate(${dx}px, ${dy}px) scale(${U.rand(0.15, 0.45)})` }
+      ], { duration: U.rand(340, 520), easing: "cubic-bezier(.2,.7,.2,1)", fill: "forwards" });
+      animation.onfinish = () => dust.remove();
+      animation.oncancel = () => dust.remove();
+    }
+  }
+
+  function showToast(text, important) {
+    if (!text) return;
+    window.clearTimeout(toastTimer);
+    refs.toast.textContent = text;
+    refs.toast.classList.toggle("important", Boolean(important));
+    refs.toast.classList.add("show");
+    toastTimer = window.setTimeout(() => refs.toast.classList.remove("show", "important"), important ? 2500 : 2100);
+  }
+
+  function toggleFullscreen() {
+    const target = refs.stage;
+    if (!document.fullscreenElement) {
+      if (target.requestFullscreen) target.requestFullscreen().catch(() => {});
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }
+
+  window.AuraUI = { init, refs, metrics, syncCrop, setAura, setMeters, humanPoint, cameraPoint, menuPoint, heatPoint, spawnAura, spawnSweat, spawnChillBurst, cameraFlash, flashUpgrade, renderBoosts, updateBoosts, boostPoint, popBlockDust, showToast, toggleFullscreen };
+})();
+
+</script>
+
+  <script>
+(function () {
+  "use strict";
+
+  const U = window.AuraUtils;
+  const Data = window.AuraData;
+  const UI = window.AuraUI;
+  const Store = window.AuraState;
+  const C = Data.constants;
+
+  let state;
+  let lastTickAt = Date.now();
+  let nextSaveAt = 0;
+  let nextTargetAt = 0;
+  let targetActiveBoosts = 1;
+  let boostSlots = [];
+
+  function init() {
+    UI.init();
+    state = Store.load();
+    state.chillBoostMultiplier = Math.max(1, Number(state.chillBoostMultiplier) || 1);
+    state.heatDecayBonus = Math.max(0, Number(state.heatDecayBonus) || 0);
+    UI.setAura(state.aura);
+    UI.setMeters(0, state.heat, tierProgress());
+    initBoostSlots();
+    UI.renderBoosts(boostSlots, takeBoost);
+    UI.refs.cameraButton.addEventListener("click", takePicture);
+    UI.refs.menuButton.addEventListener("click", openNothingMenu);
+    UI.refs.fullscreenButton.addEventListener("click", UI.toggleFullscreen);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) Store.save(state);
+      else {
+        const now = Date.now();
+        state.lastActionAt = now;
+        state.lastChillBoostAt = now;
+        lastTickAt = now;
+        for (const slot of boostSlots) disableSlot(slot, now, U.rand(400, 2600));
+      }
+    });
+    window.setInterval(tick, C.TICK_MS);
+  }
+
+  function initBoostSlots() {
+    const now = Date.now();
+    boostSlots = Data.boostTypes.map((template, index) => {
+      const slot = { ...template, available: false, disabledAt: now, cooldownMs: U.rand(600, 5200) + index * 120, readyAt: now + U.rand(600, 5200) + index * 120, ready: 0, tier: currentTier(), value: 0, icon: template.icons[0], stat: null, statLabel: "" };
+      prepareSlotPreview(slot);
+      return slot;
+    });
+  }
+
+  function tick() {
+    const now = Date.now();
+    const dt = Math.max(0.001, Math.min(0.25, (now - lastTickAt) / 1000));
+    lastTickAt = now;
+    decayHeat(dt);
+    maybeNaturalAura();
+    maybeChillBoost(now);
+    updateBoostAvailability(now);
+    updateMeters(now);
+    maybeSave(now);
+  }
+
+  function currentTier() {
+    const aura = Math.max(0, state ? state.aura || 0 : 0);
+    let tier = 0;
+    for (let i = 0; i < Data.tierThresholds.length; i += 1) if (aura >= Data.tierThresholds[i]) tier = i;
+    return tier;
+  }
+
+  function tierProgress() {
+    const aura = Math.max(0, state.aura || 0);
+    const tier = currentTier();
+    const thresholds = Data.tierThresholds;
+    const start = thresholds[tier] || 0;
+    const end = thresholds[tier + 1] || (start + Math.max(1200, Math.floor(start * 1.2)));
+    return U.clamp((aura - start) / Math.max(1, end - start), 0, 1);
+  }
+
+  function currentChance() {
+    return U.clamp(C.BASE_CHANCE_PER_TICK + state.extraChancePerTick, 0, C.MAX_CHANCE_PER_TICK);
+  }
+
+  function maybeNaturalAura() {
+    if (!U.chance(currentChance())) return;
+    gainAura(state.auraPerSpawn, "normal");
+    state.totals.naturalSpawns += 1;
+  }
+
+  function maybeChillBoost(now) {
+    const idleFor = now - state.lastActionAt;
+    if (idleFor < state.chillDurationMs) return;
+    if (now - state.lastChillBoostAt < state.chillDurationMs) return;
+    const amount = Math.max(C.CHILL_BASE_AURA, state.aura * 0.01) * state.chillBoostMultiplier;
+    state.lastChillBoostAt = now;
+    state.totals.chillBoosts += 1;
+    state.aura += amount;
+    state.peakAura = Math.max(state.peakAura, state.aura);
+    UI.setAura(state.aura);
+    UI.spawnChillBurst(9);
+    UI.flashUpgrade("chillReward");
+  }
+
+  function gainAura(amount, visualKind, startPoint) {
+    const safe = Math.max(0, Number(amount) || 0);
+    if (safe <= 0) return;
+    state.aura += safe;
+    state.peakAura = Math.max(state.peakAura, state.aura);
+    UI.setAura(state.aura);
+    UI.spawnAura(visualKind || "normal", startPoint);
+  }
+
+  function registerAction(baseHeat, options) {
+    const now = Date.now();
+    state.lastActionAt = now;
+    state.lastChillBoostAt = now;
+    addHeat(baseHeat, options && options.important, options && options.point);
+  }
+
+  function addHeat(rawAmount, important, point) {
+    const scaled = Math.max(0, Number(rawAmount) || 0);
+    state.heat = U.clamp(state.heat + scaled, 0, 1.5);
+    if (scaled > 0.006) UI.spawnSweat(scaled, point || UI.cameraPoint());
+    if (important) UI.setMeters(0, state.heat, tierProgress());
+    checkHeatPenalty();
+  }
+
+  function decayHeat(dt) {
+    const decay = (C.HEAT_DECAY_BASE + state.heatDecayBonus) * dt;
+    state.heat = Math.max(0, state.heat - decay);
+  }
+
+  function checkHeatPenalty() {
+    if (state.heat < 1) return;
+    state.aura = 0;
+    state.lastPenaltyAt = Date.now();
+    state.totals.penalties += 1;
+    state.heat = 0;
+    state.lastActionAt = Date.now();
+    state.lastChillBoostAt = Date.now();
+    UI.setAura(state.aura);
+    UI.flashUpgrade("heatDecay");
+    UI.showToast("Aura wiped. [full 💦]", true);
+    Store.save(state);
+  }
+
+  function takePicture() {
+    const now = Date.now();
+    const since = now - state.lastClickAt;
+    state.clickChain = since < 850 ? state.clickChain + 1 : 0;
+    state.lastClickAt = now;
+    const spamHeat = Math.min(0.08, state.clickChain * 0.0085);
+    registerAction(0.026 + spamHeat, { important: true, point: UI.cameraPoint() });
+    state.totals.cameraClicks += 1;
+    UI.cameraFlash();
+    gainAura(state.clickPower, "camera", UI.cameraPoint());
+  }
+
+  function openNothingMenu() {
+    registerAction(0.003, { important: true, point: UI.menuPoint() });
+    UI.showToast(U.pick(Math.random() < 0.22 ? Data.tips : Data.jokes), false);
+  }
+
+  function updateMeters(now) {
+    const anchor = Math.max(state.lastActionAt, state.lastChillBoostAt || state.lastActionAt);
+    const idleProgress = U.clamp((now - anchor) / state.chillDurationMs, 0, 1);
+    UI.setMeters(idleProgress, state.heat, tierProgress());
+  }
+
+  function maybeSave(now) {
+    if (now < nextSaveAt) return;
+    nextSaveAt = now + 1200;
+    Store.save(state);
+  }
+
+  function pickActiveTarget() {
+    const heat = state.heat;
+    const weights = heat > 0.45
+      ? [{ n: 0, w: 0.04 }, { n: 1, w: 0.24 }, { n: 2, w: 0.43 }, { n: 3, w: 0.22 }, { n: 4, w: 0.07 }]
+      : heat > 0.35
+        ? [{ n: 0, w: 0.07 }, { n: 1, w: 0.35 }, { n: 2, w: 0.38 }, { n: 3, w: 0.16 }, { n: 4, w: 0.04 }]
+        : [{ n: 0, w: 0.1 }, { n: 1, w: 0.44 }, { n: 2, w: 0.32 }, { n: 3, w: 0.12 }, { n: 4, w: 0.02 }];
+    return U.weightedPick(weights, (item) => item.w).n;
+  }
+
+  function updateBoostAvailability(now) {
+    if (now >= nextTargetAt) {
+      targetActiveBoosts = pickActiveTarget();
+      nextTargetAt = now + U.rand(1800, 2800);
+    }
+
+    for (const slot of boostSlots) {
+      if (slot.available && now > slot.expiresAt) disableSlot(slot, now);
+      if (!slot.available) slot.ready = U.clamp((now - slot.disabledAt) / Math.max(1, slot.cooldownMs), 0, 1);
+    }
+
+    let activeCount = boostSlots.filter((slot) => slot.available).length;
+    const readySlots = boostSlots.filter((slot) => !slot.available && now >= slot.readyAt);
+    while (activeCount < targetActiveBoosts && readySlots.length) {
+      const slot = readySlots.splice(Math.floor(Math.random() * readySlots.length), 1)[0];
+      activateSlot(slot, now);
+      activeCount += 1;
+    }
+    UI.updateBoosts(boostSlots);
+  }
+
+  function disableSlot(slot, now, customCooldown) {
+    slot.available = false;
+    slot.disabledAt = now;
+    slot.cooldownMs = customCooldown || U.rand(4200, 11800);
+    slot.readyAt = now + slot.cooldownMs;
+    slot.ready = 0;
+  }
+
+  function activateSlot(slot, now) {
+    const tier = currentTier();
+    slot.available = true;
+    slot.tier = tier;
+    slot.icon = slot.icons[tier] || slot.icons[slot.icons.length - 1];
+    slot.value = randomizedValue(slot.bases[tier] || slot.bases[slot.bases.length - 1], slot.effect);
+    slot.expiresAt = now + U.rand(7000, 13000);
+    slot.ready = 1;
+    slot.stat = statParts(slot);
+    slot.statLabel = statLabel(slot);
+    UI.popBlockDust(slot.id);
+  }
+
+  function prepareSlotPreview(slot) {
+    const tier = currentTier();
+    slot.tier = tier;
+    slot.icon = slot.icons[tier] || slot.icons[slot.icons.length - 1];
+    slot.value = slot.bases[tier] || slot.bases[slot.bases.length - 1];
+    slot.stat = statParts(slot);
+    slot.statLabel = statLabel(slot);
+  }
+
+  function randomBell() {
+    let total = 0;
+    for (let i = 0; i < 6; i += 1) total += Math.random();
+    return total / 6 - 0.5;
+  }
+
+  function randomizedValue(base, effect) {
+    let multiplier = Math.exp(randomBell() * 1.35);
+    const roll = Math.random();
+    if (roll < 0.03) multiplier *= U.rand(1.9, 4.2);
+    else if (roll < 0.15) multiplier *= U.rand(1.25, 1.8);
+    multiplier = U.clamp(multiplier, 0.65, 4.5);
+    const value = base * multiplier;
+    if (effect === "flat") return Math.max(1, Math.round(value));
+    if (effect === "chance" || effect === "chillReward") return Math.max(0.001, Number(value.toFixed(4)));
+    if (effect === "chillTimer") return Math.max(0.1, Number(value.toFixed(1)));
+    if (effect === "heatDecay") return Math.max(0.001, Number(value.toFixed(3)));
+    return Math.max(0.01, Number(value.toFixed(2)));
+  }
+
+  function statParts(slot) {
+    switch (slot.effect) {
+      case "chance": return { number: `+${U.formatPercent(slot.value)}%`, icon: "sparkle", text: "chance" };
+      case "spawnValue": return { number: `+${U.formatDecimal(slot.value)}`, icon: "sparkle", text: "/aura" };
+      case "clickPower": return { number: `+${U.formatDecimal(slot.value)}`, icon: "camera", text: "/photo" };
+      case "flat": return { number: `+${U.formatShortNumber(slot.value)}`, icon: "sparkle", text: "aura" };
+      case "heatDecay": return { number: `+${U.formatDecimal(slot.value)}`, icon: "sweat", text: "fade/s" };
+      case "chillTimer": return { number: `-${U.formatDecimal(slot.value)}s`, icon: null, text: "chill timer" };
+      case "chillReward": return { number: `+${U.formatPercent(slot.value)}%`, icon: null, text: "chill reward" };
+      default: return { before: "+", icon: "sparkle", after: "" };
+    }
+  }
+
+  function statLabel(slot) {
+    switch (slot.effect) {
+      case "chance": return `+${U.formatPercent(slot.value)}% ${Data.AURA} chance`;
+      case "spawnValue": return `+${U.formatDecimal(slot.value)}/${Data.AURA}`;
+      case "clickPower": return `+${U.formatDecimal(slot.value)}/${Data.CAMERA}`;
+      case "flat": return `+${U.formatShortNumber(slot.value)}${Data.AURA}`;
+      case "heatDecay": return `+${U.formatDecimal(slot.value)} ${Data.SWEAT} fade/s`;
+      case "chillTimer": return `-${U.formatDecimal(slot.value)}s chill timer`;
+      case "chillReward": return `+${U.formatPercent(slot.value)}% chill reward`;
+      default: return `+${Data.AURA}`;
+    }
+  }
+
+  function takeBoost(id) {
+    const slot = boostSlots.find((item) => item.id === id);
+    if (!slot || !slot.available) return;
+    const point = UI.boostPoint(id);
+    slot.available = false;
+    applyBoost(slot, point);
+    addHeat(slot.heat, true, point);
+    disableSlot(slot, Date.now());
+    const message = (slot.messages && slot.messages[slot.tier]) || "Upgrade found.";
+    UI.showToast(`${message} [${slot.statLabel}]`, false);
+    UI.updateBoosts(boostSlots);
+    Store.save(state);
+  }
+
+  function applyBoost(slot, point) {
+    switch (slot.effect) {
+      case "chance": state.extraChancePerTick = Math.min(C.MAX_CHANCE_PER_TICK - C.BASE_CHANCE_PER_TICK, state.extraChancePerTick + slot.value); break;
+      case "spawnValue": state.auraPerSpawn += slot.value; break;
+      case "clickPower": state.clickPower += slot.value; break;
+      case "flat": gainAura(slot.value, "boost", point); break;
+      case "heatDecay": state.heatDecayBonus += slot.value; break;
+      case "chillTimer": state.chillDurationMs = Math.max(C.MIN_CHILL_MS, state.chillDurationMs - (slot.value * 1000)); break;
+      case "chillReward": state.chillBoostMultiplier += slot.value; break;
+      default: break;
+    }
+    UI.flashUpgrade(slot.effect);
+    state.peakAura = Math.max(state.peakAura, state.aura);
+    UI.setAura(state.aura);
+  }
+
+  window.addEventListener("DOMContentLoaded", init, { once: true });
+})();
+
+</script>
+</body>
+</html>
