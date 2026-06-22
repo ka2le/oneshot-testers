@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Incremental Aura Farming</title>
+  <link rel="stylesheet" href="aura-farm/css/styles.css">
+</head>
+<body>
+  <main id="game" class="game-stage" aria-label="Incremental Aura Farming">
+    <div class="scene-vignette" aria-hidden="true"></div>
+
+    <button id="fullscreenButton" class="icon-button fullscreen-button" type="button" aria-label="Fullscreen">
+      <span class="fullscreen-glyph" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    </button>
+
+    <button id="menuButton" class="icon-button menu-button" type="button" aria-label="Menu">
+      <span class="hamburger-glyph" aria-hidden="true"><i></i><i></i><i></i></span>
+    </button>
+
+    <div class="aura-counter" aria-live="polite" aria-atomic="true">
+      <span class="counter-icon sparkle-icon masked-icon" aria-hidden="true"></span>
+      <span id="auraCounter">0</span>
+    </div>
+
+    <div class="tier-meter" aria-hidden="true"><span id="tierFill"></span></div>
+
+    <nav id="boostSidebar" class="boost-sidebar" aria-label="Aura boosts"></nav>
+    <section id="particleLayer" class="particle-layer" aria-hidden="true"></section>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <button id="cameraButton" class="camera-button" type="button" aria-label="Camera"></button>
+
+    <div class="idle-meter" aria-hidden="true"><span id="idleFill"></span></div>
+    <div class="heat-meter" aria-hidden="true"><span id="heatFill"></span></div>
+  </main>
+
+  <script defer src="aura-farm/js/utils.js"></script>
+  <script defer src="aura-farm/js/data.js"></script>
+  <script defer src="aura-farm/js/state.js"></script>
+  <script defer src="aura-farm/js/ui.js"></script>
+  <script defer src="aura-farm/js/game.js"></script>
+</body>
+</html>
