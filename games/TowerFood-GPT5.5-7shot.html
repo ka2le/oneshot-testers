@@ -1,0 +1,2126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BBQ Awakening Grand - Tower Defence</title>
+  <style>
+    :root {
+      --bg:#21130d; --panel:#352017; --panel2:#462b1d; --text:#fff3dd; --muted:#d8b98d;
+      --accent:#ffb347; --accent2:#ff6738; --good:#7ee08b; --bad:#ff6b6b;
+      --line:#5b3726; --shadow:rgba(0,0,0,.35); --blue:#9ce8ff; --green:#78ff94;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; background:radial-gradient(circle at 50% 0%, #60351e 0%, #26160f 40%, #140d09 100%);
+      color:var(--text); font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; overflow:hidden;
+    }
+    button, select { font:inherit; color:inherit; border:0; }
+    button { cursor:pointer; }
+    button:disabled { cursor:not-allowed; opacity:.45; filter:grayscale(.4); }
+    select {
+      width:100%; padding:10px 12px; border-radius:13px; background:rgba(255,255,255,.08);
+      border:1px solid rgba(255,255,255,.12); outline:none;
+    }
+    .app { height:100vh; display:grid; grid-template-rows:auto 1fr auto; }
+    .topbar {
+      display:grid; grid-template-columns:minmax(300px, 1fr) minmax(640px, 1.55fr) minmax(330px, .92fr); gap:10px;
+      padding:10px; background:linear-gradient(180deg, rgba(61,35,22,.98), rgba(42,25,17,.96));
+      border-bottom:2px solid rgba(255,180,80,.25); box-shadow:0 8px 24px var(--shadow); z-index:3;
+    }
+    .brand { display:flex; align-items:center; gap:12px; min-width:0; }
+    .logo {
+      width:50px; height:50px; display:grid; place-items:center; border-radius:17px;
+      background:linear-gradient(145deg, #b24824, #f7a43a);
+      box-shadow:0 5px 18px rgba(255,100,30,.25), inset 0 2px 6px rgba(255,255,255,.25);
+      font-size:29px;
+    }
+    h1 { margin:0; font-size:20px; line-height:1.05; letter-spacing:.2px; }
+    .subtitle { margin-top:4px; color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .stats { display:flex; flex-wrap:wrap; gap:8px; align-content:center; }
+    .stat {
+      min-width:78px; padding:7px 9px; border-radius:12px; background:rgba(255,255,255,.07);
+      border:1px solid rgba(255,255,255,.08); box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .stat.wide { min-width:162px; }
+    .stat b { display:block; color:#fff; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .stat span { display:block; color:var(--muted); font-size:11px; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .actions { display:flex; flex-wrap:wrap; gap:8px; align-content:center; justify-content:flex-end; }
+    .primary, .secondary, .danger, .tiny, .mini {
+      border-radius:12px; padding:9px 12px; background:linear-gradient(180deg, #ff9e3c, #e7602f);
+      color:#24120a; font-weight:850; box-shadow:0 5px 13px rgba(255,90,35,.22), inset 0 1px 0 rgba(255,255,255,.25);
+    }
+    .secondary, .mini {
+      background:linear-gradient(180deg, #65422d, #43291d); color:var(--text);
+      border:1px solid rgba(255,255,255,.1); font-weight:750; box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .danger { background:linear-gradient(180deg, #fe7575, #cf3434); color:#2a0d0d; }
+    .tiny { padding:5px 8px; border-radius:9px; font-size:12px; white-space:nowrap; }
+    .mini { padding:7px 9px; border-radius:10px; font-size:12px; }
+    .gameShell { min-height:0; display:grid; grid-template-columns:1fr 430px; gap:10px; padding:10px; }
+    .boardWrap {
+      min-width:0; min-height:0; position:relative; border-radius:22px; overflow:hidden;
+      border:2px solid rgba(255,194,105,.28); background:#2b1b13; box-shadow:0 12px 35px rgba(0,0,0,.42);
+    }
+    canvas { width:100%; height:100%; display:block; background:#372318; }
+    .boardSell {
+      position:absolute; z-index:12; display:none; min-width:118px; padding:7px 10px; border-radius:999px;
+      background:linear-gradient(180deg, #ffd38b, #ff8f3c); color:#2a1207; font-size:12px; font-weight:900;
+      border:1px solid rgba(255,255,255,.35); box-shadow:0 8px 18px rgba(0,0,0,.35);
+      transform:translate(-50%, 0);
+    }
+    .boardSell.show { display:block; }
+    .boardTargets {
+      position:absolute; z-index:13; display:none; gap:5px; padding:5px; border-radius:999px;
+      background:rgba(19,10,6,.78); border:1px solid rgba(255,255,255,.16); box-shadow:0 8px 18px rgba(0,0,0,.35);
+      transform:translate(-50%, 0);
+    }
+    .boardTargets.show { display:flex; }
+    .targetBtn {
+      width:31px; height:31px; display:grid; place-items:center; border-radius:50%;
+      background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.1); font-size:16px;
+    }
+    .targetBtn.active {
+      background:linear-gradient(180deg, #ffd38b, #ff8f3c); color:#2a1207;
+      box-shadow:0 0 0 2px rgba(255,255,255,.16);
+    }
+    .floatMsg {
+      position:absolute; left:14px; bottom:14px; max-width:680px; padding:9px 12px; border-radius:14px;
+      background:rgba(23,13,9,.78); border:1px solid rgba(255,255,255,.12); color:var(--text);
+      font-size:13px; pointer-events:none; opacity:0; transform:translateY(8px); transition:.2s ease;
+    }
+    .floatMsg.show { opacity:1; transform:translateY(0); }
+    .toast {
+      position:absolute; top:16px; left:50%; transform:translateX(-50%); padding:10px 14px; border-radius:14px;
+      background:rgba(23,13,9,.88); border:1px solid rgba(255,255,255,.12); box-shadow:0 10px 28px rgba(0,0,0,.35);
+      color:#ffe8bf; font-weight:850; z-index:10; opacity:0; pointer-events:none; transition:.2s ease;
+    }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(6px); }
+    .sidebar { min-width:0; min-height:0; overflow:hidden; display:grid; grid-template-rows:1.02fr .98fr; gap:10px; }
+    .panel {
+      background:linear-gradient(180deg, rgba(70,43,29,.94), rgba(49,30,21,.94));
+      border:1px solid rgba(255,255,255,.1); border-radius:18px; box-shadow:0 8px 24px var(--shadow), inset 0 1px 0 rgba(255,255,255,.06);
+      overflow:hidden;
+    }
+    .towerPanel, .upgradePanel { min-height:0; display:flex; flex-direction:column; }
+    .panelHeader {
+      padding:11px 12px; border-bottom:1px solid rgba(255,255,255,.08);
+      display:flex; justify-content:space-between; align-items:center; gap:10px; flex:0 0 auto;
+    }
+    .panelHeader h2 { margin:0; font-size:15px; letter-spacing:.2px; }
+    .panelBody { padding:12px; }
+    .towerPanel .panelBody, .upgradePanel .panelBody { min-height:0; overflow:auto; }
+    .towerList, .upgradeList { display:grid; gap:8px; }
+    .towerCard, .upgradeCard {
+      border-radius:15px; background:rgba(255,255,255,.055); border:1px solid rgba(255,255,255,.08);
+      transition:.15s ease; overflow:hidden;
+    }
+    .towerCard.selected, .upgradeCard.unlocked { outline:2px solid rgba(255,179,71,.75); background:rgba(255,176,67,.13); }
+    .towerHeader {
+      width:100%; display:grid; grid-template-columns:40px 1fr auto; gap:9px; align-items:center; padding:8px;
+      background:transparent; text-align:left;
+    }
+    .towerIcon {
+      width:40px; height:40px; display:grid; place-items:center; border-radius:13px;
+      background:rgba(20,10,5,.38); font-size:24px; border:1px solid rgba(255,255,255,.08);
+    }
+    .towerHeader h3, .upgradeCard h3 { margin:0; font-size:13px; }
+    .towerHeader p, .upgradeCard p { margin:2px 0 0; color:var(--muted); font-size:10.5px; line-height:1.25; }
+    .price { font-weight:900; color:#ffe6a8; white-space:nowrap; font-size:12px; }
+    .towerDetails {
+      display:none; padding:9px; border-top:1px solid rgba(255,255,255,.08); background:rgba(0,0,0,.14);
+    }
+    .towerCard.selected .towerDetails { display:grid; gap:8px; }
+    .detailGrid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+    .detailPill {
+      padding:6px 7px; border-radius:10px; background:rgba(255,255,255,.06); color:var(--muted); font-size:11px;
+      border:1px solid rgba(255,255,255,.06);
+    }
+    .detailPill b { display:block; color:var(--text); font-size:12px; margin-top:1px; }
+    .upgradeRow, .globalRow, .specialRow {
+      display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; padding:8px; border-radius:12px;
+      background:rgba(255,255,255,.055); border:1px solid rgba(255,255,255,.07);
+    }
+    .globalRow { grid-template-columns:34px 1fr auto; }
+    .upgradeRow b, .globalRow b, .specialRow b { font-size:12px; }
+    .upgradeRow span, .globalRow span, .specialRow span {
+      display:block; color:var(--muted); font-size:10.5px; margin-top:2px; line-height:1.25;
+    }
+    .sectionLabel {
+      margin:4px 0 -2px; color:#ffe0a6; font-size:11px; text-transform:uppercase; letter-spacing:.7px; font-weight:900;
+    }
+    .lockedUpgrades {
+      padding:8px; border-radius:12px; background:rgba(0,0,0,.16); border:1px solid rgba(255,255,255,.07);
+      color:var(--muted); font-size:11px;
+    }
+    .help { color:var(--muted); font-size:12px; line-height:1.45; }
+    .footer {
+      padding:8px 12px; color:#c8a87c; font-size:12px; display:flex; justify-content:space-between; gap:12px;
+      background:rgba(15,9,6,.8); border-top:1px solid rgba(255,255,255,.06);
+    }
+    .menuOverlay {
+      position:fixed; inset:0; z-index:50; display:grid; place-items:center; padding:20px;
+      background:radial-gradient(circle at 50% 15%, rgba(141,72,29,.92), rgba(24,13,8,.96) 56%, rgba(7,4,3,.98));
+    }
+    .menuOverlay.hidden { display:none; }
+    .menuCard {
+      width:min(1100px, 96vw); max-height:92vh; overflow:auto; border-radius:28px; padding:24px;
+      background:linear-gradient(180deg, rgba(70,43,29,.97), rgba(29,17,11,.97));
+      border:1px solid rgba(255,223,160,.22); box-shadow:0 28px 70px rgba(0,0,0,.58), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .menuTop { display:grid; grid-template-columns:1fr auto; gap:18px; align-items:start; margin-bottom:18px; }
+    .menuTop h2 { margin:0; font-size:36px; line-height:1; }
+    .menuTop p { margin:8px 0 0; max-width:760px; color:var(--muted); line-height:1.45; }
+    .menuSeal {
+      width:110px; height:110px; display:grid; place-items:center; border-radius:30px;
+      background:linear-gradient(145deg, #ff9e3c, #d94129); color:#2a1207; font-size:54px;
+      box-shadow:inset 0 3px 9px rgba(255,255,255,.25), 0 20px 35px rgba(0,0,0,.28);
+    }
+    .menuGrid { display:grid; grid-template-columns:1.3fr .7fr; gap:14px; }
+    .levelGrid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; }
+    .levelCard {
+      min-height:142px; text-align:left; padding:14px; border-radius:18px; background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.1); display:flex; flex-direction:column; justify-content:space-between;
+    }
+    .levelCard.selected { outline:2px solid var(--accent); background:rgba(255,179,71,.14); }
+    .levelCard h3 { margin:0; font-size:16px; }
+    .levelCard p { margin:5px 0 0; color:var(--muted); font-size:12px; line-height:1.35; }
+    .tagLine { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+    .tag {
+      padding:4px 7px; border-radius:999px; background:rgba(255,255,255,.08);
+      border:1px solid rgba(255,255,255,.08); font-size:11px; color:#ffe2b0;
+    }
+    .menuSide {
+      display:flex; flex-direction:column; gap:10px; padding:14px; border-radius:18px; background:rgba(0,0,0,.14);
+      border:1px solid rgba(255,255,255,.08);
+    }
+    .menuSide h3 { margin:0; font-size:16px; }
+    .menuSide label { display:grid; gap:6px; font-size:12px; color:var(--muted); }
+    .rules {
+      padding:10px; border-radius:14px; background:rgba(255,255,255,.055); border:1px solid rgba(255,255,255,.08);
+      color:var(--muted); font-size:12px; line-height:1.45;
+    }
+    @media (max-width: 1120px) {
+      body { overflow:auto; }
+      .app { height:auto; min-height:100vh; }
+      .topbar { grid-template-columns:1fr; }
+      .actions { justify-content:flex-start; }
+      .gameShell { grid-template-columns:1fr; }
+      .boardWrap { height:62vh; min-height:430px; }
+      .sidebar { overflow:visible; grid-template-rows:auto auto; }
+      .towerPanel .panelBody, .upgradePanel .panelBody { overflow:visible; }
+      .menuGrid { grid-template-columns:1fr; }
+    }
+    @media (max-width: 700px) {
+      .levelGrid { grid-template-columns:1fr; }
+      .menuTop { grid-template-columns:1fr; }
+      .menuSeal { display:none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🔥</div>
+        <div>
+          <h1>BBQ Awakening Grand</h1>
+          <div class="subtitle">A larger BBQ tower defence with level selection, prestige upgrades, teleporters, fliers, armor, splitters, and boss feasts.</div>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="actions">
+        <button class="primary" id="startWaveBtn">Start Wave</button>
+        <button class="secondary" id="speedBtn">Speed: 1x</button>
+        <button class="secondary" id="pauseBtn">Pause</button>
+        <button class="secondary" id="menuBtn">Menu</button>
+        <button class="danger" id="restartBtn">Restart</button>
+      </div>
+    </header>
+
+    <main class="gameShell">
+      <section class="boardWrap">
+        <canvas id="game" width="1180" height="680"></canvas>
+        <div class="boardTargets" id="boardTargets">
+          <button class="targetBtn" data-target-mode="first" title="Target first">⏩</button>
+          <button class="targetBtn" data-target-mode="last" title="Target last">⏪</button>
+          <button class="targetBtn" data-target-mode="hp" title="Target highest HP">❤️</button>
+          <button class="targetBtn" data-target-mode="fast" title="Target fastest">💨</button>
+        </div>
+        <button class="boardSell" id="boardSellBtn">Sell</button>
+        <div class="floatMsg" id="floatMsg"></div>
+        <div class="toast" id="toast"></div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="panel towerPanel">
+          <div class="panelHeader"><h2>Towers</h2><span class="help">Select → place / upgrade</span></div>
+          <div class="panelBody">
+            <div class="towerList" id="towerList"></div>
+          </div>
+        </section>
+
+        <section class="panel upgradePanel">
+          <div class="panelHeader"><h2>Grand Upgrades</h2><span class="help">Expensive one-time buffs</span></div>
+          <div class="panelBody">
+            <div class="upgradeList" id="globalUpgradeList"></div>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <span>Grand: global upgrades, tower-specific prestige upgrades, mixed air/ground waves, teleport packs, splitters, stealth olives, armored ribs, and regenerating desserts.</span>
+      <span>Hotkeys: Space pause · Escape clear selection · 1-0 select tower.</span>
+    </footer>
+  </div>
+
+  <div class="menuOverlay" id="menuOverlay">
+    <div class="menuCard">
+      <div class="menuTop">
+        <div>
+          <h2>BBQ Awakening Grand</h2>
+          <p>Choose a level, pick a starting wave, then spend sauce money on towers, global upgrades, and tower-specific prestige upgrades. Later waves combine fliers, tanks, fast swarms, teleport packs, stealth units, and boss feasts.</p>
+        </div>
+        <div class="menuSeal">🍖</div>
+      </div>
+      <div class="menuGrid">
+        <div>
+          <div class="sectionLabel">Level selector</div>
+          <div class="levelGrid" id="levelGrid"></div>
+        </div>
+        <div class="menuSide">
+          <h3>Run setup</h3>
+          <label>
+            Starting wave
+            <select id="startWaveSelect"></select>
+          </label>
+          <label>
+            Opening budget
+            <select id="budgetSelect">
+              <option value="normal">Normal BBQ budget</option>
+              <option value="rich">Rich test kitchen</option>
+              <option value="chaos">Chaos sandbox</option>
+            </select>
+          </label>
+          <button class="primary" id="menuStartBtn">Start Cookout</button>
+          <div class="rules">
+            <b>New threats:</b> 🥯 teleporters pause, flash forward, and drag nearby enemies with them. 🫒 stealth olives are hard to target until revealed. 🍖 armored ribs shrug off small hits. 🌭 splitters burst into swarms. 🍦 desserts regenerate.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const statsEl = document.getElementById("stats");
+      const towerListEl = document.getElementById("towerList");
+      const globalUpgradeListEl = document.getElementById("globalUpgradeList");
+      const floatMsgEl = document.getElementById("floatMsg");
+      const toastEl = document.getElementById("toast");
+      const startWaveBtn = document.getElementById("startWaveBtn");
+      const speedBtn = document.getElementById("speedBtn");
+      const pauseBtn = document.getElementById("pauseBtn");
+      const menuBtn = document.getElementById("menuBtn");
+      const restartBtn = document.getElementById("restartBtn");
+      const boardSellBtn = document.getElementById("boardSellBtn");
+      const boardTargetsEl = document.getElementById("boardTargets");
+      const menuOverlay = document.getElementById("menuOverlay");
+      const levelGridEl = document.getElementById("levelGrid");
+      const startWaveSelect = document.getElementById("startWaveSelect");
+      const budgetSelect = document.getElementById("budgetSelect");
+      const menuStartBtn = document.getElementById("menuStartBtn");
+
+      const W = canvas.width, H = canvas.height;
+      const TWO_PI = Math.PI * 2;
+      const MAX_UPGRADE_LEVEL = 5;
+      const blockedRadius = 46;
+
+      const levels = {
+        backyard: {
+          key:"backyard", name:"Backyard Brisket Bend", emoji:"🏕️", difficulty:"Standard", waves:42, startCash:190, lives:18, hpMult:1, rewardMult:1,
+          desc:"Classic long cookout lane with balanced corners. Best for learning the expanded upgrade economy.",
+          tags:["Balanced", "Long path", "Starter"],
+          path:[{x:-34,y:358}, {x:155,y:358}, {x:155,y:130}, {x:365,y:130}, {x:365,y:520}, {x:635,y:520}, {x:635,y:220}, {x:892,y:220}, {x:892,y:430}, {x:1215,y:430}]
+        },
+        smokehouse: {
+          key:"smokehouse", name:"Smokehouse Switchbacks", emoji:"🏭", difficulty:"Hard", waves:45, startCash:225, lives:16, hpMult:1.08, rewardMult:1.05,
+          desc:"A tight zigzag smokehouse where range upgrades and aura placement are very strong.",
+          tags:["Many turns", "Aura-friendly", "Hard"],
+          path:[{x:-40,y:105}, {x:160,y:105}, {x:160,y:575}, {x:330,y:575}, {x:330,y:130}, {x:520,y:130}, {x:520,y:555}, {x:718,y:555}, {x:718,y:162}, {x:910,y:162}, {x:910,y:480}, {x:1220,y:480}]
+        },
+        market: {
+          key:"market", name:"Night Market Run", emoji:"🏮", difficulty:"Aggressive", waves:44, startCash:250, lives:15, hpMult:1.02, rewardMult:1.08,
+          desc:"Shorter straights, more pressure, better rewards. Fliers and runners arrive early.",
+          tags:["Fast waves", "Short lanes", "More cash"],
+          path:[{x:-36,y:548}, {x:118,y:548}, {x:118,y:352}, {x:330,y:352}, {x:330,y:126}, {x:596,y:126}, {x:596,y:420}, {x:810,y:420}, {x:810,y:222}, {x:1028,y:222}, {x:1028,y:526}, {x:1216,y:526}]
+        },
+        festival: {
+          key:"festival", name:"Festival Feast Spiral", emoji:"🎪", difficulty:"Epic", waves:50, startCash:280, lives:14, hpMult:1.12, rewardMult:1.12,
+          desc:"A grand spiral arena designed for late-game prestige upgrades and ridiculous combined waves.",
+          tags:["Long run", "Late-game", "Epic"],
+          path:[{x:-38,y:342}, {x:126,y:342}, {x:126,y:92}, {x:1060,y:92}, {x:1060,y:590}, {x:232,y:590}, {x:232,y:218}, {x:934,y:218}, {x:934,y:468}, {x:430,y:468}, {x:430,y:342}, {x:1220,y:342}]
+        },
+        bossrush: {
+          key:"bossrush", name:"Royal Boss Rush", emoji:"👑", difficulty:"Punishing", waves:35, startCash:1325, lives:11, hpMult:1.24, rewardMult:1.18, forcedStart:10,
+          desc:"Starts late with huge funds. Bosses, armored food, and teleport packs appear almost immediately.",
+          tags:["Bosses", "High budget", "Punishing"],
+          path:[{x:-36,y:188}, {x:218,y:188}, {x:218,y:516}, {x:470,y:516}, {x:470,y:178}, {x:726,y:178}, {x:726,y:508}, {x:970,y:508}, {x:970,y:280}, {x:1218,y:280}]
+        }
+      };
+
+      const targetModes = {
+        first: { icon:"⏩", name:"First" },
+        last: { icon:"⏪", name:"Last" },
+        hp: { icon:"❤️", name:"Highest HP" },
+        fast: { icon:"💨", name:"Fastest" }
+      };
+
+      const enemyTypes = {
+        normal: { key:"normal", name:"Default Tomato", emoji:"🍅", hp:1, speed:1, reward:1, size:34, lifeCost:1, priority:0, color:"#82ef7b", slowImmune:false },
+        runner: { key:"runner", name:"Pepper Runner", emoji:"🌶️", hp:.46, speed:2.95, reward:1.18, size:28, lifeCost:1, priority:28, color:"#9ce8ff", slowImmune:false },
+        tank: { key:"tank", name:"Loaded Potato", emoji:"🥔", hp:4.75, speed:.55, reward:2.05, size:44, lifeCost:2, priority:62, color:"#d8a35e", slowImmune:false },
+        swarm: { key:"swarm", name:"Pretzel Swarm", emoji:"🥨", hp:.32, speed:1.42, reward:.44, size:25, lifeCost:1, priority:-14, color:"#f3e08a", slowImmune:false },
+        healer: { key:"healer", name:"Avocado Medic", emoji:"🥑", hp:1.45, speed:.86, reward:1.8, size:36, lifeCost:1, priority:80, color:"#7ee08b", slowImmune:false },
+        shielder: { key:"shielder", name:"Phase Apple", emoji:"🍏", hp:1.9, speed:.92, reward:1.75, size:36, lifeCost:1, priority:75, color:"#66b7ff", slowImmune:false },
+        candy: { key:"candy", name:"Candy Flier", emoji:"🍬", hp:.82, speed:1.55, reward:2.4, size:31, lifeCost:2, priority:120, color:"#ff9eea", slowImmune:true, flying:true },
+        boss: { key:"boss", name:"Boss Burger", emoji:"🍔", hp:8.25, speed:.55, reward:6.2, size:52, lifeCost:4, priority:150, color:"#ff6b6b", slowImmune:true },
+        armored: { key:"armored", name:"Armored Rib", emoji:"🍖", hp:3.55, speed:.72, reward:2.35, size:43, lifeCost:2, priority:94, color:"#caa178", armor:.18, slowImmune:false },
+        splitter: { key:"splitter", name:"Splitter Sausage", emoji:"🌭", hp:1.32, speed:1.08, reward:1.45, size:35, lifeCost:1, priority:66, color:"#f4b06e", splits:4, slowImmune:false },
+        regen: { key:"regen", name:"Regenerating Gelato", emoji:"🍦", hp:1.75, speed:.86, reward:1.9, size:37, lifeCost:1, priority:86, color:"#f6d7ff", regen:.035, slowImmune:false },
+        stealth: { key:"stealth", name:"Stealth Olive", emoji:"🫒", hp:.95, speed:1.72, reward:2.05, size:28, lifeCost:1, priority:130, color:"#c4e27a", stealth:true, slowImmune:false },
+        teleporter: { key:"teleporter", name:"Portal Bagel", emoji:"🥯", hp:2.45, speed:.76, reward:2.8, size:40, lifeCost:2, priority:170, color:"#d5a4ff", teleporter:true, slowImmune:false },
+        royal: { key:"royal", name:"Royal Brisket", emoji:"🥩", hp:12.5, speed:.48, reward:9.2, size:56, lifeCost:5, priority:200, color:"#ff9366", armor:.12, slowImmune:true }
+      };
+
+      const towerTypes = {
+        arrow: { key:"arrow", order:1, name:"Sauce Bow", emoji:"🏹", cost:70, range:145, damage:22, fireRate:1.72, splash:0, pctDps:0, slowPower:0, color:"#ffcf76", family:"single", upgrades:["damage","range","speed"] },
+        dynamite: { key:"dynamite", order:2, name:"Dynamite Grill", emoji:"🧨", cost:125, range:126, damage:25, fireRate:.52, splash:58, pctDps:0, slowPower:0, color:"#ff7251", family:"aoe", upgrades:["damage","range","speed"] },
+        pepper: { key:"pepper", order:3, name:"Pepper Mill", emoji:"🌶️", cost:185, range:152, damage:28, fireRate:.95, splash:0, pctDps:0, slowPower:0, color:"#ff806d", family:"chain", upgrades:["damage","range","speed"] },
+        rad: { key:"rad", order:4, name:"Radiant Coals", emoji:"☢️", cost:110, range:78, damage:0, fireRate:0, splash:0, pctDps:.028, slowPower:0, color:"#b7ff67", family:"percentAura", upgrades:["damage","range","speed"] },
+        frost: { key:"frost", order:5, name:"Chill Kettle", emoji:"🧊", cost:145, range:86, damage:0, fireRate:0, splash:0, pctDps:0, slowPower:.43, color:"#9ce8ff", family:"slowAura", upgrades:["range","speed"] },
+        sauce: { key:"sauce", order:6, name:"Sauce Fountain", emoji:"🍯", cost:280, range:116, damage:0, fireRate:0, splash:0, pctDps:0, slowPower:0, boostDamage:.18, boostFireRate:.14, boostRange:.05, color:"#ffca6b", family:"supportAura", upgrades:["range","speed"] },
+        sniper: { key:"sniper", order:7, name:"Long Pit Sniper", emoji:"🎯", cost:520, range:430, damage:390, fireRate:.16, splash:0, pctDps:0, slowPower:0, color:"#fff1a6", family:"sniper", upgrades:["damage","range"] },
+        sun: { key:"sun", order:8, name:"Sun Skewer", emoji:"☀️", cost:700, range:285, damage:154, fireRate:1.48, splash:0, pctDps:0, slowPower:0, color:"#ffe063", family:"single", upgrades:["damage","range","speed"], strongUpgrades:true },
+        bomb: { key:"bomb", order:9, name:"Pit Bomb", emoji:"💣", cost:1200, range:142, damage:175, fireRate:.36, splash:82, pctDps:0, slowPower:0, color:"#ff855c", family:"aoe", upgrades:["damage","range","speed"] },
+        bio: { key:"bio", order:10, name:"Bio Smoke", emoji:"☣️", cost:1050, range:94, damage:0, fireRate:0, splash:0, pctDps:.19, slowPower:.04, color:"#78ff94", family:"percentAura", upgrades:["damage","range","speed"] }
+      };
+
+      const upgradeDefs = {
+        damage: { name:"Heat", label:"Damage", baseCost:55, scale:1.74 },
+        range: { name:"Reach", label:"Range", baseCost:45, scale:1.68 },
+        speed: { name:"Tempo", label:"Speed", baseCost:50, scale:1.72 }
+      };
+
+      const globalUpgradeDefs = [
+        { key:"range10", icon:"📏", name:"Pitmaster Yardsticks", cost:950, desc:"All towers gain +10% range forever.", apply:s => { s.global.range *= 1.10; } },
+        { key:"damage12", icon:"🔥", name:"Secret Dry Rub", cost:1200, desc:"All direct damage and % tick damage gain +12%.", apply:s => { s.global.damage *= 1.12; } },
+        { key:"tempo10", icon:"🥁", name:"Kitchen Metronome", cost:1400, desc:"All attacking towers fire +10% faster.", apply:s => { s.global.fireRate *= 1.10; } },
+        { key:"economy", icon:"💰", name:"Premium Sauce Stand", cost:1100, desc:"Enemy rewards and wave bonuses pay +15% cash.", apply:s => { s.global.cashMult *= 1.15; } },
+        { key:"buildDisc", icon:"🧾", name:"Wholesale Charcoal", cost:1550, desc:"Future tower purchases cost 8% less.", apply:s => { s.global.buildCostMult *= .92; } },
+        { key:"reveal", icon:"🔦", name:"Smokehouse Lanterns", cost:850, desc:"Stealth olives become targetable by every tower.", apply:s => { s.global.revealStealth = true; } },
+        { key:"slowCraft", icon:"❄️", name:"Dry Ice Contracts", cost:1600, desc:"Slow effects last 35% longer and chilled targets flash brighter.", apply:s => { s.global.slowDuration *= 1.35; } },
+        { key:"lives", icon:"❤️", name:"Backup Picnic Tables", cost:1300, desc:"Instantly gain +4 lives and +2% score per wave clear.", apply:s => { s.lives += 4; s.global.scoreWaveBonus += .02; } },
+        { key:"interest", icon:"🏦", name:"Sauce Futures", cost:2200, desc:"Wave-clear bonuses gain another +12% cash.", apply:s => { s.global.waveBonusMult *= 1.12; } },
+        { key:"eliteAmmo", icon:"✨", name:"Grand Catering License", cost:3200, desc:"Every tower gains +5% damage, +5% range, and +5% fire rate.", apply:s => { s.global.damage *= 1.05; s.global.range *= 1.05; s.global.fireRate *= 1.05; } }
+      ];
+
+      const specialUpgradeDefs = {
+        arrow: [
+          { key:"twinSkewers", name:"Twin Skewers", cost:850, desc:"Sauce Bow fires a second shot at a nearby target." },
+          { key:"stickySauce", name:"Sticky Sauce Tips", cost:1250, desc:"Sauce Bow shots burn enemies for 4 seconds." }
+        ],
+        dynamite: [
+          { key:"greaseFire", name:"Grease Fire", cost:1600, desc:"Explosions leave burning grease zones on the track." },
+          { key:"megaKeg", name:"Mega Keg Charges", cost:2300, desc:"Dynamite splash radius +35% and blast damage +15%." }
+        ],
+        pepper: [
+          { key:"chainDinner", name:"Chain Dinner", cost:1500, desc:"Pepper Mill chain lightning hits two extra enemies." },
+          { key:"capsaicinStorm", name:"Capsaicin Storm", cost:2700, desc:"Chain hits apply a small burn and briefly reveal stealth." }
+        ],
+        rad: [
+          { key:"nuclearRub", name:"Nuclear Rub", cost:1350, desc:"Radiant Coals ignore armor and damage regenerators harder." },
+          { key:"meltdownPulse", name:"Meltdown Pulse", cost:2100, desc:"Every few seconds, emits a larger % damage pulse." }
+        ],
+        frost: [
+          { key:"universalChill", name:"Universal Chill", cost:2300, desc:"Chill Kettle works on bosses, fliers, phase apples, and other slow-immune enemies." },
+          { key:"cryoBrittle", name:"Cryo-Brittle Crust", cost:1600, desc:"Slowed enemies take 10% more damage from all towers." }
+        ],
+        sauce: [
+          { key:"executiveCatering", name:"Executive Catering", cost:2200, desc:"Support aura also gives every tower a weak global boost." },
+          { key:"tipJarDividend", name:"Tip Jar Dividend", cost:1800, desc:"Towers inside the aura generate small cash tips on kills." }
+        ],
+        sniper: [
+          { key:"penetrator", name:"Penetrating Bullets", cost:2600, desc:"Sniper bullets damage every enemy along their full trajectory." },
+          { key:"execution", name:"Executive Scope", cost:1850, desc:"Sniper shots deal +50% damage to enemies above 60% HP." }
+        ],
+        sun: [
+          { key:"solarOverdrive", name:"Solar Overdrive", cost:3200, desc:"Sun Skewer gains extreme attack speed." },
+          { key:"flareNet", name:"Flare Net", cost:1400, desc:"Sun Skewer reveals stealth and deals +25% damage to fliers." }
+        ],
+        bomb: [
+          { key:"bunkerBuster", name:"Bunker Buster", cost:2500, desc:"Pit Bomb explosions briefly stun enemies." },
+          { key:"clusterCharcoal", name:"Cluster Charcoal", cost:3100, desc:"Pit Bomb creates three smaller secondary blasts." }
+        ],
+        bio: [
+          { key:"plagueCarry", name:"Plague Carryover", cost:2100, desc:"Enemies killed near Bio Smoke burst into poison clouds." },
+          { key:"sporeOvergrowth", name:"Spore Overgrowth", cost:1900, desc:"Bio Smoke lightly slows enemies and suppresses regeneration." }
+        ]
+      };
+
+      let state, statMods, path, pathMeta, selectedLevelKey = "backyard", selectedStartWave = 1, selectedBudget = "normal";
+      let lastT = performance.now(), raf = 0, menuOpen = true;
+      let selectedBuildType = null, selectedTowerId = null;
+      let mouse = { x:0, y:0, inside:false };
+
+      function freshMods() {
+        return Object.fromEntries(Object.keys(towerTypes).map(k => [k, { damage:1, range:1, fireRate:1, pctDps:1, slowPower:1, levels:{damage:0, range:0, speed:0} }]));
+      }
+
+      function freshSpecials() {
+        return Object.fromEntries(Object.keys(towerTypes).map(k => [k, {}]));
+      }
+
+      function createPathMeta(points) {
+        const segs = [];
+        let total = 0;
+        for (let i = 0; i < points.length - 1; i++) {
+          const a = points[i], b = points[i+1], len = Math.hypot(b.x - a.x, b.y - a.y);
+          segs.push({ a, b, len, start:total, end:total + len });
+          total += len;
+        }
+        return { segs, total };
+      }
+
+      function pointAtDistance(d) {
+        const clamped = clamp(d, 0, pathMeta.total);
+        for (const seg of pathMeta.segs) {
+          if (clamped <= seg.end) {
+            const t = seg.len ? (clamped - seg.start) / seg.len : 0;
+            return { x:lerp(seg.a.x, seg.b.x, t), y:lerp(seg.a.y, seg.b.y, t), seg };
+          }
+        }
+        const last = path[path.length - 1];
+        return { x:last.x, y:last.y, seg:pathMeta.segs[pathMeta.segs.length - 1] };
+      }
+
+      function reset() {
+        const level = levels[selectedLevelKey];
+        path = level.path;
+        pathMeta = createPathMeta(path);
+        statMods = freshMods();
+        const budgetCash = selectedBudget === "rich" ? 1100 : selectedBudget === "chaos" ? 8000 : 0;
+        const budgetLives = selectedBudget === "chaos" ? 22 : 0;
+        state = {
+          cash:level.startCash + budgetCash, lives:level.lives + budgetLives, level, wave:selectedStartWave - 1, waveName:wavePlan(selectedStartWave).name, score:0,
+          paused:false, gameOver:false, victory:false, speedIndex:0, speedOptions:[1,1.5,2.5,4],
+          towers:[], enemies:[], projectiles:[], particles:[], zones:[], spawnQueue:[], waveActive:false, spawnTimer:0, nextId:1,
+          global:{ range:1, damage:1, fireRate:1, cashMult:1, buildCostMult:1, waveBonusMult:1, slowDuration:1, revealStealth:false, scoreWaveBonus:0 },
+          purchasedGlobals:{}, specials:freshSpecials(), enemiesDefeated:0, teleports:0, started:true
+        };
+        selectedBuildType = null;
+        selectedTowerId = null;
+        lastT = performance.now();
+        renderAll();
+        toast(`${level.name} ready`);
+      }
+
+      function openMenu() {
+        menuOpen = true;
+        if (state) state.paused = true;
+        menuOverlay.classList.remove("hidden");
+        renderMenu();
+        renderAll();
+      }
+
+      function closeMenuAndStart() {
+        selectedStartWave = Number(startWaveSelect.value) || 1;
+        selectedBudget = budgetSelect.value || "normal";
+        menuOpen = false;
+        menuOverlay.classList.add("hidden");
+        reset();
+        state.paused = false;
+      }
+
+      function renderMenu() {
+        levelGridEl.innerHTML = Object.values(levels).map(level => `
+          <button class="levelCard ${selectedLevelKey === level.key ? "selected" : ""}" data-level="${level.key}">
+            <div>
+              <h3>${level.emoji} ${level.name}</h3>
+              <p>${level.desc}</p>
+            </div>
+            <div class="tagLine">
+              <span class="tag">${level.difficulty}</span>
+              <span class="tag">${level.waves} waves</span>
+              <span class="tag">$${level.startCash}</span>
+              ${level.tags.map(t => `<span class="tag">${t}</span>`).join("")}
+            </div>
+          </button>
+        `).join("");
+
+        const level = levels[selectedLevelKey];
+        const forced = level.forcedStart || 1;
+        startWaveSelect.innerHTML = "";
+        const starts = [1, 5, 10, 15, 20, 25, 30, 35].filter(n => n >= forced && n < level.waves);
+        if (!starts.includes(forced)) starts.unshift(forced);
+        for (const wave of starts) {
+          const opt = document.createElement("option");
+          opt.value = String(wave);
+          opt.textContent = wave === 1 ? "Wave 1 - full campaign" : `Wave ${wave} - advanced start`;
+          if (wave === Math.max(forced, selectedStartWave)) opt.selected = true;
+          startWaveSelect.appendChild(opt);
+        }
+
+        levelGridEl.querySelectorAll("[data-level]").forEach(btn => btn.addEventListener("click", () => {
+          selectedLevelKey = btn.dataset.level;
+          selectedStartWave = levels[selectedLevelKey].forcedStart || 1;
+          renderMenu();
+        }));
+      }
+
+      function statFor(type, field, tower=null) {
+        const raw = rawStatFor(type, field);
+        if (!tower) return raw;
+        const buff = towerBuff(tower);
+        if (field === "damage" || field === "pctDps") return raw * buff.damage;
+        if (field === "range") return raw * buff.range;
+        if (field === "fireRate") return raw * buff.fireRate;
+        return raw;
+      }
+
+      function rawStatFor(type, field) {
+        const base = towerTypes[type], mods = statMods[type];
+        let v = base[field] ?? 0;
+        if (field === "damage") v *= mods.damage * state.global.damage;
+        if (field === "range") v *= mods.range * state.global.range;
+        if (field === "fireRate") v *= mods.fireRate * state.global.fireRate;
+        if (field === "pctDps") v *= mods.pctDps * state.global.damage;
+        if (field === "slowPower") v *= mods.slowPower;
+        if (field === "splash") v = base.splash || 0;
+        if (type === "sun" && field === "fireRate" && hasSpecial("sun", "solarOverdrive")) v *= 2.85;
+        if (type === "sun" && field === "damage" && hasSpecial("sun", "solarOverdrive")) v *= .92;
+        if (type === "dynamite" && field === "splash" && hasSpecial("dynamite", "megaKeg")) v *= 1.35;
+        if (type === "dynamite" && field === "damage" && hasSpecial("dynamite", "megaKeg")) v *= 1.15;
+        if (type === "bomb" && field === "splash" && hasSpecial("bomb", "clusterCharcoal")) v *= 1.12;
+        if (field === "slowPower") return clamp(v, 0, .82);
+        return v;
+      }
+
+      function towerBuff(tower) {
+        let damage = 1, fireRate = 1, range = 1, tip = false;
+        for (const s of state.towers) {
+          if (s.id === tower.id || towerTypes[s.type].family !== "supportAura") continue;
+          const inAura = Math.hypot(s.x - tower.x, s.y - tower.y) <= rawStatFor(s.type, "range");
+          if (inAura) {
+            damage *= 1 + towerTypes[s.type].boostDamage;
+            fireRate *= 1 + towerTypes[s.type].boostFireRate;
+            range *= 1 + towerTypes[s.type].boostRange;
+            if (hasSpecial("sauce", "tipJarDividend")) tip = true;
+          } else if (hasSpecial("sauce", "executiveCatering")) {
+            damage *= 1.08;
+            fireRate *= 1.08;
+          }
+        }
+        return { damage, fireRate, range, tip };
+      }
+
+      function hasSpecial(type, key) {
+        return !!state?.specials?.[type]?.[key];
+      }
+
+      function towerCost(type) {
+        return Math.max(5, Math.round(towerTypes[type].cost * state.global.buildCostMult));
+      }
+
+      function upgradeCost(type, attr) {
+        const tower = towerTypes[type], lvl = statMods[type].levels[attr];
+        const premiumPenalty = tower.cost >= 700 ? .78 : 1;
+        const sniperPenalty = tower.family === "sniper" ? .88 : 1;
+        const supportPenalty = tower.family === "supportAura" ? .72 : 1;
+        return Math.round(upgradeDefs[attr].baseCost * (tower.cost / 80) * premiumPenalty * sniperPenalty * supportPenalty * Math.pow(upgradeDefs[attr].scale, lvl));
+      }
+
+      function upgradePreview(type, attr) {
+        const tower = towerTypes[type];
+        if (attr === "damage") {
+          if (tower.family === "percentAura") return `Tick ${fmt(rawStatFor(type,"pctDps") * 100)}% max HP/s`;
+          if (tower.family === "slowAura" || tower.family === "supportAura") return `No direct damage`;
+          return `Damage ${fmt(rawStatFor(type,"damage"))}`;
+        }
+        if (attr === "range") return `Range ${fmt(rawStatFor(type,"range"))}`;
+        if (attr === "speed") {
+          if (tower.family === "percentAura") return `Tick pressure ${fmt(rawStatFor(type,"pctDps") * 100)}%/s`;
+          if (tower.family === "slowAura") return `Slow ${fmt(rawStatFor(type,"slowPower") * 100)}%`;
+          if (tower.family === "supportAura") return `Aura boost ${fmt(tower.boostDamage * 100)}% damage`;
+          return `Rate ${fmt(rawStatFor(type,"fireRate"))}/s`;
+        }
+      }
+
+      function sellValue(tower) { return Math.floor(towerCost(tower.type) * .5); }
+      function fmt(n) { return Math.round(n * 10) / 10; }
+      function clamp(v,min,max) { return Math.max(min, Math.min(max, v)); }
+      function lerp(a,b,t) { return a + (b-a)*t; }
+      function rand(min,max) { return min + Math.random() * (max - min); }
+
+      function wavePlan(num) {
+        const enemies = [];
+        let cursor = 0;
+        const add = (kind, count, spacing, firstDelay=.38) => {
+          for (let i = 0; i < count; i++) enemies.push(makeEnemy(kind, num, cursor++, i === 0 ? firstDelay : spacing));
+        };
+        const burst = (kind, packs, packSize, intra=.07, gap=.48) => {
+          for (let p = 0; p < packs; p++) for (let i = 0; i < packSize; i++) enemies.push(makeEnemy(kind, num, cursor++, i === 0 ? gap : intra));
+        };
+        const duo = (a,b,count,spacing=.34) => {
+          for (let i = 0; i < count; i++) {
+            enemies.push(makeEnemy(i % 2 ? b : a, num, cursor++, i === 0 ? .35 : spacing));
+          }
+        };
+
+        const base = 8 + Math.floor(num * 2.35);
+        let name = "Mixed Grill";
+
+        if (num === 1) {
+          name = "First Awakening";
+          add("normal", 10, .56, .32);
+          burst("swarm", 1, 7, .09, .75);
+        } else if (num % 10 === 0) {
+          name = "Royal Feast Boss";
+          add(num >= 30 ? "royal" : "boss", 1 + Math.floor(num / 20), 1.15, .75);
+          add("armored", 3 + Math.floor(num / 5), .62, .56);
+          add("healer", 2 + Math.floor(num / 9), .78, .62);
+          add("teleporter", 1 + Math.floor(num / 15), 1.02, .75);
+          add("candy", 4 + Math.floor(num / 5), .52, .44);
+          burst("swarm", 3 + Math.floor(num / 9), 8, .06, .42);
+        } else if (num % 9 === 0) {
+          name = "Air & Ground Combo";
+          duo("candy", "runner", 12 + Math.floor(num * .7), .28);
+          add("shielder", 3 + Math.floor(num / 6), .52, .48);
+          add("healer", 1 + Math.floor(num / 12), .78, .62);
+        } else if (num % 8 === 0) {
+          name = "Hard First, Small Later";
+          add("tank", 4 + Math.floor(num * .42), .72, .32);
+          add("armored", 3 + Math.floor(num / 5), .7, .54);
+          burst("swarm", 5 + Math.floor(num / 4), 9, .055, .68);
+          add("runner", 7 + Math.floor(num / 2), .23, .45);
+        } else if (num % 7 === 0) {
+          name = "Portal Catering";
+          add("teleporter", 2 + Math.floor(num / 6), .92, .4);
+          add("tank", 2 + Math.floor(num / 7), .68, .5);
+          duo("runner", "normal", 10 + Math.floor(num * .65), .31);
+          burst("swarm", 3 + Math.floor(num / 8), 7, .06, .5);
+        } else if (num % 6 === 0) {
+          name = "Regenerating Dessert Cart";
+          add("regen", 6 + Math.floor(num * .55), .46, .34);
+          add("healer", 2 + Math.floor(num / 8), .7, .55);
+          add("stealth", 4 + Math.floor(num / 3), .34, .46);
+        } else if (num % 5 === 0) {
+          name = "Feast Boss Wave";
+          add("boss", 1 + Math.floor(num / 15), 1.05, .75);
+          add("tank", 3 + Math.floor(num / 6), .7, .58);
+          add("healer", 1 + Math.floor(num / 10), .82, .62);
+          add("shielder", 3 + Math.floor(num / 8), .52, .68);
+          add("armored", 3 + Math.floor(num / 7), .68, .6);
+        } else {
+          const style = num % 8;
+          if (style === 2) {
+            name = "Snack Pack Swarm";
+            add("normal", Math.floor(base * .34), .5, .32);
+            burst("swarm", 4 + Math.floor(num / 5), 8 + Math.floor(num / 7), .065, .46);
+            if (num >= 10) add("healer", 1 + Math.floor(num / 10), .95, .55);
+          } else if (style === 3) {
+            name = "Pepper Stampede";
+            add("runner", 14 + Math.floor(num * 1.35), .215, .32);
+            burst("swarm", 3, 8, .06, .48);
+            if (num >= 15) add("stealth", 5 + Math.floor(num / 6), .26, .42);
+          } else if (style === 4) {
+            name = "Armored Bite Line";
+            add("armored", 3 + Math.floor(num * .45), .64, .34);
+            add("tank", 3 + Math.floor(num * .34), .78, .35);
+            add("normal", Math.floor(base * .45), .38, .4);
+          } else if (style === 5) {
+            name = "Phase Apple Push";
+            add("shielder", 6 + Math.floor(num * .5), .5, .36);
+            add("runner", 5 + Math.floor(num / 2), .245, .5);
+            if (num >= 13) add("tank", 2 + Math.floor(num / 7), .78, .65);
+          } else if (style === 6) {
+            name = "Splitter Picnic";
+            add("splitter", 6 + Math.floor(num / 2), .46, .34);
+            add("healer", 2 + Math.floor(num / 5), .7, .42);
+            burst("swarm", 4 + Math.floor(num / 8), 7, .06, .5);
+          } else if (style === 7) {
+            name = "Stealth Night Snack";
+            add("stealth", 10 + Math.floor(num * .7), .28, .3);
+            add("candy", 3 + Math.floor(num / 5), .58, .45);
+            add("runner", 6 + Math.floor(num / 2.3), .25, .5);
+          } else {
+            name = "Full Picnic Panic";
+            add("normal", Math.floor(base * .4), .38, .3);
+            add("runner", 7 + Math.floor(num / 2.1), .24, .45);
+            add("tank", 2 + Math.floor(num / 5), .72, .58);
+            add("healer", 1 + Math.floor(num / 6), .8, .62);
+            add("shielder", 2 + Math.floor(num / 6), .5, .7);
+            add("splitter", 3 + Math.floor(num / 7), .45, .46);
+            burst("swarm", 3 + Math.floor(num / 7), 7, .06, .5);
+          }
+        }
+
+        if (num >= 28 && num % 4 === 1) {
+          name = "Kitchen Sink Catastrophe";
+          ["teleporter","royal","candy","healer","armored","regen","stealth","splitter","runner"].forEach((kind, i) => add(kind, 2 + Math.floor(num / (8 + i)), .38 + i * .02, .36));
+          burst("swarm", 4, 8, .055, .44);
+        }
+
+        return { name, enemies };
+      }
+
+      function makeEnemy(kind, wave, index, delay) {
+        const type = enemyTypes[kind] || enemyTypes.normal;
+        const level = levels[selectedLevelKey];
+        const late = Math.max(0, wave - 8);
+        const hpBase = (36 * Math.pow(1.235, wave - 1) + wave * 8.5 + late * late * .55) * level.hpMult;
+        const speedBase = 56 + Math.min(86, wave * 3.35);
+        const rewardBase = (10 + Math.max(0, wave - 7) * .44 + Math.max(0, wave - 14) * .55) * level.rewardMult;
+        return {
+          kind, label:type.name, emoji:type.emoji, index,
+          hp:Math.round(hpBase * type.hp), speed:speedBase * type.speed, reward:Math.max(3, Math.round(rewardBase * type.reward)),
+          lifeCost:type.lifeCost, healDps:kind === "healer" ? 4 + wave * 1.05 + Math.max(0, wave - 12) * .9 : 0,
+          regenDps:type.regen ? hpBase * type.hp * type.regen : 0,
+          armor:type.armor ? Math.max(4, Math.round((wave * 1.4 + 8) * type.armor)) : 0,
+          splitCount:type.splits ? type.splits + Math.floor(wave / 13) : 0,
+          direct:!!type.flying, stealth:!!type.stealth, teleporter:!!type.teleporter, delay
+        };
+      }
+
+      function startWave() {
+        if (!state || menuOpen || state.gameOver || state.waveActive) return;
+        const nextWave = state.wave + 1;
+        if (nextWave > state.level.waves) return;
+        const plan = wavePlan(nextWave);
+        state.wave = nextWave;
+        state.waveName = plan.name;
+        state.waveActive = true;
+        state.spawnQueue = plan.enemies;
+        state.spawnTimer = 0;
+        startWaveBtn.disabled = true;
+        renderAll();
+        toast(`Wave ${state.wave}: ${plan.name}`);
+      }
+
+      function spawnEnemy(spec, overrides={}) {
+        const start = spec.direct ? {x:-42,y:92} : pointAtDistance(overrides.pathDistance || 0);
+        const end = {x:W+42,y:430};
+        const directDistance = Math.hypot(end.x - start.x, end.y - start.y);
+        state.enemies.push({
+          id:state.nextId++, x:start.x, y:start.y, baseY:start.y, hp:spec.hp, maxHp:spec.hp, speed:spec.speed, reward:spec.reward,
+          emoji:spec.emoji, kind:spec.kind, label:spec.label, lifeCost:spec.lifeCost, healDps:spec.healDps, regenDps:spec.regenDps,
+          armor:spec.armor, splitCount:spec.splitCount, direct:spec.direct, stealth:spec.stealth, teleporter:spec.teleporter,
+          directStart:start, directEnd:end, directProgress:overrides.directProgress || 0, directDistance, pathDistance:overrides.pathDistance || 0,
+          slow:0, slowFactor:1, burnTime:0, burnDps:0, poisonTime:0, stun:0, age:0, reached:false,
+          teleportCooldown:spec.teleporter ? rand(2.2, 3.4) : 0, teleportCharge:0, revealed:0, noRegen:0
+        });
+      }
+
+      function isInvulnerable(enemy) {
+        return enemy.kind === "shielder" && Math.floor(enemy.age / 2) % 2 === 1;
+      }
+
+      function shieldEmoji(enemy) { return isInvulnerable(enemy) ? "🍎" : "🍏"; }
+
+      function isSlowImmune(enemy) {
+        if (hasSpecial("frost", "universalChill")) return false;
+        return !!enemyTypes[enemy.kind]?.slowImmune || isInvulnerable(enemy);
+      }
+
+      function travelScore(enemy) {
+        return enemy.direct ? pathMeta.total + enemy.directProgress * pathMeta.total : enemy.pathDistance;
+      }
+
+      function renderStats() {
+        if (!state) return;
+        const globals = Object.keys(state.purchasedGlobals).length;
+        const specials = Object.values(state.specials).reduce((sum, group) => sum + Object.keys(group).length, 0);
+        statsEl.innerHTML = [
+          ["💰", state.cash, "Sauce money", ""],
+          ["❤️", state.lives, "Picnic lives", ""],
+          ["🌊", `${state.wave || selectedStartWave}/${state.level.waves}`, state.waveActive ? "Current wave" : "Wave", ""],
+          ["🔥", state.waveName || wavePlan(selectedStartWave).name, state.waveActive ? "Now grilling" : state.level.name, "wide"],
+          ["🏆", state.score, "Score", ""],
+          ["🍗", state.towers.length, "Towers", ""],
+          ["👑", `${globals}+${specials}`, "Grand + unique", ""]
+        ].map(([icon,val,label,klass]) => `<div class="stat ${klass}"><b>${icon} ${val}</b><span>${label}</span></div>`).join("");
+        speedBtn.textContent = `Speed: ${state.speedOptions[state.speedIndex]}x`;
+        pauseBtn.textContent = state.paused ? "Resume" : "Pause";
+        startWaveBtn.disabled = state.waveActive || state.gameOver || menuOpen;
+      }
+
+      function renderTowerList() {
+        if (!state) return;
+        const activeTower = state.towers.find(t => t.id === selectedTowerId);
+        towerListEl.innerHTML = Object.values(towerTypes).sort((a,b)=>a.order-b.order).map(t => {
+          const selected = selectedBuildType === t.key || (!selectedBuildType && activeTower && activeTower.type === t.key);
+          const role = towerRoleText(t.key);
+          const selectedInfo = activeTower && activeTower.type === t.key ? `<div class="detailPill">Target<b>${targetModes[activeTower.targetMode || "first"].icon} ${targetModes[activeTower.targetMode || "first"].name}</b></div>` : "";
+          return `
+            <div class="towerCard ${selected ? "selected" : ""}">
+              <button class="towerHeader" data-build="${t.key}">
+                <div class="towerIcon">${t.emoji}</div>
+                <div><h3>${t.name}</h3><p>${role} · R ${fmt(rawStatFor(t.key,"range"))}</p></div>
+                <div class="price">$${towerCost(t.key)}</div>
+              </button>
+              <div class="towerDetails">
+                <div class="detailGrid">
+                  ${towerDetailPills(t.key)}
+                  ${selectedInfo || `<div class="detailPill">Mode<b>${selectedBuildType === t.key ? "Build" : "Upgrade"}</b></div>`}
+                </div>
+                <div class="sectionLabel">Stat upgrades</div>
+                ${renderUpgradeRows(t.key)}
+                <div class="sectionLabel">Unique prestige upgrades</div>
+                ${renderSpecialRows(t.key)}
+              </div>
+            </div>
+          `;
+        }).join("");
+        towerListEl.querySelectorAll("[data-build]").forEach(btn => btn.addEventListener("click", () => {
+          selectedBuildType = btn.dataset.build;
+          selectedTowerId = null;
+          renderAll();
+          floatMsg(`${towerTypes[selectedBuildType].name} selected.`);
+        }));
+        towerListEl.querySelectorAll("[data-upgrade]").forEach(btn => btn.addEventListener("click", e => {
+          e.stopPropagation();
+          buyUpgrade(btn.dataset.type, btn.dataset.upgrade);
+        }));
+        towerListEl.querySelectorAll("[data-special]").forEach(btn => btn.addEventListener("click", e => {
+          e.stopPropagation();
+          buySpecial(btn.dataset.type, btn.dataset.special);
+        }));
+      }
+
+      function towerRoleText(type) {
+        const t = towerTypes[type];
+        if (t.family === "percentAura") return `Tick ${fmt(rawStatFor(type,"pctDps") * 100)}%/s`;
+        if (t.family === "slowAura") return `Slow ${fmt(rawStatFor(type,"slowPower") * 100)}%`;
+        if (t.family === "supportAura") return `Buff aura +${fmt(t.boostDamage * 100)}%`;
+        if (t.family === "sniper") return `Snipe ${fmt(rawStatFor(type,"damage"))} · ${fmt(rawStatFor(type,"fireRate"))}/s`;
+        if (t.family === "chain") return `Chain ${fmt(rawStatFor(type,"damage"))} · ${fmt(rawStatFor(type,"fireRate"))}/s`;
+        if (t.splash) return `AOE ${fmt(rawStatFor(type,"damage"))} · ${fmt(rawStatFor(type,"fireRate"))}/s`;
+        return `Shot ${fmt(rawStatFor(type,"damage"))} · ${fmt(rawStatFor(type,"fireRate"))}/s`;
+      }
+
+      function towerDetailPills(type) {
+        const t = towerTypes[type];
+        if (t.family === "percentAura") {
+          return `
+            <div class="detailPill">Tick damage<b>${fmt(rawStatFor(type,"pctDps") * 100)}% max HP/s</b></div>
+            <div class="detailPill">Range<b>${fmt(rawStatFor(type,"range"))}</b></div>
+            <div class="detailPill">Effect<b>Area pressure</b></div>
+          `;
+        }
+        if (t.family === "slowAura") {
+          return `
+            <div class="detailPill">Slow<b>${fmt(rawStatFor(type,"slowPower") * 100)}%</b></div>
+            <div class="detailPill">Range<b>${fmt(rawStatFor(type,"range"))}</b></div>
+            <div class="detailPill">Universal<b>${hasSpecial(type,"universalChill") ? "Yes" : "No"}</b></div>
+          `;
+        }
+        if (t.family === "supportAura") {
+          return `
+            <div class="detailPill">Damage buff<b>+${fmt(t.boostDamage * 100)}%</b></div>
+            <div class="detailPill">Speed buff<b>+${fmt(t.boostFireRate * 100)}%</b></div>
+            <div class="detailPill">Range<b>${fmt(rawStatFor(type,"range"))}</b></div>
+          `;
+        }
+        return `
+          <div class="detailPill">Damage<b>${fmt(rawStatFor(type,"damage"))}</b></div>
+          <div class="detailPill">Range<b>${fmt(rawStatFor(type,"range"))}</b></div>
+          <div class="detailPill">Fire rate<b>${fmt(rawStatFor(type,"fireRate"))}/s</b></div>
+        `;
+      }
+
+      function renderUpgradeRows(type) {
+        const allowed = towerTypes[type].upgrades || [];
+        if (!allowed.length) return `<div class="lockedUpgrades">No stat upgrades for this tower type.</div>`;
+        return allowed.map(attr => {
+          const def = upgradeDefs[attr], lvl = statMods[type].levels[attr], maxed = lvl >= MAX_UPGRADE_LEVEL, cost = upgradeCost(type, attr);
+          const disabled = state.cash < cost || maxed;
+          return `
+            <div class="upgradeRow">
+              <div><b>${def.name} Lv.${lvl}/${MAX_UPGRADE_LEVEL}</b><span>${upgradePreview(type, attr)}</span></div>
+              <button class="tiny" data-type="${type}" data-upgrade="${attr}" ${disabled ? "disabled" : ""}>${maxed ? "Max" : `$${cost}`}</button>
+            </div>
+          `;
+        }).join("");
+      }
+
+      function renderSpecialRows(type) {
+        const defs = specialUpgradeDefs[type] || [];
+        if (!defs.length) return `<div class="lockedUpgrades">No unique prestige upgrades yet.</div>`;
+        return defs.map(def => {
+          const owned = hasSpecial(type, def.key), disabled = owned || state.cash < def.cost;
+          return `
+            <div class="specialRow">
+              <div><b>${def.name}</b><span>${def.desc}</span></div>
+              <button class="tiny" data-type="${type}" data-special="${def.key}" ${disabled ? "disabled" : ""}>${owned ? "Owned" : `$${def.cost}`}</button>
+            </div>
+          `;
+        }).join("");
+      }
+
+      function renderGlobalUpgrades() {
+        if (!state) return;
+        globalUpgradeListEl.innerHTML = globalUpgradeDefs.map(def => {
+          const owned = !!state.purchasedGlobals[def.key];
+          const disabled = owned || state.cash < def.cost;
+          return `
+            <div class="globalRow ${owned ? "unlocked" : ""}">
+              <div class="towerIcon">${def.icon}</div>
+              <div><b>${def.name}</b><span>${def.desc}</span></div>
+              <button class="tiny" data-global="${def.key}" ${disabled ? "disabled" : ""}>${owned ? "Owned" : `$${def.cost}`}</button>
+            </div>
+          `;
+        }).join("");
+        globalUpgradeListEl.querySelectorAll("[data-global]").forEach(btn => btn.addEventListener("click", () => buyGlobal(btn.dataset.global)));
+      }
+
+      function renderBoardControls() {
+        if (!state) return;
+        const tower = state.towers.find(t => t.id === selectedTowerId);
+        if (!tower) {
+          boardSellBtn.classList.remove("show");
+          boardTargetsEl.classList.remove("show");
+          return;
+        }
+
+        const topPct = tower.y / H * 100;
+        boardSellBtn.textContent = `Sell $${sellValue(tower)}`;
+        boardSellBtn.style.left = `${tower.x / W * 100}%`;
+        boardSellBtn.style.top = `${topPct}%`;
+        boardSellBtn.style.transform = topPct > 86 ? "translate(-50%, -64px)" : "translate(-50%, 34px)";
+        boardSellBtn.classList.add("show");
+
+        const family = towerTypes[tower.type].family;
+        if (family === "percentAura" || family === "slowAura" || family === "supportAura") {
+          boardTargetsEl.classList.remove("show");
+          return;
+        }
+
+        boardTargetsEl.style.left = `${tower.x / W * 100}%`;
+        boardTargetsEl.style.top = `${topPct}%`;
+        boardTargetsEl.style.transform = topPct < 12 ? "translate(-50%, 42px)" : "translate(-50%, -52px)";
+        boardTargetsEl.classList.add("show");
+        boardTargetsEl.querySelectorAll("[data-target-mode]").forEach(btn => {
+          btn.classList.toggle("active", btn.dataset.targetMode === (tower.targetMode || "first"));
+        });
+      }
+
+      function renderAll() {
+        renderStats();
+        renderTowerList();
+        renderGlobalUpgrades();
+        renderBoardControls();
+      }
+
+      function buyUpgrade(type, attr) {
+        const allowed = towerTypes[type].upgrades || [];
+        if (!allowed.includes(attr)) return;
+
+        const cost = upgradeCost(type, attr), mods = statMods[type];
+        if (mods.levels[attr] >= MAX_UPGRADE_LEVEL || state.cash < cost) return;
+
+        const tower = towerTypes[type];
+        state.cash -= cost;
+        mods.levels[attr]++;
+
+        if (tower.strongUpgrades) {
+          if (attr === "damage") mods.damage *= 1.44;
+          if (attr === "range") mods.range *= 1.24;
+          if (attr === "speed") mods.fireRate *= 1.32;
+        } else if (tower.family === "sniper") {
+          if (attr === "damage") mods.damage *= 1.34;
+          if (attr === "range") mods.range *= 1.18;
+        } else if (tower.family === "supportAura") {
+          if (attr === "range") mods.range *= 1.14;
+          if (attr === "speed") {
+            tower.boostDamage *= 1.08;
+            tower.boostFireRate *= 1.07;
+          }
+        } else {
+          if (attr === "damage") {
+            if (tower.family === "percentAura") mods.pctDps *= 1.18;
+            else mods.damage *= 1.22;
+          }
+          if (attr === "range") mods.range *= 1.12;
+          if (attr === "speed") {
+            if (tower.family === "percentAura") mods.pctDps *= 1.12;
+            else if (tower.family === "slowAura") mods.slowPower *= 1.12;
+            else mods.fireRate *= 1.18;
+          }
+        }
+
+        toast(`${tower.name}: ${upgradeDefs[attr].label} Lv.${mods.levels[attr]}`);
+        renderAll();
+      }
+
+      function buyGlobal(key) {
+        const def = globalUpgradeDefs.find(x => x.key === key);
+        if (!def || state.purchasedGlobals[key] || state.cash < def.cost) return;
+        state.cash -= def.cost;
+        state.purchasedGlobals[key] = true;
+        def.apply(state);
+        toast(`${def.name} purchased`);
+        renderAll();
+      }
+
+      function buySpecial(type, key) {
+        const def = (specialUpgradeDefs[type] || []).find(x => x.key === key);
+        if (!def || hasSpecial(type, key) || state.cash < def.cost) return;
+        state.cash -= def.cost;
+        state.specials[type][key] = true;
+        toast(`${towerTypes[type].name}: ${def.name}`);
+        renderAll();
+      }
+
+      function sellSelected() {
+        const idx = state.towers.findIndex(t => t.id === selectedTowerId);
+        if (idx < 0) return;
+        const tower = state.towers[idx];
+        state.cash += sellValue(tower);
+        state.towers.splice(idx,1);
+        selectedTowerId = null;
+        toast(`Sold for $${sellValue(tower)}`);
+        renderAll();
+      }
+
+      function toast(text) {
+        toastEl.textContent = text;
+        toastEl.classList.add("show");
+        clearTimeout(toast._t);
+        toast._t = setTimeout(() => toastEl.classList.remove("show"), 1450);
+      }
+
+      function floatMsg(text) {
+        floatMsgEl.textContent = text;
+        floatMsgEl.classList.add("show");
+        clearTimeout(floatMsg._t);
+        floatMsg._t = setTimeout(() => floatMsgEl.classList.remove("show"), 2200);
+      }
+
+      function getMouse(evt) {
+        const rect = canvas.getBoundingClientRect();
+        return { x:(evt.clientX - rect.left) * W / rect.width, y:(evt.clientY - rect.top) * H / rect.height };
+      }
+
+      function pointToSegment(p,a,b) {
+        const dx=b.x-a.x, dy=b.y-a.y, len2=dx*dx+dy*dy;
+        if (!len2) return Math.hypot(p.x-a.x,p.y-a.y);
+        const t=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/len2,0,1);
+        return Math.hypot(p.x-(a.x+dx*t), p.y-(a.y+dy*t));
+      }
+
+      function distancePointToSegment(p,a,b) {
+        return pointToSegment(p,a,b);
+      }
+
+      function nearPath(x,y) {
+        let best = Infinity;
+        for (let i = 0; i < path.length - 1; i++) best = Math.min(best, pointToSegment({x,y}, path[i], path[i+1]));
+        return best;
+      }
+
+      function canBuildAt(x,y) {
+        if (x < 34 || y < 34 || x > W - 34 || y > H - 34) return { ok:false, reason:"Too close to the fence." };
+        if (nearPath(x,y) < blockedRadius) return { ok:false, reason:"Food needs that lane." };
+        for (const t of state.towers) if (Math.hypot(t.x-x, t.y-y) < 54) return { ok:false, reason:"Too close to another tower." };
+        return { ok:true, reason:"" };
+      }
+
+      function buildTower(x,y) {
+        if (!selectedBuildType) { selectedTowerId = null; renderAll(); return; }
+        const type = towerTypes[selectedBuildType], valid = canBuildAt(x,y);
+        if (!valid.ok) { floatMsg(valid.reason); return; }
+        const cost = towerCost(selectedBuildType);
+        if (state.cash < cost) { floatMsg(`Need $${cost - state.cash} more.`); return; }
+        state.cash -= cost;
+        const tower = { id:state.nextId++, type:selectedBuildType, x, y, cooldown:0, angle:0, kills:0, pulse:0, targetMode:"first", tickTimer:0, auraPulse:0 };
+        state.towers.push(tower);
+        selectedTowerId = tower.id;
+        selectedBuildType = null;
+        renderAll();
+      }
+
+      function selectTowerAt(x,y) {
+        let best = null, bestD = 999;
+        for (const t of state.towers) {
+          const d = Math.hypot(t.x-x,t.y-y);
+          if (d < 28 && d < bestD) { best = t; bestD = d; }
+        }
+        if (best) {
+          selectedTowerId = best.id;
+          selectedBuildType = null;
+          renderAll();
+          return true;
+        }
+        return false;
+      }
+
+      canvas.addEventListener("mousemove", e => { mouse = { ...getMouse(e), inside:true }; });
+      canvas.addEventListener("mouseleave", () => { mouse.inside = false; });
+      canvas.addEventListener("click", e => {
+        if (!state || state.gameOver || menuOpen) return;
+        const m = getMouse(e);
+        if (!selectTowerAt(m.x,m.y)) buildTower(m.x,m.y);
+      });
+      boardSellBtn.addEventListener("click", e => { e.stopPropagation(); sellSelected(); });
+      boardTargetsEl.addEventListener("click", e => {
+        const btn = e.target.closest("[data-target-mode]");
+        if (!btn) return;
+        e.stopPropagation();
+        const tower = state.towers.find(t => t.id === selectedTowerId);
+        if (!tower) return;
+        tower.targetMode = btn.dataset.targetMode;
+        toast(`${towerTypes[tower.type].name}: ${targetModes[tower.targetMode].name}`);
+        renderAll();
+      });
+      window.addEventListener("keydown", e => {
+        if (!state || menuOpen) return;
+        if (e.key === "Escape") {
+          selectedTowerId = null;
+          selectedBuildType = null;
+          renderAll();
+          floatMsg("Selection cleared.");
+        }
+        if (e.key === " ") {
+          e.preventDefault();
+          state.paused = !state.paused;
+          renderAll();
+        }
+        const keys = ["1","2","3","4","5","6","7","8","9","0"];
+        if (keys.includes(e.key)) {
+          const idx = keys.indexOf(e.key);
+          const type = Object.values(towerTypes).sort((a,b)=>a.order-b.order)[idx];
+          if (type) {
+            selectedBuildType = type.key;
+            selectedTowerId = null;
+            renderAll();
+            floatMsg(`${type.name} selected.`);
+          }
+        }
+      });
+      startWaveBtn.addEventListener("click", startWave);
+      speedBtn.addEventListener("click", () => {
+        if (!state) return;
+        state.speedIndex = (state.speedIndex + 1) % state.speedOptions.length;
+        renderAll();
+      });
+      pauseBtn.addEventListener("click", () => {
+        if (!state || menuOpen) return;
+        state.paused = !state.paused;
+        renderAll();
+      });
+      menuBtn.addEventListener("click", openMenu);
+      restartBtn.addEventListener("click", () => {
+        if (!state) return;
+        reset();
+      });
+      menuStartBtn.addEventListener("click", closeMenuAndStart);
+      budgetSelect.addEventListener("change", () => selectedBudget = budgetSelect.value);
+
+      function update(dt) {
+        if (!state || state.paused || state.gameOver || menuOpen) return;
+        const simDt = Math.min(.05, dt) * state.speedOptions[state.speedIndex];
+        updateSpawn(simDt);
+        updateEnemyStatus(simDt);
+        updateEnemyMovement(simDt);
+        updateHealers(simDt);
+        updateTowers(simDt);
+        updateProjectiles(simDt);
+        updateZones(simDt);
+        collectDeadAndReached();
+        updateParticles(simDt);
+        cleanupWave();
+      }
+
+      function updateSpawn(dt) {
+        if (!state.waveActive || !state.spawnQueue.length) return;
+        state.spawnTimer -= dt;
+        while (state.spawnTimer <= 0 && state.spawnQueue.length) {
+          const next = state.spawnQueue.shift();
+          spawnEnemy(next);
+          state.spawnTimer += next.delay;
+        }
+      }
+
+      function updateEnemyStatus(dt) {
+        for (const e of state.enemies) {
+          e.age += dt;
+          e.revealed = Math.max(0, e.revealed - dt);
+          e.noRegen = Math.max(0, e.noRegen - dt);
+          e.stun = Math.max(0, e.stun - dt);
+
+          if (e.burnTime > 0) {
+            e.burnTime -= dt;
+            damageEnemy(e, e.burnDps * dt, { dot:true, fire:true, ignoreArmor:true });
+          }
+          if (e.poisonTime > 0) {
+            e.poisonTime -= dt;
+            damageEnemy(e, Math.max(2, e.maxHp * .018) * dt, { dot:true, poison:true, ignoreArmor:true });
+          }
+          if (e.regenDps && e.noRegen <= 0 && e.hp > 0 && e.hp < e.maxHp) {
+            e.hp = Math.min(e.maxHp, e.hp + e.regenDps * dt);
+            if (Math.random() < dt * 1.3) spawnParticle(e.x, e.y - 8, "✨", 15, .42);
+          }
+
+          if (e.teleporter && e.hp > 0 && !e.reached) updateTeleporter(e, dt);
+        }
+      }
+
+      function updateTeleporter(enemy, dt) {
+        if (enemy.teleportCharge > 0) {
+          enemy.teleportCharge -= dt;
+          enemy.stun = Math.max(enemy.stun, .1);
+          if (enemy.teleportCharge <= 0) teleportPack(enemy);
+          return;
+        }
+        if (enemy.pathDistance < 90 || enemy.direct) return;
+        enemy.teleportCooldown -= dt;
+        if (enemy.teleportCooldown <= 0) {
+          enemy.teleportCharge = 1.05;
+          enemy.teleportCooldown = rand(5.6, 7.6);
+          spawnParticle(enemy.x, enemy.y - 14, "🌀", 34, 1);
+          floatMsg("Portal Bagel charging: nearby enemies may jump forward.");
+        }
+      }
+
+      function teleportPack(enemy) {
+        if (enemy.hp <= 0 || enemy.reached || enemy.direct) return;
+        const jump = 178 + state.wave * 4.5;
+        const radius = 86;
+        let carried = 0;
+        for (const e of state.enemies) {
+          if (e.direct || e.hp <= 0) continue;
+          if (Math.hypot(e.x - enemy.x, e.y - enemy.y) <= radius) {
+            e.pathDistance = Math.min(pathMeta.total, e.pathDistance + jump * (e.id === enemy.id ? 1 : .82));
+            const p = pointAtDistance(e.pathDistance);
+            e.x = p.x;
+            e.y = p.y;
+            e.stun = Math.max(e.stun, .16);
+            e.revealed = Math.max(e.revealed, 1.2);
+            carried++;
+          }
+        }
+        state.teleports++;
+        spawnParticle(enemy.x, enemy.y, "🌀", 42, .8);
+        toast(`Portal jump carried ${carried} enemies`);
+      }
+
+      function updateEnemyMovement(dt) {
+        for (const e of state.enemies) {
+          const speed = e.speed * (e.slow > 0 ? e.slowFactor : 1);
+          e.slow = Math.max(0, e.slow - dt);
+          if (e.slow <= 0) e.slowFactor = 1;
+
+          if (e.stun > 0 || e.teleportCharge > 0) continue;
+
+          if (e.direct) {
+            e.directProgress += (speed * dt) / e.directDistance;
+            const p = clamp(e.directProgress, 0, 1);
+            e.x = lerp(e.directStart.x, e.directEnd.x, p);
+            e.baseY = lerp(e.directStart.y, e.directEnd.y, p);
+            e.y = e.baseY + Math.sin(e.age * 6.4) * 18;
+            if (p >= 1) e.reached = true;
+            continue;
+          }
+
+          e.pathDistance += speed * dt;
+          const p = pointAtDistance(e.pathDistance);
+          e.x = p.x;
+          e.y = p.y;
+          if (e.pathDistance >= pathMeta.total) e.reached = true;
+        }
+      }
+
+      function updateHealers(dt) {
+        for (const healer of state.enemies) {
+          if (healer.kind !== "healer" || healer.hp <= 0) continue;
+          const radius = 96;
+          let healed = false;
+          for (const e of state.enemies) {
+            if (e.hp <= 0 || e.hp >= e.maxHp) continue;
+            const d = Math.hypot(e.x - healer.x, e.y - healer.y);
+            if (d <= radius) {
+              e.hp = Math.min(e.maxHp, e.hp + healer.healDps * dt);
+              healed = true;
+            }
+          }
+          if (healed && Math.random() < dt * 3.8) spawnParticle(healer.x, healer.y - 10, "💚", 18, .55);
+        }
+      }
+
+      function damageEnemy(enemy, amount, opts={}) {
+        if (amount <= 0 || enemy.hp <= 0) return false;
+        if (isInvulnerable(enemy) && !opts.ignoreInvul) return false;
+
+        let final = amount;
+        const sourceTower = opts.source ? state.towers.find(t => t.id === opts.source) : null;
+        const sourceType = sourceTower ? towerTypes[sourceTower.type] : null;
+
+        if (enemy.slow > 0 && hasSpecial("frost","cryoBrittle")) final *= 1.10;
+        if (sourceTower?.type === "sniper" && hasSpecial("sniper","execution") && enemy.hp > enemy.maxHp * .6) final *= 1.5;
+        if (sourceTower?.type === "sun" && enemy.direct && hasSpecial("sun","flareNet")) final *= 1.25;
+        if (sourceTower?.type === "rad" && hasSpecial("rad","nuclearRub") && enemy.regenDps) final *= 1.35;
+
+        if (enemy.armor && !opts.ignoreArmor) {
+          const armorIgnored = sourceTower?.type === "rad" && hasSpecial("rad","nuclearRub");
+          if (!armorIgnored) final = Math.max(final * .42, final - enemy.armor);
+        }
+
+        enemy.hp -= final;
+        if (sourceTower && enemy.hp <= 0 && !enemy.deadCredit) {
+          enemy.deadCredit = sourceTower.id;
+          sourceTower.kills++;
+          if (towerBuff(sourceTower).tip) {
+            state.cash += Math.max(1, Math.round(enemy.reward * .08));
+            spawnParticle(sourceTower.x, sourceTower.y - 12, "💰", 16, .55);
+          }
+        }
+        return true;
+      }
+
+      function applySlow(enemy, slowPower, duration) {
+        if (isSlowImmune(enemy)) return;
+        const factor = clamp(1 - slowPower, .18, 1);
+        enemy.slow = Math.max(enemy.slow, duration * state.global.slowDuration);
+        enemy.slowFactor = Math.min(enemy.slowFactor || 1, factor);
+      }
+
+      function applyBurn(enemy, dps, duration) {
+        enemy.burnDps = Math.max(enemy.burnDps || 0, dps);
+        enemy.burnTime = Math.max(enemy.burnTime || 0, duration);
+        enemy.revealed = Math.max(enemy.revealed, .8);
+      }
+
+      function applyPoison(enemy, duration) {
+        enemy.poisonTime = Math.max(enemy.poisonTime || 0, duration);
+        enemy.noRegen = Math.max(enemy.noRegen || 0, duration * .7);
+      }
+
+      function enemyVisibleToTower(enemy, tower) {
+        if (!enemy.stealth) return true;
+        if (state.global.revealStealth || enemy.revealed > 0) return true;
+        if (tower.type === "sniper") return true;
+        if (tower.type === "sun" && hasSpecial("sun","flareNet")) return true;
+        return false;
+      }
+
+      function targetForTower(tower) {
+        const range = statFor(tower.type, "range", tower);
+        const mode = tower.targetMode || "first";
+        let best = null, bestScore = -Infinity;
+
+        for (const e of state.enemies) {
+          if (isInvulnerable(e) || !enemyVisibleToTower(e, tower)) continue;
+          const d = Math.hypot(e.x - tower.x, e.y - tower.y);
+          if (d > range) continue;
+
+          const progress = travelScore(e);
+          const typeBias = enemyTypes[e.kind]?.priority || 0;
+          let score = 0;
+          if (mode === "first") score = progress + typeBias - d * .08;
+          else if (mode === "last") score = -progress + typeBias * .35 - d * .04;
+          else if (mode === "hp") score = e.hp + e.maxHp * .08 + typeBias * 2 - d * .03;
+          else if (mode === "fast") score = e.speed + typeBias * .7 + progress * .15 - d * .02;
+
+          if (score > bestScore) { best = e; bestScore = score; }
+        }
+        return best;
+      }
+
+      function updateTowers(dt) {
+        for (const t of state.towers) {
+          const type = towerTypes[t.type];
+          t.pulse = Math.max(0, t.pulse - dt);
+          t.cooldown = Math.max(0, t.cooldown - dt);
+          t.tickTimer = Math.max(0, (t.tickTimer || 0) - dt);
+          t.auraPulse = Math.max(0, (t.auraPulse || 0) - dt);
+
+          if (type.family === "percentAura") {
+            const range = statFor(t.type,"range",t), pctDps = statFor(t.type,"pctDps",t);
+            let hit = false;
+            for (const e of state.enemies) {
+              const d = Math.hypot(e.x-t.x,e.y-t.y);
+              if (d <= range && !isInvulnerable(e)) {
+                damageEnemy(e, e.maxHp * pctDps * dt, { source:t.id, aura:true, percent:true, ignoreArmor:t.type === "rad" && hasSpecial("rad","nuclearRub") });
+                if (t.type === "bio") {
+                  applyPoison(e, .45);
+                  if (hasSpecial("bio","sporeOvergrowth")) applySlow(e, .11, .22);
+                }
+                hit = true;
+              }
+            }
+            if (hit) {
+              t.pulse = .32;
+              if (Math.random() < dt * 8) spawnParticle(t.x + (Math.random()-.5)*range*1.05, t.y + (Math.random()-.5)*range*1.05, type.emoji, 18, .5);
+            }
+            if (t.type === "rad" && hasSpecial("rad","meltdownPulse") && t.tickTimer <= 0) {
+              t.tickTimer = 6.5;
+              const pulseR = range * 1.48;
+              for (const e of state.enemies) if (Math.hypot(e.x-t.x,e.y-t.y) <= pulseR) damageEnemy(e, e.maxHp * pctDps * 2.4, { source:t.id, aura:true, percent:true, ignoreArmor:true });
+              state.zones.push({ type:"radiation", x:t.x, y:t.y, radius:pulseR, life:.35, maxLife:.35, dps:0, slow:0 });
+              spawnParticle(t.x, t.y, "☢️", 38, .8);
+            }
+            continue;
+          }
+
+          if (type.family === "slowAura") {
+            const range = statFor(t.type,"range",t), slowPower = statFor(t.type,"slowPower",t);
+            let hit = false;
+            for (const e of state.enemies) {
+              const d = Math.hypot(e.x-t.x,e.y-t.y);
+              if (d <= range && !isSlowImmune(e)) {
+                applySlow(e, slowPower, .18);
+                hit = true;
+              }
+            }
+            if (hit) {
+              t.pulse = .28;
+              if (Math.random() < dt * 6) spawnParticle(t.x + (Math.random()-.5)*range, t.y + (Math.random()-.5)*range, "❄️", 17, .45);
+            }
+            continue;
+          }
+
+          if (type.family === "supportAura") {
+            t.pulse = .13 + Math.sin(performance.now()/380 + t.id) * .07;
+            if (Math.random() < dt * 1.8) spawnParticle(t.x + rand(-18,18), t.y + rand(-18,18), "🍯", 14, .45);
+            continue;
+          }
+
+          const target = targetForTower(t);
+          if (!target) continue;
+          t.angle = Math.atan2(target.y-t.y, target.x-t.x);
+          const fireRate = Math.max(.15, statFor(t.type,"fireRate",t));
+          if (t.cooldown <= 0) {
+            t.cooldown = 1 / fireRate;
+            t.pulse = .22;
+            fireTower(t, target);
+          }
+        }
+      }
+
+      function fireTower(tower, target) {
+        const type = towerTypes[tower.type];
+        const damage = statFor(tower.type,"damage",tower);
+        const splash = rawStatFor(tower.type,"splash");
+        const speed = type.family === "aoe" ? 420 : type.family === "sniper" ? 900 : type.family === "chain" ? 620 : 560;
+        const angle = Math.atan2(target.y - tower.y, target.x - tower.x);
+        const sx = tower.x + Math.cos(angle)*20, sy = tower.y + Math.sin(angle)*20;
+        const baseProjectile = {
+          id:state.nextId++, type:tower.type, towerId:tower.id, x:sx, y:sy, sx, sy,
+          tx:target.x, ty:target.y, targetId:target.id, speed, damage, splash, age:0, maxAge:type.family === "sniper" ? 2.6 : 1.8,
+          chain:type.family === "chain" ? 2 + (hasSpecial("pepper","chainDinner") ? 2 : 0) : 0,
+          penetrate:tower.type === "sniper" && hasSpecial("sniper","penetrator")
+        };
+
+        if (baseProjectile.penetrate) {
+          baseProjectile.locked = true;
+          baseProjectile.ex = tower.x + Math.cos(angle) * 1400;
+          baseProjectile.ey = tower.y + Math.sin(angle) * 1400;
+          baseProjectile.tx = baseProjectile.ex;
+          baseProjectile.ty = baseProjectile.ey;
+        }
+
+        state.projectiles.push(baseProjectile);
+
+        if (tower.type === "arrow" && hasSpecial("arrow","twinSkewers")) {
+          const second = secondaryTarget(tower, target);
+          if (second) {
+            const a2 = Math.atan2(second.y - tower.y, second.x - tower.x);
+            state.projectiles.push({
+              ...baseProjectile, id:state.nextId++, x:tower.x + Math.cos(a2)*20, y:tower.y + Math.sin(a2)*20,
+              sx:tower.x + Math.cos(a2)*20, sy:tower.y + Math.sin(a2)*20, tx:second.x, ty:second.y, targetId:second.id,
+              damage:damage * .72, penetrate:false, chain:0, locked:false
+            });
+          }
+        }
+
+        spawnParticle(tower.x, tower.y, type.family === "sniper" ? "✨" : type.family === "chain" ? "🌶️" : "🔥", type.family === "sniper" ? 16 : 13, .16);
+      }
+
+      function secondaryTarget(tower, primary) {
+        const range = statFor(tower.type,"range",tower);
+        let best = null, bestD = Infinity;
+        for (const e of state.enemies) {
+          if (e.id === primary.id || isInvulnerable(e) || !enemyVisibleToTower(e, tower)) continue;
+          const d = Math.hypot(e.x - tower.x, e.y - tower.y);
+          if (d <= range && d < bestD) { best = e; bestD = d; }
+        }
+        return best;
+      }
+
+      function updateProjectiles(dt) {
+        for (const p of state.projectiles) {
+          p.age += dt;
+          const target = state.enemies.find(e => e.id === p.targetId);
+          if (target && !isInvulnerable(target) && !p.locked) { p.tx = target.x; p.ty = target.y; }
+          const dx = p.tx-p.x, dy = p.ty-p.y, d = Math.hypot(dx,dy) || 1, step = p.speed * dt;
+          if (step >= d || d < 12) { hitProjectile(p); p.dead = true; }
+          else { p.x += dx/d*step; p.y += dy/d*step; }
+          if (p.age > p.maxAge) p.dead = true;
+        }
+        state.projectiles = state.projectiles.filter(p => !p.dead);
+      }
+
+      function hitProjectile(p) {
+        const main = state.enemies.find(e => e.id === p.targetId);
+        if (p.penetrate) {
+          spawnParticle(p.tx, p.ty, "💥", 21, .28);
+          for (const e of state.enemies) {
+            const d = distancePointToSegment({x:e.x,y:e.y}, {x:p.sx,y:p.sy}, {x:p.ex,y:p.ey});
+            if (d <= Math.max(18, enemyTypes[e.kind].size * .45)) damageEnemy(e, p.damage * (e.id === p.targetId ? 1 : .72), { source:p.towerId, pierce:true });
+          }
+          return;
+        }
+
+        if (p.splash > 0) {
+          blastAt(p.tx, p.ty, p.splash, p.damage, p.towerId, p.type);
+        } else if (p.chain > 0 && main) {
+          chainHit(main, p);
+        } else if (main) {
+          damageEnemy(main, p.damage, { source:p.towerId });
+          if (p.type === "arrow" && hasSpecial("arrow","stickySauce")) applyBurn(main, p.damage * .18, 4);
+          spawnParticle(main.x, main.y, towerTypes[p.type].family === "sniper" ? "💥" : "🔥", towerTypes[p.type].family === "sniper" ? 21 : 14, .22);
+        }
+      }
+
+      function blastAt(x, y, radius, damage, towerId, type) {
+        spawnParticle(x, y, "🔥", 18, .32);
+        for (const e of state.enemies) {
+          const d = Math.hypot(e.x-x,e.y-y);
+          if (d <= radius) {
+            const falloff = .35 + .65 * (1 - d / radius);
+            damageEnemy(e, damage * falloff, { source:towerId, splash:true });
+            if (type === "bomb" && hasSpecial("bomb","bunkerBuster")) e.stun = Math.max(e.stun, .34);
+          }
+        }
+        if (type === "dynamite" && hasSpecial("dynamite","greaseFire")) {
+          state.zones.push({ type:"fire", x, y, radius:radius*.75, life:3.6, maxLife:3.6, dps:damage*.22, slow:0 });
+        }
+        if (type === "bomb" && hasSpecial("bomb","clusterCharcoal")) {
+          for (let i=0; i<3; i++) {
+            const a = Math.random() * TWO_PI, r = radius * rand(.25,.62);
+            state.zones.push({ type:"miniBlast", x:x+Math.cos(a)*r, y:y+Math.sin(a)*r, radius:radius*.38, life:.22, maxLife:.22, dps:damage*1.35, slow:0, burst:true, source:towerId });
+          }
+        }
+      }
+
+      function chainHit(first, p) {
+        let current = first, dmg = p.damage, hits = 0;
+        const seen = new Set();
+        while (current && hits <= p.chain) {
+          seen.add(current.id);
+          damageEnemy(current, dmg, { source:p.towerId, chain:true });
+          if (hasSpecial("pepper","capsaicinStorm")) applyBurn(current, dmg * .12, 2.6);
+          spawnParticle(current.x, current.y, "🌶️", 17, .22);
+          hits++;
+          let next = null, bestD = Infinity;
+          for (const e of state.enemies) {
+            if (seen.has(e.id) || e.hp <= 0 || isInvulnerable(e)) continue;
+            const d = Math.hypot(e.x-current.x, e.y-current.y);
+            if (d <= 128 && d < bestD) { next = e; bestD = d; }
+          }
+          current = next;
+          dmg *= .68;
+        }
+      }
+
+      function updateZones(dt) {
+        for (const z of state.zones) {
+          z.life -= dt;
+          if (z.burst && !z.bursted) {
+            z.bursted = true;
+            for (const e of state.enemies) {
+              const d = Math.hypot(e.x-z.x,e.y-z.y);
+              if (d <= z.radius) damageEnemy(e, z.dps, { source:z.source, splash:true });
+            }
+            continue;
+          }
+          if (z.dps > 0) {
+            for (const e of state.enemies) {
+              const d = Math.hypot(e.x-z.x,e.y-z.y);
+              if (d <= z.radius) damageEnemy(e, z.dps * dt, { dot:true, fire:z.type==="fire", poison:z.type==="poison", ignoreArmor:true });
+            }
+          }
+          if (z.slow > 0) {
+            for (const e of state.enemies) if (Math.hypot(e.x-z.x,e.y-z.y) <= z.radius) applySlow(e, z.slow, .2);
+          }
+        }
+        state.zones = state.zones.filter(z => z.life > 0).slice(-90);
+      }
+
+      function collectDeadAndReached() {
+        for (const e of state.enemies) if (e.reached && !e.reachedHandled) {
+          e.reachedHandled = true;
+          state.lives -= e.lifeCost || 1;
+          spawnParticle(e.x, e.y, "💥", 34, .55);
+        }
+
+        for (const e of state.enemies) if (e.hp <= 0 && !e.deadHandled) {
+          e.deadHandled = true;
+          state.enemiesDefeated++;
+          const cash = Math.max(1, Math.round(e.reward * state.global.cashMult));
+          state.cash += cash;
+          state.score += Math.round(e.maxHp + e.reward * 5);
+          if (e.splitCount) splitEnemy(e);
+          if (hasSpecial("bio","plagueCarry") && wasNearTowerType(e, "bio", 112)) {
+            state.zones.push({ type:"poison", x:e.x, y:e.y, radius:58, life:2.8, maxLife:2.8, dps:Math.max(10, e.maxHp*.038), slow:hasSpecial("bio","sporeOvergrowth") ? .12 : 0 });
+          }
+          if (Math.random() < .45) spawnParticle(e.x, e.y - 10, "💰", 15, .5);
+        }
+
+        state.enemies = state.enemies.filter(e => e.hp > 0 && !e.reached);
+        if (state.lives <= 0) {
+          state.lives = 0;
+          state.gameOver = true;
+          toast("Game over");
+        }
+      }
+
+      function splitEnemy(enemy) {
+        const count = enemy.splitCount;
+        for (let i=0; i<count; i++) {
+          const spec = makeEnemy("swarm", state.wave, 0, 0);
+          spec.hp = Math.max(8, Math.round(enemy.maxHp * .12));
+          spec.reward = Math.max(1, Math.round(enemy.reward * .16));
+          const offset = rand(-24, 14);
+          spawnEnemy(spec, { pathDistance:clamp(enemy.pathDistance + offset, 0, pathMeta.total), directProgress:enemy.directProgress });
+        }
+        spawnParticle(enemy.x, enemy.y, "🥨", 24, .7);
+      }
+
+      function wasNearTowerType(enemy, type, extra=0) {
+        return state.towers.some(t => t.type === type && Math.hypot(t.x - enemy.x, t.y - enemy.y) <= rawStatFor(type,"range") + extra);
+      }
+
+      function cleanupWave() {
+        if (state.waveActive && state.spawnQueue.length === 0 && state.enemies.length === 0) {
+          state.waveActive = false;
+          const late = Math.max(0, state.wave - 8);
+          let bonus = 28 + state.wave * 5.6 + Math.pow(state.wave, 1.58) * 2.8 + late * late * 2.4 + state.lives * .85;
+          bonus = Math.round(bonus * state.global.cashMult * state.global.waveBonusMult);
+          state.cash += bonus;
+          state.score += Math.round(bonus * (3 + state.global.scoreWaveBonus * state.wave));
+          toast(`Wave ${state.wave} cleared · +$${bonus}`);
+          state.waveName = wavePlan(state.wave + 1).name;
+          renderAll();
+          if (state.wave >= state.level.waves) {
+            state.gameOver = true;
+            state.victory = true;
+            toast("Victory");
+          }
+        }
+      }
+
+      function spawnParticle(x,y,text,size,life) {
+        state.particles.push({ x, y, text, size, life, maxLife:life, vx:(Math.random()-.5)*36, vy:-25-Math.random()*35, rot:(Math.random()-.5)*.8 });
+      }
+
+      function updateParticles(dt) {
+        for (const p of state.particles) {
+          p.life -= dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vy += 20 * dt;
+          p.rot += dt;
+        }
+        state.particles = state.particles.filter(p => p.life > 0).slice(-230);
+      }
+
+      function draw() {
+        ctx.clearRect(0,0,W,H);
+        drawBackground();
+        drawPath();
+        drawZones();
+        drawTowers();
+        drawEnemies();
+        drawProjectiles();
+        drawParticles();
+        drawMousePreview();
+        drawOverlay();
+      }
+
+      function drawBackground() {
+        const level = state?.level || levels[selectedLevelKey];
+        ctx.fillStyle = "#3a2418";
+        ctx.fillRect(0,0,W,H);
+        ctx.save();
+        ctx.globalAlpha = .26;
+        for (let x = -60; x < W + 60; x += 58) {
+          for (let y = -40; y < H + 60; y += 58) {
+            ctx.fillStyle = ((x+y)/58)%2 ? "#462b1d" : "#2f1e15";
+            ctx.beginPath();
+            ctx.arc(x + ((y/58)%2)*18, y, 4, 0, TWO_PI);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+
+        ctx.save();
+        ctx.globalAlpha = .08;
+        ctx.strokeStyle = level.key === "market" ? "#ffb7d8" : level.key === "festival" ? "#ffe1a1" : "#ffe1a1";
+        ctx.lineWidth = 2;
+        for (let x = 32; x < W; x += 42) {
+          ctx.beginPath();
+          ctx.moveTo(x,0);
+          ctx.lineTo(x,H);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        const grill = ctx.createLinearGradient(0,0,0,H);
+        grill.addColorStop(0,"rgba(255,205,117,.06)");
+        grill.addColorStop(1,"rgba(0,0,0,.12)");
+        ctx.fillStyle = grill;
+        ctx.fillRect(0,0,W,H);
+      }
+
+      function drawPath() {
+        if (!path) return;
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = "rgba(0,0,0,.38)";
+        ctx.lineWidth = 76;
+        drawPolyline(path);
+        ctx.strokeStyle = "#8a5a31";
+        ctx.lineWidth = 66;
+        drawPolyline(path);
+        ctx.strokeStyle = "#c7833d";
+        ctx.lineWidth = 48;
+        drawPolyline(path);
+        ctx.strokeStyle = "rgba(255,238,185,.22)";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10,18]);
+        drawPolyline(path);
+        ctx.setLineDash([]);
+        ctx.font = "28px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(state?.level?.emoji || "🏕️", 36, path[0].y);
+        ctx.fillText("🍽️", W-40, path[path.length-1].y);
+        ctx.restore();
+      }
+
+      function drawPolyline(points) {
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i=1; i<points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+        ctx.stroke();
+      }
+
+      function drawZones() {
+        if (!state) return;
+        for (const z of state.zones) {
+          const a = clamp(z.life / z.maxLife, 0, 1);
+          ctx.save();
+          ctx.globalAlpha = (z.type === "radiation" ? .18 : .24) * a;
+          ctx.fillStyle = z.type === "poison" ? "#78ff94" : z.type === "radiation" ? "#b7ff67" : "#ff743f";
+          ctx.beginPath();
+          ctx.arc(z.x, z.y, z.radius, 0, TWO_PI);
+          ctx.fill();
+          ctx.globalAlpha = .33 * a;
+          ctx.strokeStyle = z.type === "poison" ? "#78ff94" : z.type === "radiation" ? "#b7ff67" : "#ffb347";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(z.x, z.y, z.radius, 0, TWO_PI);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      function drawTowers() {
+        if (!state) return;
+        for (const t of state.towers) {
+          const type = towerTypes[t.type], range = statFor(t.type,"range",t), selected = t.id === selectedTowerId;
+          if (selected) {
+            ctx.save();
+            ctx.globalAlpha = .32;
+            ctx.fillStyle = type.color;
+            ctx.beginPath();
+            ctx.arc(t.x,t.y,range,0,TWO_PI);
+            ctx.fill();
+            ctx.restore();
+          }
+
+          if (selected || type.family === "percentAura" || type.family === "slowAura" || type.family === "supportAura") {
+            ctx.save();
+            const r = range * (.82 + Math.sin(performance.now()/260 + t.id) * .035);
+            ctx.globalAlpha = selected ? .28 + t.pulse * .25 : .08 + t.pulse * .08;
+            ctx.strokeStyle = type.color;
+            ctx.lineWidth = type.family === "supportAura" ? 5 : 8;
+            ctx.beginPath();
+            ctx.arc(t.x,t.y,r,0,TWO_PI);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          ctx.save();
+          ctx.translate(t.x,t.y);
+          ctx.rotate(t.angle || 0);
+          ctx.fillStyle = "rgba(0,0,0,.35)";
+          ctx.beginPath();
+          ctx.ellipse(0,16,28,14,0,0,TWO_PI);
+          ctx.fill();
+          ctx.rotate(-(t.angle || 0));
+          ctx.font = `${34 + t.pulse*18}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(type.emoji, 0, 0);
+          if (selected) {
+            ctx.strokeStyle = "#ffd788";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0,0,27,0,TWO_PI);
+            ctx.stroke();
+          }
+          if (t.kills > 0) {
+            ctx.fillStyle = "rgba(0,0,0,.62)";
+            ctx.fillRect(-17, 20, 34, 14);
+            ctx.fillStyle = "#ffe4a6";
+            ctx.font = "10px system-ui";
+            ctx.fillText(`${t.kills}`, 0, 27);
+          }
+          ctx.restore();
+        }
+      }
+
+      function drawFoodFace(emoji, x, y, size, wobble=0, hpPct=1, alpha=1) {
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(x, y);
+        ctx.rotate(Math.sin(wobble) * .08);
+        ctx.font = `${size}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.shadowColor = "rgba(0,0,0,.4)";
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetY = 3;
+        ctx.fillText(emoji, 0, 0);
+        ctx.shadowColor = "transparent";
+
+        const eyeY = -size * .12, eyeDX = size * .18, eyeW = size * .13, eyeH = size * .16;
+        ctx.fillStyle = "white";
+        ctx.strokeStyle = "rgba(0,0,0,.65)";
+        ctx.lineWidth = Math.max(1, size * .035);
+        [-eyeDX, eyeDX].forEach(ex => {
+          ctx.beginPath();
+          ctx.ellipse(ex, eyeY, eyeW, eyeH, 0, 0, TWO_PI);
+          ctx.fill();
+          ctx.stroke();
+        });
+        ctx.fillStyle = hpPct < .35 ? "#b70000" : "#111";
+        [-eyeDX, eyeDX].forEach(ex => {
+          ctx.beginPath();
+          ctx.arc(ex + Math.sin(wobble * 1.3) * size * .018, eyeY + size * .025, size * .035, 0, TWO_PI);
+          ctx.fill();
+        });
+        ctx.restore();
+      }
+
+      function drawEnemies() {
+        if (!state) return;
+        const sorted = [...state.enemies].sort((a,b)=>a.y-b.y);
+        for (const e of sorted) {
+          const type = enemyTypes[e.kind] || enemyTypes.normal;
+          const size = type.size;
+          const invulnerable = isInvulnerable(e);
+          const emoji = e.kind === "shielder" ? shieldEmoji(e) : e.emoji;
+          const stealthAlpha = e.stealth && !state.global.revealStealth && e.revealed <= 0 ? .42 : 1;
+
+          if (e.direct) {
+            ctx.save();
+            ctx.globalAlpha = .22;
+            ctx.fillStyle = type.color;
+            ctx.beginPath();
+            ctx.ellipse(e.x, e.y + size*.58, size*.52, size*.18, 0, 0, TWO_PI);
+            ctx.fill();
+            ctx.restore();
+          }
+
+          if (e.slow > 0 && !isSlowImmune(e)) {
+            ctx.save();
+            ctx.globalAlpha = .2;
+            ctx.strokeStyle = "#9ce8ff";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, size * .62, 0, TWO_PI);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          if (e.teleportCharge > 0) {
+            ctx.save();
+            ctx.globalAlpha = .24 + Math.sin(e.age * 18) * .08;
+            ctx.strokeStyle = "#d5a4ff";
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, 72 * (1.05 - e.teleportCharge / 1.05), 0, TWO_PI);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          if (e.armor) {
+            ctx.save();
+            ctx.globalAlpha = .2;
+            ctx.strokeStyle = "#f8d29f";
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, size*.6, 0, TWO_PI);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          if (e.burnTime > 0 || e.poisonTime > 0) {
+            ctx.save();
+            ctx.globalAlpha = .34;
+            ctx.fillStyle = e.poisonTime > 0 ? "#78ff94" : "#ff723d";
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, size*.5, 0, TWO_PI);
+            ctx.fill();
+            ctx.restore();
+          }
+
+          drawFoodFace(emoji, e.x, e.y, size, e.age * 5, e.hp/e.maxHp, stealthAlpha);
+
+          const w = size * 1.25, h = 5, pct = clamp(e.hp/e.maxHp,0,1);
+          ctx.save();
+          ctx.globalAlpha = stealthAlpha;
+          ctx.fillStyle = "rgba(0,0,0,.55)";
+          ctx.fillRect(e.x-w/2, e.y-size*.78, w, h);
+          ctx.fillStyle = invulnerable ? "#66b7ff" : pct > .55 ? type.color : pct > .25 ? "#ffd15e" : "#ff6b6b";
+          ctx.fillRect(e.x-w/2, e.y-size*.78, w*pct, h);
+          ctx.restore();
+
+          if (e.kind === "shielder") {
+            ctx.save();
+            ctx.globalAlpha = invulnerable ? .22 + Math.sin(e.age * 14) * .05 : .08;
+            ctx.strokeStyle = invulnerable ? "#66b7ff" : "#7ee08b";
+            ctx.lineWidth = invulnerable ? 3 : 2;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, size*.56, 0, TWO_PI);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          if (e.kind === "healer") {
+            ctx.save();
+            ctx.globalAlpha = .12 + Math.sin(e.age * 5) * .03;
+            ctx.fillStyle = "#7ee08b";
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, 96, 0, TWO_PI);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+      }
+
+      function drawProjectiles() {
+        if (!state) return;
+        for (const p of state.projectiles) {
+          const tower = towerTypes[p.type];
+          ctx.save();
+          if (p.penetrate) {
+            ctx.globalAlpha = .42;
+            ctx.strokeStyle = "#fff1a6";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(p.sx, p.sy);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+          }
+          ctx.translate(p.x,p.y);
+          ctx.rotate(Math.atan2(p.ty-p.y,p.tx-p.x));
+          ctx.font = `${tower.family === "aoe" ? 18 : tower.family === "sniper" ? 13 : 14}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(tower.family === "sniper" ? "✨" : tower.family === "chain" ? "🌶️" : "🔥", 0, 0);
+          ctx.restore();
+        }
+      }
+
+      function drawParticles() {
+        if (!state) return;
+        for (const p of state.particles) {
+          const a = clamp(p.life / p.maxLife, 0, 1);
+          ctx.save();
+          ctx.globalAlpha = a;
+          ctx.translate(p.x,p.y);
+          ctx.rotate(p.rot);
+          ctx.font = `${p.size}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(p.text, 0, 0);
+          ctx.restore();
+        }
+      }
+
+      function drawMousePreview() {
+        if (!state || !mouse.inside || state.gameOver || menuOpen || !selectedBuildType) return;
+        const type = towerTypes[selectedBuildType], valid = canBuildAt(mouse.x,mouse.y), canAfford = state.cash >= towerCost(selectedBuildType);
+        ctx.save();
+        ctx.globalAlpha = .45;
+        ctx.fillStyle = valid.ok && canAfford ? type.color : "#ff4a4a";
+        ctx.beginPath();
+        ctx.arc(mouse.x,mouse.y,rawStatFor(selectedBuildType,"range"),0,TWO_PI);
+        ctx.fill();
+        ctx.globalAlpha = .92;
+        ctx.font = "34px \"Apple Color Emoji\", \"Segoe UI Emoji\", sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(type.emoji, mouse.x, mouse.y);
+        ctx.restore();
+      }
+
+      function drawOverlay() {
+        if (!state) return;
+        if (!state.gameOver && !state.paused) return;
+        ctx.save();
+        ctx.fillStyle = "rgba(15,8,5,.58)";
+        ctx.fillRect(0,0,W,H);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#fff3dd";
+        ctx.font = "900 46px system-ui";
+        ctx.fillText(state.gameOver ? (state.victory ? "Cookout Saved" : "Picnic Overrun") : "Paused", W/2, H/2 - 28);
+        ctx.fillStyle = "#eac799";
+        ctx.font = "18px system-ui";
+        ctx.fillText(state.gameOver ? `Score ${state.score} · Wave ${state.wave} · ${state.level.name}` : "Press Space or Resume to continue", W/2, H/2 + 20);
+        ctx.restore();
+      }
+
+      function loop(now) {
+        const dt = (now - lastT) / 1000;
+        lastT = now;
+        update(dt);
+        draw();
+        if (state) {
+          renderStats();
+          renderBoardControls();
+        }
+        raf = requestAnimationFrame(loop);
+      }
+
+      renderMenu();
+      path = levels[selectedLevelKey].path;
+      pathMeta = createPathMeta(path);
+      state = null;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
