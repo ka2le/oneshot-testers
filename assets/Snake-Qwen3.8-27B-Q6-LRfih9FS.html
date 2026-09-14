@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0f;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        .game-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            padding: 0 4px;
+        }
+
+        .score-display {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .score-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 8px 16px;
+        }
+
+        .score-item .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+        }
+
+        .score-item .value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #fff;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .score-item.high .value {
+            color: #ffd700;
+        }
+
+        .btn-restart {
+            background: linear-gradient(135deg, #ff4757, #ff6b81);
+            border: none;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            letter-spacing: 0.5px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+        }
+
+        .btn-restart:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 71, 87, 0.4);
+        }
+
+        .btn-restart:active {
+            transform: translateY(0);
+        }
+
+        canvas {
+            border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.08);
+            box-shadow: 0 0 60px rgba(0, 255, 135, 0.05), inset 0 0 60px rgba(0,0,0,0.3);
+        }
+
+        .legend {
+            display: flex;
+            gap: 24px;
+            padding: 8px 0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #777;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.normal { background: #ff6b6b; box-shadow: 0 0 6px #ff6b6b; }
+        .legend-dot.bonus { background: #ffd93d; box-shadow: 0 0 6px #ffd93d; }
+        .legend-dot.special { background: #a855f7; box-shadow: 0 0 6px #a855f7; }
+        .legend-dot.heal { background: #4ecdc4; box-shadow: 0 0 6px #4ecdc4; }
+
+        .overlay {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 10, 15, 0.92);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 40px 50px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+            display: none;
+        }
+
+        .overlay.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-50%) scale(0.9); }
+            to { opacity: 1; transform: translateX(-50%) scale(1); }
+        }
+
+        .overlay h2 {
+            color: #fff;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .overlay p {
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .overlay .final-score {
+            color: #fff;
+            font-size: 48px;
+            font-weight: 700;
+            margin: 16px 0;
+        }
+
+        .overlay .btn-play {
+            margin-top: 20px;
+            background: linear-gradient(135deg, #00d26a, #38ef7d);
+            border: none;
+            color: #0a0a0f;
+            padding: 12px 32px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.2s ease;
+        }
+
+        .overlay .btn-play:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(0, 210, 106, 0.4);
+        }
+
+        .controls-hint {
+            color: #555;
+            font-size: 12px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <div class="score-display">
+                <div class="score-item">
+                    <span class="label">Score</span>
+                    <span class="value" id="score">0</span>
+                </div>
+                <div class="score-item high">
+                    <span class="label">Best</span>
+                    <span class="value" id="highScore">0</span>
+                </div>
+            </div>
+            <button class="btn-restart" onclick="restartGame()">↻ Restart</button>
+        </div>
+
+        <canvas id="gameCanvas" width="600" height="600"></canvas>
+
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot normal"></div> +10</div>
+            <div class="legend-item"><div class="legend-dot bonus"></div> +30</div>
+            <div class="legend-item"><div class="legend-dot special"></div> +50</div>
+            <div class="legend-item"><div class="legend-dot heal"></div> Extra Life</div>
+        </div>
+
+        <div class="controls-hint">Arrow Keys / WASD to move</div>
+
+        <div class="overlay" id="overlay">
+            <h2 id="overlayTitle">SNAKE</h2>
+            <p id="overlayMsg">Eat food. Don't hit yourself or the walls.</p>
+            <div class="final-score" id="overlayScore" style="display:none;">0</div>
+            <button class="btn-play" id="overlayBtn" onclick="startGame()">Play</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GRID = 20;
+        const COLS = canvas.width / GRID;
+        const ROWS = canvas.height / GRID;
+
+        let snake, direction, nextDirection, food, bonusFood, specialFood, healFood;
+        let score, highScore = 0, speed, baseSpeed, gameRunning;
+        let lives, particles, frameCount;
+
+        function init() {
+            snake = [{ x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) }];
+            direction = { x: 1, y: 0 };
+            nextDirection = { x: 1, y: 0 };
+            score = 0;
+            speed = baseSpeed = 120;
+            lives = 3;
+            particles = [];
+            frameCount = 0;
+            bonusFood = null;
+            specialFood = null;
+            healFood = null;
+            spawnFood();
+            updateScore();
+        }
+
+        function spawnFood() {
+            let pos;
+            do {
+                pos = {
+                    x: Math.floor(Math.random() * COLS),
+                    y: Math.floor(Math.random() * ROWS)
+                };
+            } while (snake.some(s => s.x === pos.x && s.y === pos.y) ||
+                     (bonusFood && bonusFood.x === pos.x && bonusFood.y === pos.y) ||
+                     (specialFood && specialFood.x === pos.x && specialFood.y === pos.y) ||
+                     (healFood && healFood.x === pos.x && healFood.y === pos.y));
+            food = pos;
+        }
+
+        function spawnBonus() {
+            let pos;
+            do {
+                pos = {
+                    x: Math.floor(Math.random() * COLS),
+                    y: Math.floor(Math.random() * ROWS)
+                };
+            } while (snake.some(s => s.x === pos.x && s.y === pos.y) ||
+                     (food.x === pos.x && food.y === pos.y) ||
+                     (specialFood && specialFood.x === pos.x && specialFood.y === pos.y) ||
+                     (healFood && healFood.x === pos.x && healFood.y === pos.y));
+            bonusFood = pos;
+            bonusFood.timer = 150;
+        }
+
+        function spawnSpecial() {
+            let pos;
+            do {
+                pos = {
+                    x: Math.floor(Math.random() * COLS),
+                    y: Math.floor(Math.random() * ROWS)
+                };
+            } while (snake.some(s => s.x === pos.x && s.y === pos.y) ||
+                     (food.x === pos.x && food.y === pos.y) ||
+                     (bonusFood && bonusFood.x === pos.x && bonusFood.y === pos.y) ||
+                     (healFood && healFood.x === pos.x && healFood.y === pos.y));
+            specialFood = pos;
+            specialFood.timer = 100;
+        }
+
+        function spawnHeal() {
+            let pos;
+            do {
+                pos = {
+                    x: Math.floor(Math.random() * COLS),
+                    y: Math.floor(Math.random() * ROWS)
+                };
+            } while (snake.some(s => s.x === pos.x && s.y === pos.y) ||
+                     (food.x === pos.x && food.y === pos.y) ||
+                     (bonusFood && bonusFood.x === pos.x && bonusFood.y === pos.y) ||
+                     (specialFood && specialFood.x === pos.x && specialFood.y === pos.y));
+            healFood = pos;
+            healFood.timer = 120;
+        }
+
+        function addParticles(x, y, color, count = 8) {
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 / count) * i;
+                const spd = 1.5 + Math.random() * 2;
+                particles.push({
+                    x: x * GRID + GRID / 2,
+                    y: y * GRID + GRID / 2,
+                    vx: Math.cos(angle) * spd,
+                    vy: Math.sin(angle) * spd,
+                    life: 1,
+                    color: color,
+                    size: 3 + Math.random() * 3
+                });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.03;
+                p.size *= 0.97;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        function updateScore() {
+            document.getElementById('score').textContent = score;
+            if (score > highScore) {
+                highScore = score;
+                document.getElementById('highScore').textContent = highScore;
+            }
+        }
+
+        function update() {
+            frameCount++;
+            direction = { ...nextDirection };
+
+            const head = {
+                x: snake[0].x + direction.x,
+                y: snake[0].y + direction.y
+            };
+
+            // Wall collision
+            if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+                lives--;
+                addParticles(snake[0].x, snake[0].y, '#ff4757', 12);
+                if (lives <= 0) {
+                    gameOver();
+                    return;
+                }
+                // Reset position
+                snake = [{ x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) }];
+                direction = { x: 1, y: 0 };
+                nextDirection = { x: 1, y: 0 };
+                return;
+            }
+
+            // Self collision
+            if (snake.some(s => s.x === head.x && s.y === head.y)) {
+                lives--;
+                addParticles(head.x, head.y, '#ff4757', 12);
+                if (lives <= 0) {
+                    gameOver();
+                    return;
+                }
+                snake = [{ x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) }];
+                direction = { x: 1, y: 0 };
+                nextDirection = { x: 1, y: 0 };
+                return;
+            }
+
+            snake.unshift(head);
+
+            let ate = false;
+
+            if (head.x === food.x && head.y === food.y) {
+                score += 10;
+                ate = true;
+                addParticles(head.x, head.y, '#ff6b6b');
+                spawnFood();
+                speed = Math.max(60, baseSpeed - Math.floor(score / 50) * 5);
+
+                // Chance to spawn bonus
+                if (!bonusFood && Math.random() < 0.3) spawnBonus();
+                if (!specialFood && Math.random() < 0.1) spawnSpecial();
+                if (lives < 3 && !healFood && Math.random() < 0.15) spawnHeal();
+            }
+
+            if (bonusFood && head.x === bonusFood.x && head.y === bonusFood.y) {
+                score += 30;
+                ate = true;
+                addParticles(head.x, head.y, '#ffd93d', 12);
+                bonusFood = null;
+            }
+
+            if (specialFood && head.x === specialFood.x && head.y === specialFood.y) {
+                score += 50;
+                ate = true;
+                addParticles(head.x, head.y, '#a855f7', 16);
+                specialFood = null;
+            }
+
+            if (healFood && head.x === healFood.x && head.y === healFood.y) {
+                lives = Math.min(3, lives + 1);
+                ate = true;
+                addParticles(head.x, head.y, '#4ecdc4', 12);
+                healFood = null;
+            }
+
+            if (!ate) {
+                snake.pop();
+            }
+
+            // Decrement timers
+            if (bonusFood) {
+                bonusFood.timer--;
+                if (bonusFood.timer <= 0) bonusFood = null;
+            }
+            if (specialFood) {
+                specialFood.timer--;
+                if (specialFood.timer <= 0) specialFood = null;
+            }
+            if (healFood) {
+                healFood.timer--;
+                if (healFood.timer <= 0) healFood = null;
+            }
+
+            updateScore();
+        }
+
+        function draw() {
+            // Background
+            ctx.fillStyle = '#0d0d14';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Grid (subtle)
+            ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= COLS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * GRID, 0);
+                ctx.lineTo(i * GRID, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i <= ROWS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, i * GRID);
+                ctx.lineTo(canvas.width, i * GRID);
+                ctx.stroke();
+            }
+
+            // Food (pulsing)
+            const pulse = 1 + Math.sin(frameCount * 0.1) * 0.15;
+
+            // Normal food
+            ctx.save();
+            ctx.shadowColor = '#ff6b6b';
+            ctx.shadowBlur = 12;
+            ctx.fillStyle = '#ff6b6b';
+            ctx.beginPath();
+            ctx.arc(food.x * GRID + GRID / 2, food.y * GRID + GRID / 2, (GRID / 2 - 3) * pulse, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // Bonus food
+            if (bonusFood) {
+                const bp = 1 + Math.sin(frameCount * 0.15) * 0.2;
+                const alpha = bonusFood.timer < 30 ? bonusFood.timer / 30 : 1;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.shadowColor = '#ffd93d';
+                ctx.shadowBlur = 16;
+                ctx.fillStyle = '#ffd93d';
+                ctx.beginPath();
+                // Diamond shape
+                const cx = bonusFood.x * GRID + GRID / 2;
+                const cy = bonusFood.y * GRID + GRID / 2;
+                const r = (GRID / 2 - 2) * bp;
+                ctx.moveTo(cx, cy - r);
+                ctx.lineTo(cx + r, cy);
+                ctx.lineTo(cx, cy + r);
+                ctx.lineTo(cx - r, cy);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Special food
+            if (specialFood) {
+                const sp = 1 + Math.sin(frameCount * 0.2) * 0.25;
+                const alpha = specialFood.timer < 25 ? specialFood.timer / 25 : 1;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.shadowColor = '#a855f7';
+                ctx.shadowBlur = 20;
+                ctx.fillStyle = '#a855f7';
+                // Star-like
+                const cx = specialFood.x * GRID + GRID / 2;
+                const cy = specialFood.y * GRID + GRID / 2;
+                const r = (GRID / 2 - 1) * sp;
+                ctx.beginPath();
+                for (let i = 0; i < 5; i++) {
+                    const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
+                    const innerAngle = angle + Math.PI / 5;
+                    ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+                    ctx.lineTo(cx + Math.cos(innerAngle) * r * 0.45, cy + Math.sin(innerAngle) * r * 0.45);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Heal food
+            if (healFood) {
+                const hp = 1 + Math.sin(frameCount * 0.12) * 0.15;
+                const alpha = healFood.timer < 30 ? healFood.timer / 30 : 1;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.shadowColor = '#4ecdc4';
+                ctx.shadowBlur = 14;
+                ctx.fillStyle = '#4ecdc4';
+                const cx = healFood.x * GRID + GRID / 2;
+                const cy = healFood.y * GRID + GRID / 2;
+                const r = (GRID / 2 - 3) * hp;
+                // Cross shape
+                ctx.fillRect(cx - r * 0.3, cy - r * 0.8, r * 0.6, r * 1.6);
+                ctx.fillRect(cx - r * 0.8, cy - r * 0.3, r * 1.6, r * 0.6);
+                ctx.restore();
+            }
+
+            // Snake
+            for (let i = snake.length - 1; i >= 0; i--) {
+                const seg = snake[i];
+                const t = i / snake.length;
+
+                if (i === 0) {
+                    // Head
+                    ctx.save();
+                    ctx.shadowColor = '#00ff87';
+                    ctx.shadowBlur = 15;
+                    ctx.fillStyle = '#00ff87';
+                    const padding = 2;
+                    roundRect(ctx, seg.x * GRID + padding, seg.y * GRID + padding, GRID - padding * 2, GRID - padding * 2, 5);
+                    ctx.fill();
+                    ctx.restore();
+
+                    // Eyes
+                    const eyeSize = 3;
+                    ctx.fillStyle = '#0a0a0f';
+                    const ex = direction.x === 0 ? 4 : (direction.x > 0 ? 5 : 1);
+                    const ey = direction.y === 0 ? 4 : (direction.y > 0 ? 5 : 1);
+                    const ox1 = direction.y !== 0 ? 4 : 0;
+                    const oy1 = direction.x !== 0 ? 4 : 0;
+                    ctx.beginPath();
+                    ctx.arc(seg.x * GRID + GRID / 2 + ex - 2 + ox1, seg.y * GRID + GRID / 2 + ey - 2 + oy1, eyeSize, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(seg.x * GRID + GRID / 2 - ex + 2 + ox1, seg.y * GRID + GRID / 2 - ey + 2 + oy1, eyeSize, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    // Body segments with gradient
+                    const g = Math.floor(180 - t * 100);
+                    ctx.save();
+                    if (i < 3) {
+                        ctx.shadowColor = '#00ff87';
+                        ctx.shadowBlur = 8;
+                    }
+                    ctx.fillStyle = `rgb(0, ${g}, ${Math.floor(g * 0.55)})`;
+                    const padding = 2 + t * 1.5;
+                    const radius = 5 - t * 2;
+                    roundRect(ctx, seg.x * GRID + padding, seg.y * GRID + padding, GRID - padding * 2, GRID - padding * 2, Math.max(3, radius));
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            // Particles
+            drawParticles();
+
+            // Lives display
+            ctx.save();
+            for (let i = 0; i < 3; i++) {
+                ctx.beginPath();
+                ctx.arc(20 + i * 24, canvas.height - 16, 7, 0, Math.PI * 2);
+                if (i < lives) {
+                    ctx.fillStyle = '#00ff87';
+                    ctx.shadowColor = '#00ff87';
+                    ctx.shadowBlur = 6;
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                    ctx.fill();
+                }
+            }
+            ctx.restore();
+        }
+
+        function roundRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return;
+            update();
+            updateParticles();
+            draw();
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        let gameLoopId;
+        let lastTime = 0;
+        let accumulator = 0;
+
+        function gameLoopSmooth(timestamp) {
+            if (!gameRunning) return;
+
+            if (!lastTime) lastTime = timestamp;
+            const delta = timestamp - lastTime;
+            lastTime = timestamp;
+            accumulator += delta;
+
+            while (accumulator >= speed) {
+                update();
+                accumulator -= speed;
+            }
+
+            updateParticles();
+            draw();
+            gameLoopId = requestAnimationFrame(gameLoopSmooth);
+        }
+
+        function startGame() {
+            document.getElementById('overlay').classList.remove('active');
+            init();
+            gameRunning = true;
+            lastTime = 0;
+            accumulator = 0;
+            gameLoopId = requestAnimationFrame(gameLoopSmooth);
+        }
+
+        function restartGame() {
+            cancelAnimationFrame(gameLoopId);
+            startGame();
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            cancelAnimationFrame(gameLoopId);
+            draw();
+
+            const overlay = document.getElementById('overlay');
+            document.getElementById('overlayTitle').textContent = 'Game Over';
+            document.getElementById('overlayMsg').textContent = `You scored ${score} points`;
+            document.getElementById('overlayScore').style.display = 'block';
+            document.getElementById('overlayScore').textContent = score;
+            document.getElementById('overlayBtn').textContent = 'Play Again';
+            overlay.classList.add('active');
+        }
+
+        // Input
+        document.addEventListener('keydown', (e) => {
+            if (!gameRunning) {
+                if (e.key === ' ' || e.key === 'Enter') startGame();
+                return;
+            }
+
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    if (direction.y !== 1) nextDirection = { x: 0, y: -1 };
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (direction.y !== -1) nextDirection = { x: 0, y: 1 };
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (direction.x !== 1) nextDirection = { x: -1, y: 0 };
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (direction.x !== -1) nextDirection = { x: 1, y: 0 };
+                    break;
+            }
+            e.preventDefault();
+        });
+
+        // Initial overlay
+        init();
+        draw();
+        document.getElementById('overlay').classList.add('active');
+    </script>
+</body>
+</html>

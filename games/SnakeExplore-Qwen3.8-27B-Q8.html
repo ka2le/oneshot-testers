@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Abyssal Serpent</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { 
+    width: 100%; height: 100%; overflow: hidden; 
+    background: #0a0a0f; 
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    touch-action: none;
+}
+canvas { display: block; width: 100%; height: 100%; }
+#ui {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 10;
+}
+#spellBar {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 12px; pointer-events: auto;
+}
+.spell {
+    width: 52px; height: 52px; border-radius: 10px;
+    background: rgba(20,20,35,0.85); border: 2px solid rgba(100,140,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; position: relative; cursor: pointer;
+    transition: all 0.2s;
+}
+.spell:hover { border-color: rgba(100,140,255,0.7); }
+.spell.cooling { opacity: 0.4; }
+.spell.cooling::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(100,140,255,0.3); border-radius: 0 0 8px 8px;
+    animation: coolUp linear forwards;
+}
+.spell.locked { opacity: 0.2; border-color: rgba(100,100,100,0.3); }
+@keyframes coolUp { from { height: 100%; } to { height: 0%; } }
+#hud {
+    position: fixed; top: 16px; left: 16px;
+    color: rgba(255,255,255,0.7); font-size: 14px;
+    display: flex; flex-direction: column; gap: 4px;
+}
+#hud div { display: flex; align-items: center; gap: 6px; }
+.hud-icon { font-size: 16px; }
+#fullscreenBtn {
+    position: fixed; top: 16px; right: 16px;
+    width: 40px; height: 40px; border-radius: 8px;
+    background: rgba(20,20,35,0.85); border: 2px solid rgba(100,140,255,0.3);
+    color: rgba(255,255,255,0.7); font-size: 18px;
+    cursor: pointer; pointer-events: auto;
+    display: flex; align-items: center; justify-content: center;
+}
+#fullscreenBtn:hover { border-color: rgba(100,140,255,0.7); }
+#gameOver {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    text-align: center; color: #fff; display: none;
+    pointer-events: auto;
+}
+#gameOver h1 { font-size: 36px; margin-bottom: 12px; color: #ff4466; }
+#gameOver p { font-size: 16px; color: rgba(255,255,255,0.6); margin-bottom: 20px; }
+#gameOver button {
+    padding: 12px 32px; font-size: 16px; border-radius: 8px;
+    background: rgba(100,140,255,0.2); border: 2px solid rgba(100,140,255,0.5);
+    color: #fff; cursor: pointer;
+}
+#gameOver button:hover { background: rgba(100,140,255,0.4); }
+#startScreen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(10,10,15,0.95); z-index: 100;
+    pointer-events: auto;
+}
+#startScreen h1 { font-size: 42px; color: #4af; margin-bottom: 8px; }
+#startScreen p { color: rgba(255,255,255,0.5); font-size: 14px; margin-bottom: 24px; }
+#startScreen button {
+    padding: 14px 40px; font-size: 18px; border-radius: 10px;
+    background: rgba(68,170,255,0.2); border: 2px solid rgba(68,170,255,0.5);
+    color: #fff; cursor: pointer;
+}
+#startScreen button:hover { background: rgba(68,170,255,0.4); }
+#levelUp {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    color: #4af; font-size: 28px; font-weight: bold;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    text-shadow: 0 0 20px rgba(68,170,255,0.5);
+}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+    <div id="hud">
+        <div><span class="hud-icon">⚡</span><span id="hudLevel">1</span></div>
+        <div><span class="hud-icon">📏</span><span id="hudLength">5</span></div>
+        <div><span class="hud-icon">❤️</span><span id="hudLives">3</span></div>
+        <div><span class="hud-icon">⭐</span><span id="hudScore">0</span></div>
+    </div>
+    <div id="spellBar">
+        <div class="spell" id="spell0" title="Tail Bait [Q]">🐍</div>
+        <div class="spell" id="spell1" title="Barrier [E]">🛡️</div>
+        <div class="spell" id="spell2" title="Explosion [R]">💥</div>
+        <div class="spell" id="spell3" title="Missile [F]">🚀</div>
+    </div>
+    <button id="fullscreenBtn">⛶</button>
+    <div id="levelUp">LEVEL UP</div>
+</div>
+<div id="gameOver">
+    <h1>DECEASED</h1>
+    <p id="finalScore">Score: 0</p>
+    <button onclick="restart()">RESTART</button>
+</div>
+<div id="startScreen">
+    <h1>ABYSSAL SERPENT</h1>
+    <p>Arrow keys / WASD to move • Q E R F for spells</p>
+    <button onclick="startGame()">BEGIN</button>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+let W, H;
+function resize() {
+    W = canvas.width = window.innerWidth * devicePixelRatio;
+    H = canvas.height = window.innerHeight * devicePixelRatio;
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Constants
+const CELL = 24;
+const WORLD = 250;
+const MIN_LENGTH = 3;
+const BASE_SPEED = 140;
+const MIN_SPEED = 60;
+
+// Game state
+let snake, dir, nextDir, food, enemies, portals, obstacles, hazards, iceTiles, bait, missiles, particles;
+let score, level, lives, cameraX, cameraY, cameraTargetX, cameraTargetY;
+let moveTimer, speed, gameOver, started, barrierTimer, invulnTimer;
+let spellCooldowns, spellLevels;
+let lastTime, spawnTimer, rareSpawnTimer;
+let touchStartX, touchStartY;
+
+const BIOME_COLORS = [
+    { bg: '#0d1117', ground: '#161b22', name: 'Safe' },
+    { bg: '#0f1419', ground: '#1a2332', name: 'Meadow' },
+    { bg: '#12100e', ground: '#1f1a14', name: 'Wastes' },
+    { bg: '#0e0a12', ground: '#1a1222', name: 'Dark' },
+    { bg: '#120a0a', ground: '#221010', name: 'Blood' },
+    { bg: '#0a0a0a', ground: '#151015', name: 'Void' },
+];
+
+const FOOD_COLORS = {
+    common: '#4af',
+    rare: '#f4a',
+    elite: '#fa0',
+    life: '#f44',
+    moving: '#4fa',
+};
+
+const ENEMY_COLORS = {
+    wanderer: '#888',
+    chaser: '#f66',
+    hunter: '#f30',
+    elite: '#a0f',
+    rare: '#ff0',
+};
+
+function getBiome(x, y) {
+    const cx = WORLD / 2, cy = WORLD / 2;
+    const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+    if (dist < 15) return 0;
+    if (dist < 35) return 1;
+    if (dist < 60) return 2;
+    if (dist < 90) return 3;
+    if (dist < 120) return 4;
+    return 5;
+}
+
+function getSpeed(biome) {
+    return BASE_SPEED - biome * (BASE_SPEED - MIN_SPEED) / 5;
+}
+
+function levelForScore(s) {
+    return Math.floor(Math.sqrt(s / 50)) + 1;
+}
+
+function init() {
+    const cx = Math.floor(WORLD / 2), cy = Math.floor(WORLD / 2);
+    snake = [];
+    for (let i = 0; i < 5; i++) snake.push({ x: cx - i, y: cy });
+    dir = { x: 1, y: 0 };
+    nextDir = { x: 1, y: 0 };
+    score = 0;
+    level = 1;
+    lives = 3;
+    speed = getSpeed(0);
+    moveTimer = 0;
+    cameraX = cx * CELL;
+    cameraY = cy * CELL;
+    cameraTargetX = cx * CELL;
+    cameraTargetY = cy * CELL;
+    barrierTimer = 0;
+    invulnTimer = 0;
+    gameOver = false;
+    started = false;
+    spellCooldowns = [0, 0, 0, 0];
+    spellLevels = [1, 1, 1, 1];
+    lastTime = 0;
+    spawnTimer = 0;
+    rareSpawnTimer = 0;
+
+    food = [];
+    enemies = [];
+    portals = [];
+    obstacles = [];
+    hazards = [];
+    iceTiles = [];
+    bait = [];
+    missiles = [];
+    particles = [];
+
+    // Generate initial world
+    for (let i = 0; i < 30; i++) spawnFood();
+    for (let i = 0; i < 8; i++) spawnEnemy();
+    for (let i = 0; i < 5; i++) spawnPortal();
+    for (let i = 0; i < 40; i++) spawnObstacle();
+    for (let i = 0; i < 25; i++) spawnHazard();
+    for (let i = 0; i < 30; i++) spawnIce();
+
+    updateHUD();
+    updateSpells();
+}
+
+function randPos(biomeRange) {
+    const cx = WORLD / 2, cy = WORLD / 2;
+    let x, y;
+    do {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = biomeRange[0] + Math.random() * (biomeRange[1] - biomeRange[0]);
+        x = Math.floor(cx + Math.cos(angle) * dist);
+        y = Math.floor(cy + Math.sin(angle) * dist);
+    } while (x < 0 || x >= WORLD || y < 0 || y >= WORLD);
+    return { x, y };
+}
+
+function randNearSnake(minDist, maxDist) {
+    const head = snake[0];
+    const cx = WORLD / 2, cy = WORLD / 2;
+    let x, y;
+    do {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = minDist + Math.random() * (maxDist - minDist);
+        x = Math.floor(head.x + Math.cos(angle) * dist);
+        y = Math.floor(head.y + Math.sin(angle) * dist);
+    } while (x < 0 || x >= WORLD || y < 0 || y >= WORLD);
+    return { x, y };
+}
+
+function spawnFood() {
+    const head = snake[0];
+    const biome = getBiome(head.x, head.y);
+    let pos;
+    if (Math.random() < 0.6) {
+        pos = randNearSnake(5, 20 + biome * 5);
+    } else {
+        pos = randPos([biome * 8, biome * 8 + 20]);
+    }
+    if (pos.x < 0 || pos.x >= WORLD || pos.y < 0 || pos.y >= WORLD) return;
+    const type = Math.random() < 0.05 ? 'rare' : (Math.random() < 0.1 ? 'moving' : 'common');
+    const f = { x: pos.x, y: pos.y, type, vx: 0, vy: 0, life: 0 };
+    if (type === 'moving') {
+        const a = Math.random() * Math.PI * 2;
+        f.vx = Math.cos(a);
+        f.vy = Math.sin(a);
+    }
+    food.push(f);
+}
+
+function spawnEnemy() {
+    const head = snake[0];
+    const biome = getBiome(head.x, head.y);
+    let pos;
+    if (Math.random() < 0.5) {
+        pos = randNearSnake(10, 25 + biome * 5);
+    } else {
+        pos = randPos([biome * 8, biome * 8 + 15]);
+    }
+    if (pos.x < 0 || pos.x >= WORLD || pos.y < 0 || pos.y >= WORLD) return;
+
+    const r = Math.random();
+    let type;
+    if (biome <= 1) type = r < 0.7 ? 'wanderer' : 'chaser';
+    else if (biome === 2) type = r < 0.4 ? 'wanderer' : (r < 0.8 ? 'chaser' : 'hunter');
+    else if (biome === 3) type = r < 0.3 ? 'chaser' : (r < 0.7 ? 'hunter' : 'elite');
+    else type = r < 0.4 ? 'hunter' : (r < 0.8 ? 'elite' : 'rare');
+
+    const e = {
+        x: pos.x, y: pos.y, type,
+        hp: type === 'elite' ? 3 : type === 'rare' ? 5 : 1,
+        dir: { x: Math.random() < 0.5 ? 1 : -1, y: 0 },
+        moveTimer: Math.random() * 100,
+        size: type === 'elite' ? 2 : type === 'rare' ? 2 : 1,
+    };
+    enemies.push(e);
+}
+
+function spawnPortal() {
+    const cx = WORLD / 2, cy = WORLD / 2;
+    const angle1 = Math.random() * Math.PI * 2;
+    const dist1 = 20 + Math.random() * 80;
+    const p1 = {
+        x: Math.floor(cx + Math.cos(angle1) * dist1),
+        y: Math.floor(cy + Math.sin(angle1) * dist1)
+    };
+    const angle2 = angle1 + Math.PI + (Math.random() - 0.5) * 2;
+    const dist2 = 20 + Math.random() * 80;
+    const p2 = {
+        x: Math.floor(cx + Math.cos(angle2) * dist2),
+        y: Math.floor(cy + Math.sin(angle2) * dist2)
+    };
+    if (p1.x >= 0 && p1.x < WORLD && p1.y >= 0 && p1.y < WORLD &&
+        p2.x >= 0 && p2.x < WORLD && p2.y >= 0 && p2.y < WORLD) {
+        const id = Math.random().toString(36).substr(2, 5);
+        portals.push({ x: p1.x, y: p1.y, link: id, color: `hsl(${Math.random()*360},70%,50%)` });
+        portals.push({ x: p2.x, y: p2.y, link: id, color: `hsl(${Math.random()*360},70%,50%)` });
+    }
+}
+
+function spawnObstacle() {
+    const head = snake[0];
+    const biome = getBiome(head.x, head.y);
+    const pos = randNearSnake(8, 30 + biome * 5);
+    if (pos.x < 0 || pos.x >= WORLD || pos.y < 0 || pos.y >= WORLD) return;
+    const destructible = level >= 3;
+    obstacles.push({ x: pos.x, y: pos.y, destructible, hp: destructible ? 2 : 999 });
+}
+
+function spawnHazard() {
+    const head = snake[0];
+    const biome = getBiome(head.x, head.y);
+    if (biome < 1) return;
+    const pos = randNearSnake(5, 25 + biome * 5);
+    if (pos.x < 0 || pos.x >= WORLD || pos.y < 0 || pos.y >= WORLD) return;
+    hazards.push({ x: pos.x, y: pos.y, damage: biome >= 3 ? 3 : 2, edible: level >= 5 });
+}
+
+function spawnIce() {
+    const head = snake[0];
+    const biome = getBiome(head.x, head.y);
+    if (biome < 1) return;
+    const pos = randNearSnake(8, 30);
+    if (pos.x < 0 || pos.x >= WORLD || pos.y < 0 || pos.y >= WORLD) return;
+    iceTiles.push({ x: pos.x, y: pos.y, life: 300 });
+}
+
+function canEatEnemy(type) {
+    const thresholds = { wanderer: 2, chaser: 4, hunter: 6, elite: 9, rare: 12 };
+    return level >= (thresholds[type] || 10);
+}
+
+function damage(amount) {
+    if (invulnTimer > 0) return;
+    if (barrierTimer > 0) {
+        invulnTimer = 200;
+        return;
+    }
+    if (snake.length - amount >= MIN_LENGTH) {
+        for (let i = 0; i < amount; i++) snake.pop();
+        invulnTimer = 300;
+    } else {
+        lives--;
+        snake.length = Math.max(MIN_LENGTH, snake.length - amount);
+        while (snake.length < Math.max(MIN_LENGTH, 5)) snake.push({ ...snake[0] });
+        invulnTimer = 800;
+        if (lives <= 0) endGame();
+    }
+    updateHUD();
+}
+
+function addScore(amount) {
+    score += amount;
+    const newLevel = levelForScore(score);
+    if (newLevel > level) {
+        level = newLevel;
+        showLevelUp();
+        updateSpells();
+    }
+    speed = getSpeed(getBiome(snake[0].x, snake[0].y));
+    updateHUD();
+}
+
+function showLevelUp() {
+    const el = document.getElementById('levelUp');
+    el.style.opacity = '1';
+    setTimeout(() => el.style.opacity = '0', 1200);
+}
+
+function castSpell(idx) {
+    if (gameOver || !started) return;
+    if (spellCooldowns[idx] > 0) return;
+    const head = snake[0];
+
+    switch (idx) {
+        case 0: // Tail Bait
+            if (snake.length <= MIN_LENGTH + 2) return;
+            const sacrifice = Math.min(3 + spellLevels[0], snake.length - MIN_LENGTH);
+            for (let i = 0; i < sacrifice; i++) {
+                const seg = snake.pop();
+                bait.push({ x: seg.x, y: seg.y, life: 300, poison: 3 });
+            }
+            spellCooldowns[0] = 3000;
+            break;
+        case 1: // Barrier
+            barrierTimer = 4000 + spellLevels[1] * 1000;
+            spellCooldowns[1] = 8000;
+            break;
+        case 2: // Explosion
+            const radius = 3 + Math.floor(snake.length / 5) + spellLevels[2] * 2;
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                const d = Math.abs(e.x - head.x) + Math.abs(e.y - head.y);
+                if (d <= radius) {
+                    killEnemy(i);
+                }
+            }
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const o = obstacles[i];
+                if (o.destructible && Math.abs(o.x - head.x) + Math.abs(o.y - head.y) <= radius) {
+                    obstacles.splice(i, 1);
+                    addScore(10);
+                }
+            }
+            addParticle(head.x, head.y, '#f80', 20);
+            spellCooldowns[2] = 5000;
+            break;
+        case 3: // Missile
+            if (enemies.length === 0) return;
+            let target = null, bestDist = Infinity;
+            for (const e of enemies) {
+                const d = Math.abs(e.x - head.x) + Math.abs(e.y - head.y);
+                if (d < bestDist && d < 20) { bestDist = d; target = e; }
+            }
+            if (!target) {
+                target = enemies[Math.floor(Math.random() * enemies.length)];
+            }
+            const mRadius = 3 + Math.floor(snake.length / 8) + spellLevels[3] * 2;
+            missiles.push({ x: head.x, y: head.y, target, speed: 8, radius: mRadius, trail: [] });
+            spellCooldowns[3] = 12000;
+            break;
+    }
+    updateSpells();
+}
+
+function killEnemy(idx) {
+    const e = enemies[idx];
+    const points = { wanderer: 30, chaser: 50, hunter: 80, elite: 150, rare: 200 };
+    addScore(points[e.type] || 50);
+    addParticle(e.x, e.y, ENEMY_COLORS[e.type], 12);
+    if (Math.random() < 0.3) {
+        food.push({ x: e.x, y: e.y, type: 'rare', vx: 0, vy: 0, life: 0 });
+    }
+    if (Math.random() < 0.05) {
+        food.push({ x: e.x, y: e.y, type: 'life', vx: 0, vy: 0, life: 0 });
+    }
+    enemies.splice(idx, 1);
+}
+
+function addParticle(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const s = 0.5 + Math.random() * 2;
+        particles.push({
+            x: x * CELL + CELL / 2, y: y * CELL + CELL / 2,
+            vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+            life: 30 + Math.random() * 30, color, size: 2 + Math.random() * 3
+        });
+    }
+}
+
+function endGame() {
+    gameOver = true;
+    document.getElementById('finalScore').textContent = `Score: ${score} • Length: ${snake.length} • Level: ${level}`;
+    document.getElementById('gameOver').style.display = 'block';
+}
+
+function update(dt) {
+    if (gameOver || !started) return;
+
+    // Cooldowns
+    for (let i = 0; i < 4; i++) {
+        if (spellCooldowns[i] > 0) spellCooldowns[i] = Math.max(0, spellCooldowns[i] - dt);
+    }
+    if (barrierTimer > 0) barrierTimer = Math.max(0, barrierTimer - dt);
+    if (invulnTimer > 0) invulnTimer = Math.max(0, invulnTimer - dt);
+
+    // Movement
+    moveTimer += dt;
+    let currentSpeed = speed;
+    const head = snake[0];
+    const onIce = iceTiles.find(t => t.x === head.x && t.y === head.y);
+    if (onIce) currentSpeed *= 1.5;
+
+    if (moveTimer >= currentSpeed) {
+        moveTimer = 0;
+        dir = { ...nextDir };
+        const newHead = { x: head.x + dir.x, y: head.y + dir.y };
+
+        // World bounds
+        if (newHead.x < 0 || newHead.x >= WORLD || newHead.y < 0 || newHead.y >= WORLD) {
+            damage(2);
+            dir = { x: -dir.x, y: -dir.y };
+            nextDir = { ...dir };
+        } else {
+            // Self collision
+            if (snake.some((s, i) => i < snake.length - 1 && s.x === newHead.x && s.y === newHead.y)) {
+                damage(3);
+            } else {
+                snake.unshift(newHead);
+                if (!shouldGrow()) snake.pop();
+                growCounter = 0;
+            }
+        }
+    }
+
+    let growCounter = 0;
+    function shouldGrow() {
+        if (growCounter > 0) { growCounter--; return true; }
+        return false;
+    }
+
+    // Food
+    const h = snake[0];
+    for (let i = food.length - 1; i >= 0; i--) {
+        const f = food[i];
+        if (f.type === 'moving') {
+            f.x += f.vx * 0.02;
+            f.y += f.vy * 0.02;
+            if (f.x < 0 || f.x >= WORLD || f.y < 0 || f.y >= WORLD) {
+                f.vx *= -1; f.vy *= -1;
+                f.x = Math.max(0, Math.min(WORLD - 1, f.x));
+                f.y = Math.max(0, Math.min(WORLD - 1, f.y));
+            }
+        }
+        f.life += dt;
+        if (f.life > 30000 && f.type === 'common') {
+            food.splice(i, 1);
+            continue;
+        }
+        if (Math.round(f.x) === h.x && Math.round(f.y) === h.y) {
+            if (f.type === 'life') {
+                lives++;
+                addScore(10);
+            } else if (f.type === 'rare') {
+                growCounter = 2;
+                addScore(15);
+            } else {
+                growCounter = 1;
+                addScore(5);
+            }
+            food.splice(i, 1);
+            spawnFood();
+        }
+    }
+
+    // Enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        e.moveTimer += dt;
+        const chaseSpeed = e.type === 'hunter' ? 100 : e.type === 'chaser' ? 150 : 200;
+        if (e.moveTimer >= chaseSpeed) {
+            e.moveTimer = 0;
+            const dx = h.x - e.x;
+            const dy = h.y - e.y;
+            const dist = Math.abs(dx) + Math.abs(dy);
+
+            if (e.type === 'wanderer') {
+                if (Math.random() < 0.3) {
+                    const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+                    e.dir = dirs[Math.floor(Math.random() * 4)];
+                }
+            } else if (e.type === 'chaser') {
+                if (dist < 20) {
+                    if (Math.abs(dx) > Math.abs(dy)) e.dir = { x: Math.sign(dx), y: 0 };
+                    else e.dir = { x: 0, y: Math.sign(dy) };
+                }
+            } else if (e.type === 'hunter') {
+                if (dist < 30) {
+                    const px = h.x + dir.x * 2 - e.x;
+                    const py = h.y + dir.y * 2 - e.y;
+                    if (Math.abs(px) > Math.abs(py)) e.dir = { x: Math.sign(px), y: 0 };
+                    else e.dir = { x: 0, y: Math.sign(py) };
+                }
+            } else {
+                if (dist < 25) {
+                    if (Math.abs(dx) > Math.abs(dy)) e.dir = { x: Math.sign(dx), y: 0 };
+                    else e.dir = { x: 0, y: Math.sign(dy) };
+                }
+            }
+
+            const nx = e.x + e.dir.x;
+            const ny = e.y + e.dir.y;
+            if (nx >= 0 && nx < WORLD && ny >= 0 && ny < WORLD &&
+                !obstacles.some(o => o.x === nx && o.y === ny)) {
+                e.x = nx;
+                e.y = ny;
+            } else {
+                const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+                e.dir = dirs[Math.floor(Math.random() * 4)];
+            }
+
+            // Enemy eats bait
+            for (let b = bait.length - 1; b >= 0; b--) {
+                if (e.x === bait[b].x && e.y === bait[b].y) {
+                    e.hp -= bait[b].poison;
+                    bait.splice(b, 1);
+                    if (e.hp <= 0) killEnemy(i);
+                }
+            }
+
+            // Enemy eats food
+            for (let fi = food.length - 1; fi >= 0; fi--) {
+                if (e.x === Math.round(food[fi].x) && e.y === Math.round(food[fi].y)) {
+                    food.splice(fi, 1);
+                    spawnFood();
+                }
+            }
+        }
+
+        // Collision with player
+        if (e.x === h.x && e.y === h.y) {
+            if (canEatEnemy(e.type)) {
+                killEnemy(i);
+            } else if (barrierTimer > 0) {
+                killEnemy(i);
+            } else {
+                const dmg = e.type === 'elite' || e.type === 'rare' ? 4 : e.type === 'hunter' ? 3 : 2;
+                damage(dmg);
+            }
+        }
+    }
+
+    // Hazards
+    for (let i = hazards.length - 1; i >= 0; i--) {
+        const hz = hazards[i];
+        if (hz.x === h.x && hz.y === h.y) {
+            if (hz.edible) {
+                hazards.splice(i, 1);
+                addScore(20);
+                growCounter = 1;
+            } else {
+                damage(hz.damage);
+            }
+        }
+    }
+
+    // Obstacles
+    for (const o of obstacles) {
+        if (o.x === h.x && o.y === h.y) {
+            if (o.destructible && level >= 3) {
+                o.hp--;
+                if (o.hp <= 0) {
+                    obstacles.splice(obstacles.indexOf(o), 1);
+                    addScore(15);
+                    growCounter = 1;
+                }
+            } else {
+                damage(1);
+                nextDir = { x: -dir.x, y: -dir.y };
+            }
+            break;
+        }
+    }
+
+    // Portals
+    for (const p of portals) {
+        if (p.x === h.x && p.y === h.y) {
+            const linked = portals.find(lp => lp.link === p.link && lp !== p);
+            if (linked) {
+                snake[0].x = linked.x;
+                snake[0].y = linked.y;
+                addParticle(linked.x, linked.y, p.color, 15);
+                invulnTimer = 500;
+            }
+        }
+    }
+
+    // Ice tiles
+    for (let i = iceTiles.length - 1; i >= 0; i--) {
+        iceTiles[i].life -= dt;
+        if (iceTiles[i].life <= 0) iceTiles.splice(i, 1);
+    }
+
+    // Bait
+    for (let i = bait.length - 1; i >= 0; i--) {
+        bait[i].life -= dt;
+        if (bait[i].life <= 0) bait.splice(i, 1);
+    }
+
+    // Missiles
+    for (let i = missiles.length - 1; i >= 0; i--) {
+        const m = missiles[i];
+        if (!m.target || !enemies.includes(m.target)) {
+            missiles.splice(i, 1);
+            continue;
+        }
+        const dx = m.target.x - m.x;
+        const dy = m.target.y - m.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 1) {
+            // Explode
+            addParticle(m.x, m.y, '#f80', 25);
+            for (let j = enemies.length - 1; j >= 0; j--) {
+                const e = enemies[j];
+                if (Math.abs(e.x - m.x) + Math.abs(e.y - m.y) <= m.radius) {
+                    killEnemy(j);
+                }
+            }
+            missiles.splice(i, 1);
+        } else {
+            m.x += (dx / dist) * m.speed * dt / 100;
+            m.y += (dy / dist) * m.speed * dt / 100;
+            m.trail.push({ x: m.x, y: m.y, life: 20 });
+        }
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.05;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // Spawning
+    spawnTimer += dt;
+    rareSpawnTimer += dt;
+    if (spawnTimer > 1000) {
+        spawnTimer = 0;
+        if (food.length < 40) spawnFood();
+        if (enemies.length < 10 + level * 2) spawnEnemy();
+    }
+    if (rareSpawnTimer > 8000) {
+        rareSpawnTimer = 0;
+        if (portals.length < 10) spawnPortal();
+        if (obstacles.length < 50) spawnObstacle();
+        if (hazards.length < 30 + level * 2) spawnHazard();
+        if (iceTiles.length < 20) spawnIce();
+    }
+
+    // Camera
+    cameraTargetX = h.x * CELL + CELL / 2;
+    cameraTargetY = h.y * CELL + CELL / 2;
+    cameraX += (cameraTargetX - cameraX) * 0.08;
+    cameraY += (cameraTargetY - cameraY) * 0.08;
+
+    updateSpells();
+}
+
+let growCounter = 0;
+
+function render() {
+    ctx.fillStyle = '#0a0a0f';
+    ctx.fillRect(0, 0, W, H);
+
+    const offsetX = W / 2 - cameraX;
+    const offsetY = H / 2 - cameraY;
+
+    const startX = Math.floor((cameraX - W / 2) / CELL) - 1;
+    const startY = Math.floor((cameraY - H / 2) / CELL) - 1;
+    const endX = Math.ceil((cameraX + W / 2) / CELL) + 1;
+    const endY = Math.ceil((cameraY + H / 2) / CELL) + 1;
+
+    // Background / Biome tiles
+    for (let y = Math.max(0, startY); y <= Math.min(WORLD - 1, endY); y++) {
+        for (let x = Math.max(0, startX); x <= Math.min(WORLD - 1, endX); x++) {
+            const biome = getBiome(x, y);
+            const color = BIOME_COLORS[biome];
+            const px = x * CELL + offsetX;
+            const py = y * CELL + offsetY;
+            ctx.fillStyle = color.ground;
+            ctx.fillRect(px, py, CELL, CELL);
+
+            // Subtle grid
+            ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+            ctx.strokeRect(px, py, CELL, CELL);
+        }
+    }
+
+    // Ice tiles
+    for (const t of iceTiles) {
+        if (t.x < startX || t.x > endX || t.y < startY || t.y > endY) continue;
+        const px = t.x * CELL + offsetX;
+        const py = t.y * CELL + offsetY;
+        ctx.fillStyle = 'rgba(100,180,255,0.15)';
+        ctx.fillRect(px, py, CELL, CELL);
+        ctx.fillStyle = 'rgba(150,220,255,0.3)';
+        ctx.fillRect(px + 4, py + 4, CELL - 8, CELL - 8);
+    }
+
+    // Obstacles
+    for (const o of obstacles) {
+        if (o.x < startX || o.x > endX || o.y < startY || o.y > endY) continue;
+        const px = o.x * CELL + offsetX;
+        const py = o.y * CELL + offsetY;
+        ctx.fillStyle = o.destructible ? '#4a3a2a' : '#3a3a4a';
+        ctx.fillRect(px + 2, py + 2, CELL - 4, CELL - 4);
+        ctx.fillStyle = o.destructible ? '#6a5a4a' : '#5a5a6a';
+        ctx.fillRect(px + 5, py + 5, CELL - 10, CELL - 10);
+    }
+
+    // Hazards
+    for (const hz of hazards) {
+        if (hz.x < startX || hz.x > endX || hz.y < startY || hz.y > endY) continue;
+        const px = hz.x * CELL + offsetX;
+        const py = hz.y * CELL + offsetY;
+        ctx.fillStyle = hz.edible ? 'rgba(255,200,0,0.4)' : 'rgba(255,50,50,0.3)';
+        ctx.fillRect(px, py, CELL, CELL);
+        ctx.fillStyle = hz.edible ? '#fa0' : '#f33';
+        ctx.beginPath();
+        ctx.moveTo(px + CELL / 2, py + 3);
+        ctx.lineTo(px + CELL - 3, py + CELL - 3);
+        ctx.lineTo(px + 3, py + CELL - 3);
+        ctx.fill();
+    }
+
+    // Portals
+    for (const p of portals) {
+        if (p.x < startX || p.x > endX || p.y < startY || p.y > endY) continue;
+        const px = p.x * CELL + offsetX + CELL / 2;
+        const py = p.y * CELL + offsetY + CELL / 2;
+        const time = Date.now() / 500;
+        ctx.beginPath();
+        ctx.arc(px, py, CELL / 2 - 2, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = 0.3 + Math.sin(time) * 0.15;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(px, py, CELL / 4, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+    }
+
+    // Food
+    for (const f of food) {
+        if (f.x < startX || f.x > endX || f.y < startY || f.y > endY) continue;
+        const px = f.x * CELL + offsetX + CELL / 2;
+        const py = f.y * CELL + offsetY + CELL / 2;
+        const size = f.type === 'rare' ? CELL / 3 : f.type === 'life' ? CELL / 2.5 : CELL / 3.5;
+        const pulse = 1 + Math.sin(Date.now() / 300 + f.x) * 0.15;
+
+        ctx.beginPath();
+        if (f.type === 'life') {
+            // Heart shape approximation
+            ctx.arc(px, py, size * pulse, 0, Math.PI * 2);
+            ctx.fillStyle = '#f44';
+        } else if (f.type === 'rare') {
+            // Diamond
+            ctx.moveTo(px, py - size * pulse);
+            ctx.lineTo(px + size * pulse, py);
+            ctx.lineTo(px, py + size * pulse);
+            ctx.lineTo(px - size * pulse, py);
+            ctx.closePath();
+            ctx.fillStyle = FOOD_COLORS.rare;
+        } else if (f.type === 'moving') {
+            ctx.arc(px, py, size * pulse, 0, Math.PI * 2);
+            ctx.fillStyle = FOOD_COLORS.moving;
+        } else {
+            ctx.arc(px, py, size * pulse, 0, Math.PI * 2);
+            ctx.fillStyle = FOOD_COLORS.common;
+        }
+        ctx.fill();
+
+        // Glow for rare
+        if (f.type === 'rare' || f.type === 'life') {
+            ctx.beginPath();
+            ctx.arc(px, py, size * 2, 0, Math.PI * 2);
+            ctx.fillStyle = f.type === 'life' ? 'rgba(255,68,68,0.1)' : 'rgba(255,68,170,0.1)';
+            ctx.fill();
+        }
+    }
+
+    // Bait
+    for (const b of bait) {
+        if (b.x < startX || b.x > endX || b.y < startY || b.y > endY) continue;
+        const px = b.x * CELL + offsetX + CELL / 2;
+        const py = b.y * CELL + offsetY + CELL / 2;
+        const alpha = b.life / 3000;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#8f0';
+        ctx.beginPath();
+        ctx.arc(px, py, CELL / 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+
+    // Enemies
+    const head = snake[0];
+    for (const e of enemies) {
+        if (e.x < startX || e.x > endX || e.y < startY || e.y > endY) continue;
+        const px = e.x * CELL + offsetX + CELL / 2;
+        const py = e.y * CELL + offsetY + CELL / 2;
+        const size = e.size * CELL / 3;
+        const color = ENEMY_COLORS[e.type];
+
+        // Glow if edible
+        if (canEatEnemy(e.type)) {
+            ctx.beginPath();
+            ctx.arc(px, py, size * 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,100,0.15)';
+            ctx.fill();
+        }
+
+        // Body
+        ctx.fillStyle = color;
+        if (e.type === 'wanderer') {
+            ctx.beginPath();
+            ctx.arc(px, py, size, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (e.type === 'chaser') {
+            ctx.beginPath();
+            ctx.moveTo(px, py - size);
+            ctx.lineTo(px + size, py + size);
+            ctx.lineTo(px - size, py + size);
+            ctx.closePath();
+            ctx.fill();
+        } else if (e.type === 'hunter') {
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(Math.atan2(e.dir.y, e.dir.x));
+            ctx.beginPath();
+            ctx.moveTo(size, 0);
+            ctx.lineTo(-size, -size * 0.7);
+            ctx.lineTo(-size, size * 0.7);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        } else {
+            // Elite / Rare - larger with inner detail
+            ctx.beginPath();
+            ctx.arc(px, py, size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(px, py, size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // Missiles
+    for (const m of missiles) {
+        const px = m.x * CELL + offsetX + CELL / 2;
+        const py = m.y * CELL + offsetY + CELL / 2;
+        // Trail
+        ctx.strokeStyle = 'rgba(255,100,0,0.4)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        if (m.trail.length > 0) {
+            ctx.moveTo(m.trail[0].x * CELL + offsetX + CELL / 2, m.trail[0].y * CELL + offsetY + CELL / 2);
+            for (const t of m.trail) {
+                ctx.lineTo(t.x * CELL + offsetX + CELL / 2, t.y * CELL + offsetY + CELL / 2);
+            }
+        }
+        ctx.stroke();
+        // Head
+        ctx.fillStyle = '#f80';
+        ctx.beginPath();
+        ctx.arc(px, py, 5, 0, Math.PI * 2);
+        ctx.fill();
+        // Remove old trail
+        m.trail = m.trail.filter(t => (t.life -= 1) > 0);
+    }
+
+    // Snake
+    for (let i = snake.length - 1; i >= 0; i--) {
+        const s = snake[i];
+        const px = s.x * CELL + offsetX;
+        const py = s.y * CELL + offsetY;
+
+        if (i === 0) {
+            // Head
+            ctx.fillStyle = barrierTimer > 0 ? '#4ff' : (invulnTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0 ? '#fff' : '#4af');
+            ctx.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
+            // Eyes
+            ctx.fillStyle = '#000';
+            const ex = dir.x > 0 ? px + CELL - 8 : dir.x < 0 ? px + 4 : px + 6;
+            const ey = dir.y > 0 ? py + CELL - 8 : dir.y < 0 ? py + 4 : py + 6;
+            ctx.fillRect(ex, ey, 3, 3);
+            ctx.fillRect(ex + (dir.x !== 0 ? 0 : 4), ey + (dir.y !== 0 ? 0 : 4), 3, 3);
+        } else {
+            // Body
+            const t = i / snake.length;
+            const g = Math.floor(170 - t * 80);
+            ctx.fillStyle = barrierTimer > 0 ? `rgba(68,255,255,${1 - t * 0.3})` : `rgb(40,${g},${100 + Math.floor(t * 50)})`;
+            ctx.fillRect(px + 2, py + 2, CELL - 4, CELL - 4);
+        }
+    }
+
+    // Barrier visual
+    if (barrierTimer > 0) {
+        const hpx = head.x * CELL + offsetX + CELL / 2;
+        const hpy = head.y * CELL + offsetY + CELL / 2;
+        ctx.beginPath();
+        ctx.arc(hpx, hpy, CELL * 1.5, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(68,255,255,${0.3 + Math.sin(Date.now() / 200) * 0.2})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
+
+    // Particles
+    for (const p of particles) {
+        ctx.globalAlpha = p.life / 60;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+
+    // Vignette
+    const grad = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.7);
+    grad.addColorStop(0, 'transparent');
+    grad.addColorStop(1, 'rgba(0,0,0,0.4)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+}
+
+function updateHUD() {
+    document.getElementById('hudLevel').textContent = level;
+    document.getElementById('hudLength').textContent = snake ? snake.length : 0;
+    document.getElementById('hudLives').textContent = lives;
+    document.getElementById('hudScore').textContent = score;
+}
+
+function updateSpells() {
+    const unlocks = [1, 3, 5, 8];
+    for (let i = 0; i < 4; i++) {
+        const el = document.getElementById('spell' + i);
+        el.classList.toggle('locked', level < unlocks[i]);
+        el.classList.toggle('cooling', spellCooldowns[i] > 0 && level >= unlocks[i]);
+        if (spellCooldowns[i] > 0) {
+            const dur = [3000, 8000, 5000, 12000][i];
+            el.style.setProperty('--cool-dur', dur + 'ms');
+        }
+    }
+}
+
+function gameLoop(time) {
+    const dt = lastTime ? Math.min(time - lastTime, 50) : 16;
+    lastTime = time;
+    update(dt);
+    render();
+    requestAnimationFrame(gameLoop);
+}
+
+// Input
+document.addEventListener('keydown', (e) => {
+    if (!started) return;
+    switch (e.key) {
+        case 'ArrowUp': case 'w': case 'W':
+            if (dir.y === 0) nextDir = { x: 0, y: -1 };
+            break;
+        case 'ArrowDown': case 's': case 'S':
+            if (dir.y === 0) nextDir = { x: 0, y: 1 };
+            break;
+        case 'ArrowLeft': case 'a': case 'A':
+            if (dir.x === 0) nextDir = { x: -1, y: 0 };
+            break;
+        case 'ArrowRight': case 'd': case 'D':
+            if (dir.x === 0) nextDir = { x: 1, y: 0 };
+            break;
+        case 'q': case 'Q': castSpell(0); break;
+        case 'e': case 'E': castSpell(1); break;
+        case 'r': case 'R': castSpell(2); break;
+        case 'f': case 'F': castSpell(3); break;
+    }
+});
+
+// Touch
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.touches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (!touchStartX || !started) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+    if (Math.max(absDx, absDy) < 20) {
+        castSpell(0); // Tap = bait
+        return;
+    }
+    if (absDx > absDy) {
+        if (dir.y === 0) nextDir = { x: Math.sign(dx), y: 0 };
+    } else {
+        if (dir.x === 0) nextDir = { x: 0, y: Math.sign(dy) };
+    }
+    touchStartX = null;
+}, { passive: false });
+
+// Spell bar clicks
+document.getElementById('spell0').addEventListener('click', () => castSpell(0));
+document.getElementById('spell1').addEventListener('click', () => castSpell(1));
+document.getElementById('spell2').addEventListener('click', () => castSpell(2));
+document.getElementById('spell3').addEventListener('click', () => castSpell(3));
+
+// Fullscreen
+document.getElementById('fullscreenBtn').addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+        document.exitFullscreen();
+    }
+});
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    started = true;
+}
+
+function restart() {
+    document.getElementById('gameOver').style.display = 'none';
+    init();
+    started = true;
+}
+
+init();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

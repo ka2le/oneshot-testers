@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emoji Rush!</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #0a0a1a;
+    color: #fff;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  #game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── HUD ── */
+  #hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    padding: 12px 16px;
+    gap: 8px;
+  }
+
+  .hud-panel {
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 10px 18px;
+    min-width: 140px;
+  }
+
+  .hud-panel h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+    opacity: 0.6;
+  }
+
+  .hud-good h3 { color: #4ade80; }
+  .hud-bad h3  { color: #f87171; }
+
+  .hud-emojis {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .hud-emojis span {
+    font-size: 22px;
+    transition: filter 0.2s;
+  }
+
+  #hud-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 100px;
+  }
+
+  #score-display {
+    font-size: 40px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #facc15, #f59e0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1;
+  }
+
+  #hearts-display {
+    font-size: 22px;
+    letter-spacing: 4px;
+    line-height: 1.2;
+  }
+
+  .heart { transition: all 0.3s; display: inline-block; }
+  .heart.lost {
+    filter: grayscale(1) opacity(0.2);
+    transform: scale(0.7);
+  }
+
+  #round-display {
+    font-size: 11px;
+    opacity: 0.4;
+    letter-spacing: 1px;
+  }
+
+  /* ── Play emojis ── */
+  .play-emoji {
+    position: absolute;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    cursor: pointer;
+    transform: scale(0);
+  }
+
+  @keyframes popIn {
+    0%   { transform: scale(0) rotate(-15deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+
+  .play-emoji .emoji-char {
+    font-size: 56px;
+    line-height: 1;
+    filter: drop-shadow(0 4px 16px rgba(0,0,0,0.6));
+    transition: transform 0.1s;
+    pointer-events: none;
+  }
+
+  .play-emoji:hover .emoji-char {
+    transform: scale(1.12);
+  }
+
+  .play-emoji .timer-bar {
+    width: 50px;
+    height: 4px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+
+  .play-emoji .timer-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width linear;
+    background: linear-gradient(90deg, #4ade80, #22c55e);
+  }
+
+  .play-emoji .timer-fill.urgent {
+    background: linear-gradient(90deg, #f87171, #ef4444);
+  }
+
+  .play-emoji.clicked-good {
+    animation: clickGood 0.35s ease-out forwards;
+    pointer-events: none;
+  }
+
+  .play-emoji.clicked-bad {
+    animation: clickBad 0.35s ease-out forwards;
+    pointer-events: none;
+  }
+
+  .play-emoji .timer-bar,
+  .play-emoji .timer-fill {
+    transition: none;
+  }
+
+  .play-emoji.clicked-good .timer-bar,
+  .play-emoji.clicked-bad .timer-bar {
+    display: none;
+  }
+
+  .play-emoji.clicked-good .emoji-char {
+    filter: drop-shadow(0 4px 16px rgba(0,0,0,0.6)) drop-shadow(0 0 20px rgba(74,222,128,0.8));
+  }
+
+  .play-emoji.clicked-bad .emoji-char {
+    filter: drop-shadow(0 4px 16px rgba(0,0,0,0.6)) drop-shadow(0 0 20px rgba(248,113,113,0.8));
+  }
+
+  @keyframes clickGood {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.4); }
+    100% { transform: scale(0); opacity: 0; }
+  }
+
+  @keyframes clickBad {
+    0%   { transform: scale(1); }
+    20%  { transform: translateX(-8px) scale(1.15); }
+    40%  { transform: translateX(8px) scale(1.15); }
+    60%  { transform: translateX(-4px) scale(1.1); }
+    100% { transform: scale(0); opacity: 0; }
+  }
+
+  /* ── Floating score text ── */
+  .float-text {
+    position: absolute;
+    z-index: 200;
+    font-weight: 800;
+    font-size: 26px;
+    pointer-events: none;
+    animation: floatUp 0.9s ease-out forwards;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  }
+
+  .float-text.positive { color: #4ade80; }
+  .float-text.negative { color: #f87171; }
+
+  @keyframes floatUp {
+    0%   { opacity: 1; transform: translateY(0) scale(0.8); }
+    30%  { transform: translateY(-10px) scale(1.1); }
+    100% { opacity: 0; transform: translateY(-70px) scale(0.9); }
+  }
+
+  /* ── Particles ── */
+  .particle {
+    position: absolute;
+    z-index: 150;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: particleFly 0.7s ease-out forwards;
+  }
+
+  @keyframes particleFly {
+    0%   { opacity: 1; transform: translate(0,0) scale(1); }
+    100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0); }
+  }
+
+  /* ── Background ── */
+  #bg-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 50% 50%, rgba(100,100,255,0.03) 0%, transparent 70%),
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 100% 100%, 40px 40px, 40px 40px;
+    z-index: 0;
+  }
+
+  /* ── Screens ── */
+  .screen-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(5,5,20,0.93);
+    backdrop-filter: blur(20px);
+    animation: fadeIn 0.4s ease-out;
+  }
+
+  .screen-overlay.hidden { display: none; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  .screen-overlay h1 {
+    font-size: 52px;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #facc15, #f97316, #ef4444, #a855f7, #3b82f6, #4ade80);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradientShift 4s ease infinite;
+  }
+
+  @keyframes gradientShift {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+  }
+
+  .screen-overlay .subtitle {
+    font-size: 15px;
+    opacity: 0.45;
+    margin-bottom: 36px;
+    text-align: center;
+    line-height: 1.7;
+    max-width: 340px;
+  }
+
+  .final-score {
+    font-size: 80px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #facc15, #f59e0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 10px 0 4px;
+  }
+
+  .final-label {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    opacity: 0.4;
+    margin-bottom: 8px;
+  }
+
+  .final-round {
+    font-size: 16px;
+    opacity: 0.45;
+    margin-bottom: 40px;
+  }
+
+  .btn {
+    padding: 16px 52px;
+    font-size: 20px;
+    font-weight: 700;
+    border: none;
+    border-radius: 60px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #4ade80, #22c55e);
+    color: #052e16;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 24px rgba(74, 222, 128, 0.3);
+  }
+
+  .btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 32px rgba(74, 222, 128, 0.5);
+  }
+
+  .btn:active {
+    transform: scale(0.97);
+  }
+
+  /* ── Heart shake on damage ── */
+  @keyframes screenShake {
+    0%, 100% { transform: translate(0); }
+    15%      { transform: translate(-6px, 3px); }
+    30%      { transform: translate(6px, -3px); }
+    50%      { transform: translate(-3px, 6px); }
+    70%      { transform: translate(3px, -6px); }
+  }
+
+  #game-container.damaged {
+    animation: screenShake 0.35s ease-out;
+  }
+
+  /* ── Combo ── */
+  #combo-display {
+    position: absolute;
+    top: 95px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 26px;
+    font-weight: 900;
+    color: #facc15;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    text-shadow: 0 2px 12px rgba(250, 204, 21, 0.5);
+    white-space: nowrap;
+  }
+
+  #combo-display.visible {
+    opacity: 1;
+    animation: comboPulse 0.3s ease-out;
+  }
+
+  @keyframes comboPulse {
+    0%   { transform: translateX(-50%) scale(1.3); }
+    100% { transform: translateX(-50%) scale(1); }
+  }
+
+  /* ── Round announcement ── */
+  .round-announce {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 300;
+    pointer-events: none;
+    font-size: 48px;
+    font-weight: 900;
+    opacity: 0;
+    animation: roundAnnounce 1.2s ease-out forwards;
+    text-shadow: 0 4px 24px rgba(0,0,0,0.8);
+  }
+
+  @keyframes roundAnnounce {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    40%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    80%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+  }
+
+  /* ── Missed indicator ── */
+  .missed-flash {
+    position: absolute;
+    inset: 0;
+    border: 3px solid rgba(250, 204, 21, 0.4);
+    border-radius: 12px;
+    z-index: 90;
+    pointer-events: none;
+    animation: missedFlash 0.5s ease-out forwards;
+  }
+
+  @keyframes missedFlash {
+    0%   { opacity: 1; }
+    100% { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <div id="bg-grid"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hud-panel hud-good">
+      <h3>✅ Good</h3>
+      <div class="hud-emojis" id="hud-good"></div>
+    </div>
+    <div class="hud-panel" id="hud-center">
+      <div id="score-display">0</div>
+      <div id="hearts-display"></div>
+      <div id="round-display">Round 1</div>
+    </div>
+    <div class="hud-panel hud-bad">
+      <h3>❌ Bad</h3>
+      <div class="hud-emojis" id="hud-bad"></div>
+    </div>
+  </div>
+
+  <div id="combo-display"></div>
+  <div id="play-area"></div>
+
+  <!-- Start Screen -->
+  <div class="screen-overlay" id="start-screen">
+    <h1>🎯 Emoji Rush</h1>
+    <div class="subtitle">
+      Tap the <strong style="color:#4ade80">good</strong> emojis for points!<br>
+      Avoid the <strong style="color:#f87171">bad</strong> ones or lose a heart!<br>
+      3 hearts and you're out. Combo boosts your score!
+    </div>
+    <button class="btn" id="btn-start">Start Game</button>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div class="screen-overlay hidden" id="gameover-screen">
+    <div class="final-label">Final Score</div>
+    <div class="final-score" id="final-score">0</div>
+    <div class="final-round" id="final-round">Round 1</div>
+    <button class="btn" id="btn-restart">Play Again</button>
+  </div>
+</div>
+
+<script>
+  // ── Emoji Pool ──
+  const ALL_EMOJIS = [
+    '😀','😎','🥳','🤩','😺','🦄','🌈','🎉',
+    '🔥','💎','🍕','🚀','🎸','🌺','🎪','🧁'
+  ];
+
+  // ── Game State ──
+  let score = 0;
+  let hearts = 3;
+  let combo = 0;
+  let round = 1;
+  let gameActive = false;
+  let roundTimeout = null;
+  let currentGood = [];
+  let currentBad = [];
+  let emojisOnScreen = [];
+  let difficulty = 1;
+
+  // TIMING — these are the real controls
+  // Base: 1.8s between spawns, 4s emoji lifetime at start
+  const BASE_SPAWN_INTERVAL = 1800;  // ms between emoji spawns
+  const BASE_EMOJI_LIFESPAN = 4000;  // ms an emoji stays on screen
+  const MAX_CONCURRENT = 4;          // max emojis on screen at once
+
+  // ── Derived (modified by difficulty) ──
+  let spawnTimer = BASE_SPAWN_INTERVAL;
+  let emojiLifespan = BASE_EMOJI_LIFESPAN;
+
+  // ── DOM refs ──
+  const container  = document.getElementById('game-container');
+  const playArea   = document.getElementById('play-area');
+  const scoreEl    = document.getElementById('score-display');
+  const heartsEl   = document.getElementById('hearts-display');
+  const roundEl    = document.getElementById('round-display');
+  const hudGood    = document.getElementById('hud-good');
+  const hudBad     = document.getElementById('hud-bad');
+  const startScreen = document.getElementById('start-screen');
+  const gameoverScreen = document.getElementById('gameover-screen');
+  const finalScore = document.getElementById('final-score');
+  const finalRound = document.getElementById('final-round');
+  const comboDisplay = document.getElementById('combo-display');
+
+  // ── Helpers ──
+  function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // ── HUD Updates ──
+  function updateHearts() {
+    heartsEl.innerHTML = '';
+    for (let i = 0; i < 3; i++) {
+      const span = document.createElement('span');
+      span.className = 'heart' + (i >= hearts ? ' lost' : '');
+      span.textContent = '❤️';
+      heartsEl.appendChild(span);
+    }
+  }
+
+  function updateHUD() {
+    scoreEl.textContent = score;
+    updateHearts();
+    roundEl.textContent = `Round ${round}`;
+
+    hudGood.innerHTML = '';
+    currentGood.forEach(e => {
+      const s = document.createElement('span');
+      s.textContent = e;
+      hudGood.appendChild(s);
+    });
+
+    hudBad.innerHTML = '';
+    currentBad.forEach(e => {
+      const s = document.createElement('span');
+      s.textContent = e;
+      hudBad.appendChild(s);
+    });
+  }
+
+  // ── Combo ──
+  function updateCombo() {
+    if (combo >= 3) {
+      comboDisplay.textContent = `🔥 ${combo}x Combo!`;
+      comboDisplay.className = 'visible';
+      comboDisplay.style.animation = 'none';
+      void comboDisplay.offsetWidth;
+      comboDisplay.style.animation = '';
+    } else {
+      comboDisplay.className = '';
+    }
+  }
+
+  // ── Particles ──
+  function spawnParticles(x, y, color, count = 10) {
+    for (let i = 0; i < count; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.left = x + 'px';
+      p.style.top = y + 'px';
+      p.style.background = color;
+      const angle = (Math.PI * 2 / count) * i + Math.random() * 0.6;
+      const dist = 50 + Math.random() * 70;
+      p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+      p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+      playArea.appendChild(p);
+      setTimeout(() => p.remove(), 700);
+    }
+  }
+
+  // ── Float text ──
+  function spawnFloatText(x, y, text, positive) {
+    const el = document.createElement('div');
+    el.className = 'float-text ' + (positive ? 'positive' : 'negative');
+    el.textContent = text;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    playArea.appendChild(el);
+    setTimeout(() => el.remove(), 900);
+  }
+
+  // ── Missed flash ──
+  function spawnMissedFlash() {
+    const el = document.createElement('div');
+    el.className = 'missed-flash';
+    playArea.appendChild(el);
+    setTimeout(() => el.remove(), 500);
+  }
+
+  // ── Assign good/bad for round ──
+  function assignEmojisForRound() {
+    const shuffled = shuffle(ALL_EMOJIS);
+    currentGood = shuffled.slice(0, 5);
+    currentBad  = shuffled.slice(5, 10);
+    updateHUD();
+  }
+
+  // ── Difficulty ──
+  function increaseDifficulty() {
+    difficulty = 1 + (round - 1) * 0.15;
+    // Very gradual speed increase
+    spawnTimer = Math.max(900, BASE_SPAWN_INTERVAL - (round - 1) * 60);
+    emojiLifespan = Math.max(2500, BASE_EMOJI_LIFESPAN - (round - 1) * 100);
+  }
+
+  // ── Round announcement ──
+  function showRoundAnnounce(text) {
+    const el = document.createElement('div');
+    el.className = 'round-announce';
+    el.textContent = text;
+    playArea.appendChild(el);
+    setTimeout(() => el.remove(), 1300);
+  }
+
+  // ── Spawn an emoji ──
+  function spawnEmoji() {
+    if (!gameActive) return;
+
+    // Check concurrent limit
+    const activeCount = emojisOnScreen.filter(el => el.parentNode).length;
+    if (activeCount >= MAX_CONCURRENT) return;
+
+    // Pick from combined pool
+    const combined = [...currentGood, ...currentBad];
+    const emojiChar = pickRandom(combined);
+    const isGood = currentGood.includes(emojiChar);
+
+    // Random position with padding from edges
+    const padX = 60;
+    const padY = 120; // below HUD
+    const padBottom = 60;
+    const maxX = window.innerWidth - padX * 2;
+    const maxY = window.innerHeight - padY - padBottom;
+    const x = padX + Math.random() * maxX;
+    const y = padY + Math.random() * maxY;
+
+    const el = document.createElement('div');
+    el.className = 'play-emoji';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+
+    // Emoji character
+    const charEl = document.createElement('div');
+    charEl.className = 'emoji-char';
+    charEl.textContent = emojiChar;
+    el.appendChild(charEl);
+
+    // Timer bar
+    const timerBar = document.createElement('div');
+    timerBar.className = 'timer-bar';
+    const timerFill = document.createElement('div');
+    timerFill.className = 'timer-fill';
+    timerBar.appendChild(timerFill);
+    el.appendChild(timerBar);
+
+    // Store metadata
+    el.dataset.type = isGood ? 'good' : 'bad';
+    el.dataset.createdAt = Date.now();
+
+    // Timer bar animation — set duration to match lifespan
+    timerFill.style.transitionDuration = emojiLifespan + 'ms';
+
+    // Click handler
+    const handleClick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleEmojiClick(el, isGood);
+    };
+    el.addEventListener('click', handleClick);
+    el.addEventListener('touchstart', handleClick, { passive: false });
+
+    playArea.appendChild(el);
+    emojisOnScreen.push(el);
+
+    // Force reflow so the transition starts from current width
+    void timerFill.offsetWidth;
+
+    // Animate timer bar — width goes from 100% to 0%
+    requestAnimationFrame(() => {
+      timerFill.style.width = '0%';
+    });
+
+    // Auto-remove after lifespan
+    const removalTimeout = setTimeout(() => {
+      if (el.parentNode && !el.classList.contains('clicked-good') && !el.classList.contains('clicked-bad')) {
+        // Emoji expired naturally
+        if (isGood) {
+          // Missed a good one
+          combo = 0;
+          updateCombo();
+          spawnMissedFlash();
+        }
+        el.style.transition = 'transform 0.25s ease-in, opacity 0.25s ease-in';
+        el.style.transform = 'scale(0)';
+        el.style.opacity = '0';
+        setTimeout(() => {
+          if (el.parentNode) el.remove();
+        }, 250);
+      }
+    }, emojiLifespan);
+    el.dataset.timeoutId = removalTimeout;
+  }
+
+  // ── Handle emoji click ──
+  function handleEmojiClick(el, isGood) {
+    if (!gameActive) return;
+    if (el.classList.contains('clicked-good') || el.classList.contains('clicked-bad')) return;
+
+    // Clear the auto-removal timeout
+    clearTimeout(parseInt(el.dataset.timeoutId));
+
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    if (isGood) {
+      el.classList.add('clicked-good');
+      combo++;
+
+      const multiplier = Math.min(combo, 10);
+      const points = 10 * multiplier;
+      score += points;
+
+      spawnFloatText(cx - 20, cy - 20, `+${points}`, true);
+      spawnParticles(cx, cy, '#4ade80', 12);
+
+      updateCombo();
+      updateHUD();
+
+      setTimeout(() => {
+        if (el.parentNode) el.remove();
+      }, 350);
+    } else {
+      el.classList.add('clicked-bad');
+      hearts--;
+      combo = 0;
+      updateCombo();
+      updateHUD();
+
+      spawnFloatText(cx - 20, cy - 20, '💔', false);
+      spawnParticles(cx, cy, '#f87171', 14);
+
+      container.classList.add('damaged');
+      setTimeout(() => container.classList.remove('damaged'), 350);
+
+      setTimeout(() => {
+        if (el.parentNode) el.remove();
+      }, 350);
+
+      if (hearts <= 0) {
+        endGame();
+      }
+    }
+  }
+
+  // ── Spawn loop (uses setInterval for reliability) ──
+  function startSpawning() {
+    // Clear any existing interval
+    clearInterval(window._spawnInterval);
+
+    function doSpawn() {
+      if (gameActive) spawnEmoji();
+    }
+
+    // Use setInterval so timing is consistent
+    window._spawnInterval = setInterval(doSpawn, spawnTimer);
+  }
+
+  function stopSpawning() {
+    clearInterval(window._spawnInterval);
+    window._spawnInterval = null;
+  }
+
+  // ── Next round ──
+  function nextRound() {
+    if (!gameActive) return;
+    round++;
+    increaseDifficulty();
+    assignEmojisForRound();
+    updateHUD();
+    showRoundAnnounce(`Round ${round}`);
+
+    // Clear remaining emojis smoothly
+    const remaining = emojisOnScreen.filter(el => el.parentNode);
+    remaining.forEach(el => {
+      clearTimeout(parseInt(el.dataset.timeoutId));
+      el.style.transition = 'transform 0.3s ease-in, opacity 0.3s ease-in';
+      el.style.transform = 'scale(0)';
+      el.style.opacity = '0';
+      setTimeout(() => {
+        if (el.parentNode) el.remove();
+      }, 300);
+    });
+    emojisOnScreen = [];
+
+    // Restart spawning with new timing
+    stopSpawning();
+    setTimeout(() => {
+      if (gameActive) startSpawning();
+    }, 1000);
+  }
+
+  // ── Start game ──
+  function startGame() {
+    score = 0;
+    hearts = 3;
+    combo = 0;
+    round = 1;
+    difficulty = 1;
+    spawnTimer = BASE_SPAWN_INTERVAL;
+    emojiLifespan = BASE_EMOJI_LIFESPAN;
+    gameActive = true;
+
+    startScreen.classList.add('hidden');
+    gameoverScreen.classList.add('hidden');
+    playArea.innerHTML = '';
+    emojisOnScreen = [];
+    stopSpawning();
+    comboDisplay.className = '';
+
+    assignEmojisForRound();
+    updateHUD();
+    updateCombo();
+
+    showRoundAnnounce('Round 1');
+
+    setTimeout(() => startSpawning(), 800);
+  }
+
+  // ── End game ──
+  function endGame() {
+    gameActive = false;
+    stopSpawning();
+
+    // Clear all remaining emojis
+    emojisOnScreen.forEach(el => {
+      clearTimeout(parseInt(el.dataset.timeoutId));
+      el.style.transition = 'transform 0.4s ease-in, opacity 0.4s ease-in';
+      el.style.transform = 'scale(0)';
+      el.style.opacity = '0';
+    });
+
+    finalScore.textContent = score;
+    finalRound.textContent = `Round ${round} reached`;
+
+    setTimeout(() => {
+      gameoverScreen.classList.remove('hidden');
+    }, 800);
+  }
+
+  // ── Event listeners ──
+  document.getElementById('btn-start').addEventListener('click', startGame);
+  document.getElementById('btn-restart').addEventListener('click', startGame);
+  document.addEventListener('contextmenu', e => e.preventDefault());
+</script>
+
+</body>
+</html>
