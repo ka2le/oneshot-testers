@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#7a3b12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Läsbingo</title>
+<style>
+  :root{
+    --bg1:#f7d9a8; --bg2:#e9a25a;
+    --card:#fffaf1; --ink:#5a2e0e; --edge:#c98a4b;
+    --mark1:#e8661c; --mark2:#b8400f; --markInk:#fff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden}
+  body{
+    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(255,255,255,.35), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(160,60,10,.25), transparent 45%),
+      linear-gradient(160deg,var(--bg1),var(--bg2));
+    color:var(--ink);
+    user-select:none;-webkit-user-select:none;
+  }
+  .leaf{position:fixed;font-size:9vmin;opacity:.18;pointer-events:none}
+  .grid{
+    position:relative;
+    height:100dvh;width:100vw;
+    display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+    gap:2.5vmin;
+    padding:max(3vmin,env(safe-area-inset-top)) max(3vmin,env(safe-area-inset-right)) max(3vmin,env(safe-area-inset-bottom)) max(3vmin,env(safe-area-inset-left));
+  }
+  .tile{
+    position:relative;border:none;cursor:pointer;
+    background:var(--card);
+    border:.6vmin dashed var(--edge);
+    border-radius:3vmin;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5vmin;
+    padding:2vmin;text-align:center;color:var(--ink);font:inherit;
+    box-shadow:0 1vmin 2vmin rgba(90,40,10,.18);
+    transition:transform .15s ease, background .25s ease, color .25s ease, border-color .25s;
+    overflow:hidden;
+  }
+  .tile:active{transform:scale(.95)}
+  .icon{font-size:clamp(28px,10vmin,90px);line-height:1;filter:grayscale(.35);opacity:.85;transition:all .25s}
+  .text{font-weight:800;font-size:clamp(11px,3.4vmin,28px);letter-spacing:.03em;line-height:1.15}
+  .check{
+    position:absolute;top:1.2vmin;right:1.2vmin;
+    width:clamp(20px,7vmin,54px);height:clamp(20px,7vmin,54px);border-radius:50%;
+    border:.5vmin solid var(--edge);background:transparent;
+    display:flex;align-items:center;justify-content:center;
+    font-size:clamp(12px,4.5vmin,34px);font-weight:900;color:transparent;transition:all .25s;
+  }
+  .tile.marked{
+    background:linear-gradient(145deg,var(--mark1),var(--mark2));
+    border:.6vmin solid #7a2a06;color:var(--markInk);
+    box-shadow:inset 0 0 0 .6vmin rgba(255,255,255,.25),0 1vmin 2vmin rgba(90,40,10,.35);
+  }
+  .tile.marked .icon{filter:none;opacity:1;transform:scale(1.12) rotate(-6deg)}
+  .tile.marked .check{background:#fff;border-color:#fff;color:var(--mark2);transform:rotate(-8deg) scale(1.1)}
+  .tile.marked .text{text-shadow:0 .3vmin .6vmin rgba(0,0,0,.25)}
+  .tile.pop{animation:pop .35s ease}
+  @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.08)}100%{transform:scale(1)}}
+  .tile.allDone{animation:glow 1.2s ease-in-out 2}
+  @keyframes glow{50%{box-shadow:0 0 4vmin 1vmin #ffd27a}}
+</style>
+</head>
+<body>
+<span class="leaf" style="top:4%;left:46%">🍁</span>
+<span class="leaf" style="top:62%;left:2%">🍂</span>
+<span class="leaf" style="bottom:3%;right:30%">🍁</span>
+
+<main class="grid" id="grid"></main>
+
+<script>
+  const TILES = [
+    {t:"LÄS MED LÄSKIG RÖST", i:"🦇"},
+    {t:"LÄS I MYSIG BELYSNING", i:"🕯️"},
+    {t:"LÄS PÅ ETT GÖMSTÄLLE", i:"🔦"},
+    {t:"LÄS OCH ÄT NÅGOT GOTT", i:"🍪"},
+    {t:"LÄS FÖR ETT GOSEDJUR", i:"🧸"},
+    {t:"LÄS UNDER ETT BORD", i:"🪑"},
+    {t:"LÄS FÖR EN VUXEN", i:"👵"},
+    {t:"LÄS UTOMHUS", i:"🍂"},
+    {t:"LÄS OCH GÅ RUNT SOM ETT SPÖKE", i:"👻"}
+  ];
+  const KEY = "lasbingo-hostlov-v1";
+
+  function load(){
+    try{ const v = JSON.parse(localStorage.getItem(KEY)); if(Array.isArray(v) && v.length===9) return v; }catch(e){}
+    return Array(9).fill(false);
+  }
+  function save(s){ try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){} }
+
+  const state = load();
+  const grid = document.getElementById("grid");
+
+  TILES.forEach((tile, idx) => {
+    const b = document.createElement("button");
+    b.className = "tile" + (state[idx] ? " marked" : "");
+    b.setAttribute("aria-pressed", state[idx]);
+    b.innerHTML = `<span class="check">✓</span><span class="icon">${tile.i}</span><span class="text">${tile.t}</span>`;
+    b.addEventListener("click", () => {
+      state[idx] = !state[idx];
+      b.classList.toggle("marked", state[idx]);
+      b.setAttribute("aria-pressed", state[idx]);
+      b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop");
+      if (navigator.vibrate) navigator.vibrate(state[idx] ? 30 : 10);
+      save(state);
+      if (state[idx] && state.every(Boolean)) celebrate();
+    });
+    grid.appendChild(b);
+  });
+
+  function celebrate(){
+    document.querySelectorAll(".tile").forEach((t,k)=>{
+      setTimeout(()=>{ t.classList.remove("allDone"); void t.offsetWidth; t.classList.add("allDone"); }, k*80);
+    });
+  }
+
+  // Try going fullscreen on first tap (where the browser allows it)
+  document.addEventListener("click", function fs(){
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req && !document.fullscreenElement) { try{ req.call(el).catch(()=>{}); }catch(e){} }
+  }, {once:true});
+</script>
+</body>
+</html>
