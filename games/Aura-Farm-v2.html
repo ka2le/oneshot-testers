@@ -31,7 +31,7 @@ html, body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #000 url("https://ka2le.github.io/oneshot-testers/aura-background.png") center / cover no-repeat;
+  background: #000;
   font-family: Cormorant, "Cormorant Garamond", Garamond, Georgia, "Times New Roman", serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: geometricPrecision;
@@ -41,7 +41,6 @@ body {
   position: relative;
   display: grid;
   place-items: center;
-  isolation: isolate;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
@@ -50,21 +49,19 @@ body {
 body::before {
   content: "";
   position: fixed;
-  inset: -5vh -5vw;
-  z-index: 0;
+  inset: -4vh -4vw;
+  z-index: -2;
   background: url("https://ka2le.github.io/oneshot-testers/aura-background.png") center / cover no-repeat;
-  filter: blur(10px) saturate(1.176) brightness(1.5);
-  transform: scale(1.12);
-  transform-origin: center;
-  opacity: 1;
-  pointer-events: none;
+  filter: blur(30px) saturate(1.08) brightness(0.66);
+  transform: scale(1.08);
+  opacity: 0.94;
 }
 
 body::after {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 1;
+  z-index: -1;
   background: rgba(0, 0, 0, 0.38);
   pointer-events: none;
 }
@@ -73,7 +70,6 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
 
 .game-stage {
   position: relative;
-  z-index: 2;
   width: min(100vw, calc(100vh * var(--stage-ratio-w) / var(--stage-ratio-h)));
   height: 100vh;
   max-width: 100vw;
@@ -110,7 +106,7 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
   gap: 6px;
   transform: translateX(-50%);
   color: #fff;
-  font-size: clamp(18px, 2.45vh, 36px);
+  font-size: clamp(18px, 2.45vh, 30px);
   font-weight: 400;
   line-height: 1;
   letter-spacing: .01em;
@@ -226,7 +222,7 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
   transform: translateX(-50%) translateY(4px);
   white-space: nowrap;
   color: #fff;
-  font-size: clamp(16px, 1.8vh, 20px);
+  font-size: clamp(12px, 1.6vh, 16px);
   font-weight: 400;
   letter-spacing: .01em;
   opacity: 0;
@@ -260,83 +256,13 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.important { text-shadow: 0 3px 18px rgba(0,0,0,1), 0 0 22px rgba(255,60,60,.48); }
 
-.save-choice-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
-  padding: max(20px, var(--safe-top)) 20px max(20px, var(--safe-bottom));
-  background: rgba(0,0,0,.42);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  pointer-events: auto;
-}
-
-.save-choice-card {
-  width: min(84%, 390px);
-  display: grid;
-  gap: 14px;
-  padding: clamp(22px, 3.7vh, 34px);
-  border: 1px solid rgba(255,255,255,.26);
-  border-radius: 26px;
-  background: rgba(12,12,12,.72);
-  box-shadow: 0 18px 56px rgba(0,0,0,.58), inset 0 1px 0 rgba(255,255,255,.08);
-  color: #fff;
-  text-align: center;
-  text-shadow: 0 3px 14px rgba(0,0,0,.92);
-}
-
-.save-choice-title {
-  margin: 0;
-  font-size: clamp(25px, 4vh, 42px);
-  font-weight: 400;
-  line-height: .95;
-  letter-spacing: .01em;
-}
-
-.save-choice-text {
-  margin: 0;
-  color: rgba(255,255,255,.86);
-  font-size: clamp(17px, 2.35vh, 24px);
-  line-height: 1.12;
-}
-
-.save-choice-actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 2px;
-}
-
-.save-choice-button {
-  min-width: 112px;
-  padding: 10px 16px;
-  border: 1px solid rgba(255,255,255,.32);
-  border-radius: 999px;
-  background: rgba(255,255,255,.94);
-  color: #111;
-  cursor: pointer;
-  font-size: clamp(16px, 2vh, 22px);
-  line-height: 1;
-  box-shadow: 0 8px 22px rgba(0,0,0,.32);
-  transition: transform 120ms ease, opacity 120ms ease;
-}
-
-.save-choice-button.secondary {
-  background: rgba(255,255,255,.12);
-  color: #fff;
-}
-
-.save-choice-button:active { transform: scale(.94); opacity: .78; }
-
 .camera-button {
   position: absolute;
   left: 50%;
   bottom: calc(var(--safe-bottom) + 22px);
   z-index: 45;
-  width:  clamp(45px, 7vh, 106px);
-  height:  clamp(45px, 7vh, 106px);
+  width: clamp(76px, 10vh, 106px);
+  height: clamp(76px, 10vh, 106px);
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -461,7 +387,7 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
   gap: .02em;
   max-width: 100%;
   color: #fff;
-  font-size: clamp(15px, 1.6vh, 18px);
+  font-size: clamp(11px, 1.42vh, 15px);
   font-weight: 400;
   line-height: .96;
   text-align: center;
@@ -471,7 +397,7 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
 }
 
 .boost-label .stat-num {
-  font-size: 1.42em;
+  font-size: 1.22em;
   line-height: .9;
   margin-right: .05em;
 }
@@ -501,7 +427,7 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
   .boost-button { min-height: clamp(50px, 7.2vh, 66px); }
   .boost-icon-wrap { width: clamp(34px, 5vh, 48px); height: clamp(32px, 4.85vh, 46px); }
   .boost-icon { font-size: clamp(31px, 4.65vh, 46px); }
-  .boost-label { font-size: clamp(12px, 1.25vh, 12px); min-height: 1.65em; }
+  .boost-label { font-size: clamp(10px, 1.25vh, 12px); min-height: 1.65em; }
 }
 
 @media (max-width: 540px) {
@@ -511,7 +437,6 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: reduce) {
   .boost-button { transition-duration: 1ms; }
 }
-
   </style>
 </head>
 <body>
@@ -543,6 +468,7 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
     <div class="idle-meter" aria-hidden="true"><span id="idleFill"></span></div>
     <div class="heat-meter" aria-hidden="true"><span id="heatFill"></span></div>
   </main>
+
   <script>
 (function () {
   "use strict";
@@ -621,7 +547,6 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
 
   window.AuraUtils = U;
 })();
-
 </script>
 
   <script>
@@ -637,32 +562,32 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
     AURA, CAMERA, SWEAT, CHILL,
 
     constants: {
-      SAVE_KEY: "incrementalAuraFarming.v8",
+      SAVE_KEY: "incrementalAuraFarming.v9",
       TICK_MS: 50,
-      BASE_CHANCE_PER_TICK: 0.018,
-      MAX_CHANCE_PER_TICK: 0.45,
+      BASE_CHANCE_PER_TICK: 0.0018,
+      MAX_CHANCE_PER_TICK: 0.32,
       BASE_AURA_PER_SPAWN: 1,
       BASE_CLICK_POWER: 1,
       BASE_CHILL_MS: 10000,
-      MIN_CHILL_MS: 4300,
+      MIN_CHILL_MS: 900,
       CHILL_BASE_AURA: 10,
-      HEAT_DECAY_BASE: 0.03
+      HEAT_DECAY_BASE: 0.022
     },
 
     tierThresholds: [0, 100, 300, 800, 2000],
 
     boostTypes: [
-      { id: "auraFlat", effect: "flat", icons: ["👕", "⌚", "🎸", "❤️", "🕊️"], bases: [10, 40, 80, 200, 500], heat: 0.48, messages: ["Fresh tee. easy aura.", "Wrist watch. timed perfectly.", "Meal prepped. aura fed.", "Heart soft. aura huge.", "Inner peace. outer shine."] },
-      { id: "chance", effect: "chance", icons: ["🧥", "💍", "🏃", "🌴", "🌙"], bases: [0.018, 0.028, 0.04, 0.055, 0.075], heat: 0.52, messages: ["Jacket caught the light.", "Ring glint. odds up.", "Morning run. aura finds you.", "Home base. aura settles in.", "Moon phase. aura magnetic."] },
-      { id: "spawnValue", effect: "spawnValue", icons: ["👟", "👑", "🥤", "🌷", "🌳"], bases: [0.35, 0.75, 1.2, 2, 3.2], heat: 0.5, messages: ["Clean kicks. sparkle stride.", "Crown energy. bigger sparkle.", "Protein shake. sparkle dense.", "Flowers outside. sparkles inside.", "Lotus bloom. sparkles upgraded."] },
-      { id: "clickPower", effect: "clickPower", icons: ["🧢", "🕶️", "🐕", "💃", "🦋"], bases: [1.1, 1.9, 3.2, 5.4, 8.8], heat: 0.52, messages: ["Cap forward. tap cleaner.", "Sunglasses. camera got cooler.", "Dog walk glow-up.", "Long-haired muse. camera blessed.", "Mirror check. honest greatness."] },
-      { id: "heatDecay", effect: "heatDecay", icons: ["🩳", "📿", "💨", "🍁", "🛡️"], bases: [0.015, 0.025, 0.04, 0.06, 0.09], heat: 0.56, messages: ["Soft hands. stank fades.", "Prayer beads. panic drains.", "Cool breeze. thirsty no more.", "Secure attachment. stank down.", "Boundaries up. desperation leaves."] },
-      { id: "chillTimer", effect: "chillTimer", icons: ["🧦", "🎧", "🧘", "🤙", "☁️"], bases: [1, 1.4, 1.8, 2.3, 3], heat: 0.5, messages: ["Cozy socks. timer trimmed.", "Playlist on. waiting shorter.", "Breathing arc activated.", "Open hands. calm arrives sooner.", "Cloud mind. timer melts."] },
-      { id: "chillReward", effect: "chillReward", icons: ["🧸", "🎵", "🧹", "🛏️", "🧠"], bases: [0.18, 0.28, 0.42, 0.65, 1], heat: 0.51, messages: ["Comfort object. stillness pays.", "One song. better waiting.", "Clean room. cleaner reward.", "Eight hours. absurd power.", "Peace learned math."] }
+      { id: "auraFlat", effect: "flat", icons: ["👕", "⌚", "🥗", "❤️", "🕊️"], bases: [10, 40, 80, 200, 500], heat: 0.48, messages: ["Fresh tee. easy aura.", "Wrist watch. timed perfectly.", "Meal prepped. aura fed.", "Heart soft. aura huge.", "Inner peace. outer shine."] },
+      { id: "chance", effect: "chance", icons: ["🧥", "💍", "🏃", "🏡", "🌙"], bases: [0.018, 0.028, 0.04, 0.055, 0.075], heat: 0.52, messages: ["Jacket caught the light.", "Ring glint. odds up.", "Morning run. aura finds you.", "Home base. aura settles in.", "Moon phase. aura magnetic."] },
+      { id: "spawnValue", effect: "spawnValue", icons: ["👟", "👑", "🥤", "🌷", "🪷"], bases: [0.35, 0.75, 1.2, 2, 3.2], heat: 0.5, messages: ["Clean kicks. sparkle stride.", "Crown energy. bigger sparkle.", "Protein shake. sparkle dense.", "Flowers outside. sparkles inside.", "Lotus bloom. sparkles upgraded."] },
+      { id: "clickPower", effect: "clickPower", icons: ["🧢", "🕶️", "🐕", "👩", "🪞"], bases: [1.1, 1.9, 3.2, 5.4, 8.8], heat: 0.52, messages: ["Cap forward. tap cleaner.", "Sunglasses. camera got cooler.", "Dog walk glow-up.", "Long-haired muse. camera blessed.", "Mirror check. honest greatness."] },
+      { id: "heatDecay", effect: "heatDecay", icons: ["🧤", "📿", "💨", "🤝", "🛡️"], bases: [0.07, 0.09, 0.115, 0.14, 0.17], heat: 0.56, messages: ["Soft hands. shorter stank.", "Prayer beads. panic drains faster.", "Cool breeze. stank time shrinks.", "Secure attachment. stank passes.", "Boundaries up. desperation leaves."] },
+      { id: "chillTimer", effect: "chillTimer", icons: ["🧦", "🎧", "🧘", "🫶", "☁️"], bases: [0.09, 0.115, 0.14, 0.17, 0.21], heat: 0.5, messages: ["Cozy socks. timer trimmed.", "Playlist on. waiting shorter.", "Breathing arc activated.", "Open hands. calm arrives sooner.", "Cloud mind. timer melts."] },
+      { id: "chillReward", effect: "chillReward", icons: ["🧸", "🎵", "🧹", "😴", "🧠"], bases: [0.18, 0.28, 0.42, 0.65, 1], heat: 0.51, messages: ["Comfort object. stillness pays.", "One song. better waiting.", "Clean room. cleaner reward.", "Eight hours. absurd power.", "Peace learned math."] }
     ],
 
     tips: [
-      "Wait. then wait again.", "White bar pays each fill.", "Red bar full = aura zero.", "Side boosts cost 💦.", "Two boosts can wipe.", "Pick one. ignore three.", "✨ never gets spent.", "Higher aura changes icons.", "Random rolls can spike.", "Flat ✨ is bait but tasty.", "Camera scales hard.", "💦 fades over time.", "Stank makes offers tempting.", "Cool means restraint.", "Top gold line changes chapters.", "Hover is optional. text is there.", "Chill reward is steady now.", "No more chill exponential.", "Let some icons stay locked."
+      "Wait. then wait again.", "White bar pays each fill.", "Red bar full = aura zero.", "Side boosts cost 💦.", "Two boosts can wipe.", "Pick one. ignore three.", "✨ never gets spent.", "Higher aura changes icons.", "Random rolls can spike.", "Flat ✨ is bait but tasty.", "Passive starts tiny.", "💦 fades slower now.", "Stank makes offers tempting.", "Cool means restraint.", "Top gold line changes chapters.", "Hover is optional. text is there.", "Chill reward is steady now.", "No more chill exponential.", "Let some icons stay locked."
     ],
 
     jokes: [
@@ -670,7 +595,6 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
     ]
   };
 })();
-
 </script>
 
   <script>
@@ -690,6 +614,8 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
       heat: 0,
       heatGainMultiplier: 1,
       heatDecayBonus: 0,
+      heatClearMultiplier: 1,
+      boostLockoutUntil: 0,
       chillChain: 0,
       lastActionAt: now,
       lastChillBoostAt: now,
@@ -732,9 +658,12 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
     state.clickPower = Math.max(c.BASE_CLICK_POWER, Number(state.clickPower) || c.BASE_CLICK_POWER);
     state.chillDurationMs = Math.max(c.MIN_CHILL_MS, Number(state.chillDurationMs) || c.BASE_CHILL_MS);
     state.chillBoostMultiplier = Math.max(1, Number(state.chillBoostMultiplier) || 1);
-    state.heat = Math.max(0, Math.min(0.95, (Number(state.heat) || 0) - offlineSeconds * c.HEAT_DECAY_BASE));
+    const heatClearMultiplier = Math.max(0.08, Number(state.heatClearMultiplier) || 1);
+    state.heat = Math.max(0, Math.min(0.95, (Number(state.heat) || 0) - offlineSeconds * (c.HEAT_DECAY_BASE / heatClearMultiplier)));
     state.heatGainMultiplier = Math.max(0.28, Math.min(1, Number(state.heatGainMultiplier) || 1));
     state.heatDecayBonus = Math.max(0, Number(state.heatDecayBonus) || 0);
+    state.heatClearMultiplier = heatClearMultiplier;
+    state.boostLockoutUntil = Math.max(0, Number(state.boostLockoutUntil) || 0);
     state.chillChain = 0;
     state.lastActionAt = now;
     state.lastChillBoostAt = now;
@@ -756,31 +685,6 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
     return sanitize(mergeState(defaults(), saved));
   }
 
-  function hasSave() {
-    const c = window.AuraData.constants;
-    let saved = null;
-    try {
-      saved = JSON.parse(localStorage.getItem(c.SAVE_KEY) || "null");
-    } catch (error) {
-      return false;
-    }
-    if (!saved || typeof saved !== "object") return false;
-    const totals = saved.totals || {};
-    return Number(saved.aura) > 0
-      || Number(saved.peakAura) > 0
-      || Number(saved.extraChancePerTick) > 0
-      || Number(saved.auraPerSpawn) > c.BASE_AURA_PER_SPAWN
-      || Number(saved.clickPower) > c.BASE_CLICK_POWER
-      || Number(saved.chillBoostMultiplier) > 1
-      || Number(saved.heatDecayBonus) > 0
-      || Number(saved.chillDurationMs) < c.BASE_CHILL_MS
-      || Number(totals.naturalSpawns) > 0
-      || Number(totals.cameraClicks) > 0
-      || Number(totals.chillBoosts) > 0
-      || Number(totals.items) > 0
-      || Number(totals.penalties) > 0;
-  }
-
   function save(state) {
     const c = window.AuraData.constants;
     try {
@@ -797,9 +701,8 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
     return defaults();
   }
 
-  window.AuraState = { defaults, hasSave, load, save, reset };
+  window.AuraState = { defaults, load, save, reset };
 })();
-
 </script>
 
   <script>
@@ -1081,56 +984,6 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
     toastTimer = window.setTimeout(() => refs.toast.classList.remove("show", "important"), important ? 2500 : 2100);
   }
 
-  function showSavePrompt(details, handlers) {
-    const previous = refs.stage.querySelector(".save-choice-overlay");
-    if (previous) previous.remove();
-
-    const overlay = document.createElement("section");
-    overlay.className = "save-choice-overlay";
-    overlay.setAttribute("role", "dialog");
-    overlay.setAttribute("aria-modal", "true");
-    overlay.setAttribute("aria-labelledby", "saveChoiceTitle");
-
-    const card = document.createElement("div");
-    card.className = "save-choice-card";
-
-    const title = document.createElement("h2");
-    title.id = "saveChoiceTitle";
-    title.className = "save-choice-title";
-    title.textContent = "Saved aura found";
-
-    const text = document.createElement("p");
-    text.className = "save-choice-text";
-    text.textContent = `Keep going from ${U.formatWhole(details && details.aura)} aura, or reset from 0.`;
-
-    const actions = document.createElement("div");
-    actions.className = "save-choice-actions";
-
-    const resetButton = document.createElement("button");
-    resetButton.className = "save-choice-button secondary";
-    resetButton.type = "button";
-    resetButton.textContent = "Reset from 0";
-
-    const keepButton = document.createElement("button");
-    keepButton.className = "save-choice-button";
-    keepButton.type = "button";
-    keepButton.textContent = "Keep going";
-
-    const close = (callback) => {
-      overlay.remove();
-      if (callback) callback();
-    };
-
-    overlay.addEventListener("click", (event) => event.stopPropagation());
-    resetButton.addEventListener("click", () => close(handlers && handlers.onReset));
-    keepButton.addEventListener("click", () => close(handlers && handlers.onKeep));
-    actions.append(resetButton, keepButton);
-    card.append(title, text, actions);
-    overlay.appendChild(card);
-    refs.stage.appendChild(overlay);
-    keepButton.focus({ preventScroll: true });
-  }
-
   function toggleFullscreen() {
     const target = refs.stage;
     if (!document.fullscreenElement) {
@@ -1140,9 +993,8 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
     }
   }
 
-  window.AuraUI = { init, refs, metrics, syncCrop, setAura, setMeters, humanPoint, cameraPoint, menuPoint, heatPoint, spawnAura, spawnSweat, spawnChillBurst, cameraFlash, flashUpgrade, renderBoosts, updateBoosts, boostPoint, popBlockDust, showToast, showSavePrompt, toggleFullscreen };
+  window.AuraUI = { init, refs, metrics, syncCrop, setAura, setMeters, humanPoint, cameraPoint, menuPoint, heatPoint, spawnAura, spawnSweat, spawnChillBurst, cameraFlash, flashUpgrade, renderBoosts, updateBoosts, boostPoint, popBlockDust, showToast, toggleFullscreen };
 })();
-
 </script>
 
   <script>
@@ -1157,7 +1009,6 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
 
   let state;
   let lastTickAt = Date.now();
-  let tickTimer = 0;
   let nextSaveAt = 0;
   let nextTargetAt = 0;
   let targetActiveBoosts = 1;
@@ -1165,9 +1016,11 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
 
   function init() {
     UI.init();
-    const shouldPromptSave = Store.hasSave && Store.hasSave();
     state = Store.load();
-    normalizeState();
+    state.chillBoostMultiplier = Math.max(1, Number(state.chillBoostMultiplier) || 1);
+    state.heatDecayBonus = Math.max(0, Number(state.heatDecayBonus) || 0);
+    state.heatClearMultiplier = Math.max(0.08, Number(state.heatClearMultiplier) || 1);
+    state.boostLockoutUntil = Math.max(0, Number(state.boostLockoutUntil) || 0);
     UI.setAura(state.aura);
     UI.setMeters(0, state.heat, tierProgress());
     initBoostSlots();
@@ -1185,36 +1038,7 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
         for (const slot of boostSlots) disableSlot(slot, now, U.rand(400, 2600));
       }
     });
-    if (shouldPromptSave) UI.showSavePrompt({ aura: state.aura }, { onKeep: startGame, onReset: resetFromZero });
-    else startGame();
-  }
-
-  function normalizeState() {
-    state.chillBoostMultiplier = Math.max(1, Number(state.chillBoostMultiplier) || 1);
-    state.heatDecayBonus = Math.max(0, Number(state.heatDecayBonus) || 0);
-  }
-
-  function startGame() {
-    const now = Date.now();
-    state.lastActionAt = now;
-    state.lastChillBoostAt = now;
-    lastTickAt = now;
-    if (!tickTimer) tickTimer = window.setInterval(tick, C.TICK_MS);
-  }
-
-  function resetFromZero() {
-    state = Store.reset();
-    normalizeState();
-    nextSaveAt = 0;
-    nextTargetAt = 0;
-    targetActiveBoosts = 1;
-    UI.setAura(state.aura);
-    UI.setMeters(0, state.heat, tierProgress());
-    initBoostSlots();
-    UI.renderBoosts(boostSlots, takeBoost);
-    Store.save(state);
-    startGame();
-    UI.showToast("Started from 0.", false);
+    window.setInterval(tick, C.TICK_MS);
   }
 
   function initBoostSlots() {
@@ -1303,18 +1127,21 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
   }
 
   function decayHeat(dt) {
-    const decay = (C.HEAT_DECAY_BASE + state.heatDecayBonus) * dt;
+    const timeMultiplier = Math.max(0.08, Number(state.heatClearMultiplier) || 1);
+    const decay = ((C.HEAT_DECAY_BASE + state.heatDecayBonus) / timeMultiplier) * dt;
     state.heat = Math.max(0, state.heat - decay);
   }
 
   function checkHeatPenalty() {
     if (state.heat < 1) return;
     state.aura = 0;
-    state.lastPenaltyAt = Date.now();
+    const now = Date.now();
+    state.lastPenaltyAt = now;
+    state.boostLockoutUntil = now + 10000;
     state.totals.penalties += 1;
     state.heat = 0;
-    state.lastActionAt = Date.now();
-    state.lastChillBoostAt = Date.now();
+    state.lastActionAt = now;
+    state.lastChillBoostAt = now;
     UI.setAura(state.aura);
     UI.flashUpgrade("heatDecay");
     UI.showToast("Aura wiped. [full 💦]", true);
@@ -1326,8 +1153,8 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
     const since = now - state.lastClickAt;
     state.clickChain = since < 850 ? state.clickChain + 1 : 0;
     state.lastClickAt = now;
-    const spamHeat = Math.min(0.08, state.clickChain * 0.0085);
-    registerAction(0.026 + spamHeat, { important: true, point: UI.cameraPoint() });
+    const spamHeat = Math.min(0.055, state.clickChain * 0.0065);
+    registerAction(0.018 + spamHeat, { important: true, point: UI.cameraPoint() });
     state.totals.cameraClicks += 1;
     UI.cameraFlash();
     gainAura(state.clickPower, "camera", UI.cameraPoint());
@@ -1352,7 +1179,7 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
 
   function pickActiveTarget() {
     const heat = state.heat;
-    const weights = heat > 0.45
+    const weights = heat > 0.75
       ? [{ n: 0, w: 0.04 }, { n: 1, w: 0.24 }, { n: 2, w: 0.43 }, { n: 3, w: 0.22 }, { n: 4, w: 0.07 }]
       : heat > 0.35
         ? [{ n: 0, w: 0.07 }, { n: 1, w: 0.35 }, { n: 2, w: 0.38 }, { n: 3, w: 0.16 }, { n: 4, w: 0.04 }]
@@ -1361,6 +1188,15 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
   }
 
   function updateBoostAvailability(now) {
+    if (now < (state.boostLockoutUntil || 0)) {
+      for (const slot of boostSlots) {
+        if (slot.available || slot.readyAt < state.boostLockoutUntil) disableSlot(slot, now, Math.max(600, state.boostLockoutUntil - now + U.rand(250, 1400)));
+      }
+      targetActiveBoosts = 0;
+      UI.updateBoosts(boostSlots);
+      return;
+    }
+
     if (now >= nextTargetAt) {
       targetActiveBoosts = pickActiveTarget();
       nextTargetAt = now + U.rand(1800, 2800);
@@ -1425,9 +1261,7 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
     multiplier = U.clamp(multiplier, 0.65, 4.5);
     const value = base * multiplier;
     if (effect === "flat") return Math.max(1, Math.round(value));
-    if (effect === "chance" || effect === "chillReward") return Math.max(0.001, Number(value.toFixed(4)));
-    if (effect === "chillTimer") return Math.max(0.1, Number(value.toFixed(1)));
-    if (effect === "heatDecay") return Math.max(0.001, Number(value.toFixed(3)));
+    if (effect === "chance" || effect === "chillReward" || effect === "chillTimer" || effect === "heatDecay") return U.clamp(Number(value.toFixed(4)), 0.005, 0.45);
     return Math.max(0.01, Number(value.toFixed(2)));
   }
 
@@ -1437,8 +1271,8 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
       case "spawnValue": return { number: `+${U.formatDecimal(slot.value)}`, icon: "sparkle", text: "/aura" };
       case "clickPower": return { number: `+${U.formatDecimal(slot.value)}`, icon: "camera", text: "/photo" };
       case "flat": return { number: `+${U.formatShortNumber(slot.value)}`, icon: "sparkle", text: "aura" };
-      case "heatDecay": return { number: `+${U.formatDecimal(slot.value)}`, icon: "sweat", text: "fade/s" };
-      case "chillTimer": return { number: `-${U.formatDecimal(slot.value)}s`, icon: null, text: "chill timer" };
+      case "heatDecay": return { number: `-${U.formatPercent(slot.value)}%`, icon: "sweat", text: "time" };
+      case "chillTimer": return { number: `-${U.formatPercent(slot.value)}%`, icon: null, text: "chill timer" };
       case "chillReward": return { number: `+${U.formatPercent(slot.value)}%`, icon: null, text: "chill reward" };
       default: return { before: "+", icon: "sparkle", after: "" };
     }
@@ -1450,8 +1284,8 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
       case "spawnValue": return `+${U.formatDecimal(slot.value)}/${Data.AURA}`;
       case "clickPower": return `+${U.formatDecimal(slot.value)}/${Data.CAMERA}`;
       case "flat": return `+${U.formatShortNumber(slot.value)}${Data.AURA}`;
-      case "heatDecay": return `+${U.formatDecimal(slot.value)} ${Data.SWEAT} fade/s`;
-      case "chillTimer": return `-${U.formatDecimal(slot.value)}s chill timer`;
+      case "heatDecay": return `-${U.formatPercent(slot.value)}% ${Data.SWEAT} time`;
+      case "chillTimer": return `-${U.formatPercent(slot.value)}% chill timer`;
       case "chillReward": return `+${U.formatPercent(slot.value)}% chill reward`;
       default: return `+${Data.AURA}`;
     }
@@ -1463,7 +1297,7 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
     const point = UI.boostPoint(id);
     slot.available = false;
     applyBoost(slot, point);
-    addHeat(slot.heat, true, point);
+    registerAction(slot.heat, { important: true, point });
     disableSlot(slot, Date.now());
     const message = (slot.messages && slot.messages[slot.tier]) || "Upgrade found.";
     UI.showToast(`${message} [${slot.statLabel}]`, false);
@@ -1477,8 +1311,8 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
       case "spawnValue": state.auraPerSpawn += slot.value; break;
       case "clickPower": state.clickPower += slot.value; break;
       case "flat": gainAura(slot.value, "boost", point); break;
-      case "heatDecay": state.heatDecayBonus += slot.value; break;
-      case "chillTimer": state.chillDurationMs = Math.max(C.MIN_CHILL_MS, state.chillDurationMs - (slot.value * 1000)); break;
+      case "heatDecay": state.heatClearMultiplier = Math.max(0.08, (Number(state.heatClearMultiplier) || 1) * (1 - U.clamp(slot.value, 0.005, 0.9))); break;
+      case "chillTimer": state.chillDurationMs = Math.max(C.MIN_CHILL_MS, state.chillDurationMs * (1 - U.clamp(slot.value, 0.005, 0.9))); break;
       case "chillReward": state.chillBoostMultiplier += slot.value; break;
       default: break;
     }
@@ -1489,7 +1323,6 @@ button { font: inherit; -webkit-tap-highlight-color: transparent; }
 
   window.addEventListener("DOMContentLoaded", init, { once: true });
 })();
-
 </script>
 </body>
 </html>
