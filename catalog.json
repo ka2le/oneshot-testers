@@ -1,30 +1,38 @@
 {
   "elsewhere.html": {
     "game": "Elsewhere",
-    "family": "Unspecified",
-    "model": "Unspecified"
+    "family": "OpenAI",
+    "model": "Astra 6.0"
   },
   "the-ninth-tide.html": {
     "game": "The Ninth Tide",
-    "family": "Unspecified",
-    "model": "Unspecified"
+    "family": "OpenAI",
+    "model": "Astra 6.0"
   },
   "wildfang.html": {
     "game": "Wildfang",
-    "family": "Unspecified",
-    "model": "Unspecified"
+    "family": "OpenAI",
+    "model": "Astra 6.0"
   },
   "wildfang-flow-lab.html": {
-    "hidden": true
+    "hidden": true,
+    "family": "OpenAI",
+    "model": "Astra 6.0"
   },
   "SNAKE ROUGELIKE  ASTRA.html": {
-    "hidden": true
+    "hidden": true,
+    "family": "OpenAI",
+    "model": "Astra 6.0"
   },
   "PUZZLE RUSH ASTRA.html": {
-    "hidden": true
+    "hidden": true,
+    "family": "OpenAI",
+    "model": "Astra 6.0"
   },
   "TEXT TPG ASTRA.html": {
-    "hidden": true
+    "hidden": true,
+    "family": "OpenAI",
+    "model": "Astra 6.0"
   },
   "LASBINGO.html": {
     "game": "Läsbingo",
@@ -66,5 +74,13 @@
   "Aura-Farm-reblanced.html": {
     "game": "Aura Farm",
     "variant": "Rebalanced"
+  },
+  "AutumNationV13_balance2-Astra6.html": {
+    "family": "OpenAI",
+    "model": "Astra 6.0"
+  },
+  "Pinball-Astra-6-modified from claude.html": {
+    "family": "OpenAI",
+    "model": "Astra 6.0"
   }
 }

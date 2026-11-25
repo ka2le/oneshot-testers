@@ -20,6 +20,12 @@ test("catalog groups games, attributes model families and hides report/auxiliary
       file,
     );
   assert(!catalog.some((g) => g.file === "wildfang-flow-lab.html"));
+  for (const file of ["elsewhere.html", "the-ninth-tide.html", "wildfang.html"])
+    assert.equal(catalog.find((g) => g.file === file).model, "Astra 6.0");
+  assert.deepEqual(
+    [...new Set(catalog.filter((g) => /^Astra/i.test(g.model)).map((g) => g.model))],
+    ["Astra 6.0"],
+  );
   assert(
     new Set(catalog.filter((g) => g.game === "Snake").map((g) => g.family))
       .size >= 4,

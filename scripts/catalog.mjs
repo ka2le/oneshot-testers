@@ -69,6 +69,7 @@ export function inferMetadata(file) {
     .replace(/^gpt/i, "GPT")
     .replace(/^qwen/i, "Qwen")
     .replace(/^gemma/i, "Gemma")
+    .replace(/^Astra(?:[- ]?6(?:\.0)?)?$/i, "Astra 6.0")
     .replace(/^Astra-?(\d)/i, "Astra $1")
     .replace(/^Claude-Opus-?/i, "Claude Opus ")
     .replace(/^Claude-Sonnet-?/i, "Claude Sonnet ");
