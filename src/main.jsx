@@ -1,292 +1,415 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./styles.css";
-import { games, unique, filterGames } from "./games";
+import {
+  games,
+  filterGames,
+  byName,
+  buildLabel,
+  familyColor,
+  ringColor,
+  UNSPECIFIED,
+} from "./games";
 
 const initial = new URLSearchParams(location.search);
+const groupBy = (list, key) => {
+  const map = new Map();
+  for (const item of list) {
+    const k = key(item);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(item);
+  }
+  return map;
+};
+
+// Families ordered by size, Unspecified last; each with its models.
+const familyTree = [...groupBy(games, (g) => g.family)]
+  .map(([family, items]) => ({
+    family,
+    count: items.length,
+    models: [...groupBy(items, (g) => g.model)]
+      .map(([model, list]) => ({ model, count: list.length }))
+      .sort((a, b) => byName(a.model, b.model)),
+  }))
+  .sort(
+    (a, b) =>
+      (a.family === UNSPECIFIED) - (b.family === UNSPECIFIED) ||
+      b.count - a.count ||
+      a.family.localeCompare(b.family),
+  );
+
+// "Original" first, then natural order (v2 < v10).
+const byBuild = (a, b) => {
+  const x = buildLabel(a),
+    y = buildLabel(b);
+  return (
+    (y === "Original") - (x === "Original") ||
+    x.localeCompare(y, undefined, { numeric: true, sensitivity: "base" })
+  );
+};
+
+function Logo() {
+  const C = 157.08,
+    seg = C / 5,
+    dash = seg * 0.88;
+  return (
+    <svg className="logo" viewBox="0 0 64 64" aria-hidden="true">
+      {["#0081c8", "#f4a300", "#1d1d1f", "#00a651", "#ee334e"].map((c, i) => (
+        <circle
+          key={c}
+          cx="32"
+          cy="32"
+          r="25"
+          fill="none"
+          stroke={c}
+          strokeWidth="7"
+          strokeDasharray={`${dash} ${C - dash}`}
+          strokeDashoffset={C / 4 - i * seg}
+        />
+      ))}
+      <path d="M28.5 25.5 35 21h3v22h-5V27.6l-4.5 2.6z" />
+    </svg>
+  );
+}
+
+function Card({ title, subtitle, color, rows, rowColor }) {
+  const [open, setOpen] = useState(false);
+  const limit = 7;
+  const shown = open ? rows : rows.slice(0, limit);
+  const total = rows.reduce((n, [, items]) => n + items.length, 0);
+  return (
+    <article className="card" style={{ "--c": color }}>
+      <header className="cover">
+        <div>
+          <h2>{title}</h2>
+          {subtitle && <span className="sub">{subtitle}</span>}
+        </div>
+        <span className="count" title={`${total} builds`}>
+          {total}
+        </span>
+      </header>
+      <ul className="rows">
+        {shown.map(([name, items]) => (
+          <li
+            key={name}
+            className={name === UNSPECIFIED ? "row unspecified" : "row"}
+          >
+            {items.length === 1 ? (
+              <a className="row-link" href={items[0].href}>
+                <span className="name">
+                  {rowColor && (
+                    <i className="dot" style={{ background: rowColor(items[0]) }} />
+                  )}
+                  {name}
+                </span>
+                <span className="label">{buildLabel(items[0])}</span>
+              </a>
+            ) : (
+              <>
+                <span className="name">
+                  {rowColor && (
+                    <i className="dot" style={{ background: rowColor(items[0]) }} />
+                  )}
+                  {name}
+                </span>
+                <span className="builds">
+                  {items.map((item) => (
+                    <a className="build" href={item.href} key={item.id}>
+                      {buildLabel(item)}
+                    </a>
+                  ))}
+                </span>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      {rows.length > limit && (
+        <button className="more" onClick={() => setOpen(!open)}>
+          {open ? "Show less" : `+${rows.length - limit} more`}
+        </button>
+      )}
+    </article>
+  );
+}
+
+function PasteDialog({ onClose }) {
+  const [html, setHtml] = useState("");
+  const [preview, setPreview] = useState("");
+  useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview]);
+  useEffect(() => {
+    const esc = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+  if (preview)
+    return (
+      <div className="overlay preview" role="dialog" aria-modal="true">
+        <div className="preview-bar">
+          <strong>Preview</strong>
+          <button autoFocus onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <iframe
+          src={preview}
+          title="Pasted HTML preview"
+          sandbox="allow-scripts allow-pointer-lock"
+        />
+      </div>
+    );
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="paste" onClick={(e) => e.stopPropagation()}>
+        <textarea
+          autoFocus
+          value={html}
+          onChange={(e) => setHtml(e.target.value)}
+          placeholder="Paste HTML…"
+          spellCheck={false}
+          aria-label="HTML"
+        />
+        <div className="paste-actions">
+          <button onClick={onClose}>Cancel</button>
+          <button
+            className="primary"
+            disabled={!/<[a-z!]/i.test(html)}
+            onClick={() =>
+              setPreview(
+                URL.createObjectURL(new Blob([html], { type: "text/html" })),
+              )
+            }
+          >
+            Open
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [mode, setMode] = useState(
     initial.get("view") === "model" ? "model" : "game",
   );
   const [family, setFamily] = useState(initial.get("family") || "");
   const [model, setModel] = useState(initial.get("model") || "");
-  const [game, setGame] = useState(initial.get("game") || "");
   const [search, setSearch] = useState(initial.get("q") || "");
   const [paste, setPaste] = useState(false);
-  const [html, setHtml] = useState("");
-  const [error, setError] = useState("");
-  const [preview, setPreview] = useState("");
-  const families = unique(games.map((g) => g.family));
-  const models = unique(
-    games.filter((g) => !family || g.family === family).map((g) => g.model),
-  );
-  const gameNames = unique(games.map((g) => g.game));
+
   const filtered = useMemo(
-    () => filterGames(games, { mode, family, model, game, search }),
-    [mode, family, model, game, search],
-  );
-  const groups = Object.groupBy(filtered, (g) =>
-    mode === "game" ? g.game : `${g.family} / ${g.model}`,
+    () => filterGames(games, { family, model, search }),
+    [family, model, search],
   );
 
+  const cards = useMemo(() => {
+    const primary = mode === "game" ? "game" : "model";
+    const secondary = mode === "game" ? "model" : "game";
+    return [...groupBy(filtered, (g) => g[primary])]
+      .sort(([a], [b]) => byName(a, b))
+      .map(([title, items]) => ({
+        title,
+        items,
+        rows: [...groupBy(items, (g) => g[secondary])]
+          .sort(([a], [b]) => byName(a, b))
+          .map(([name, list]) => [name, [...list].sort(byBuild)]),
+      }));
+  }, [filtered, mode]);
+
   useEffect(() => {
-    const params = new URLSearchParams({ view: mode });
-    for (const [key, value] of Object.entries({
-      family,
-      model,
-      game,
-      q: search,
-    }))
+    const params = new URLSearchParams();
+    if (mode === "model") params.set("view", "model");
+    for (const [key, value] of Object.entries({ family, model, q: search }))
       if (value) params.set(key, value);
-    history.replaceState(null, "", `?${params}`);
-  }, [mode, family, model, game, search]);
-  useEffect(
-    () => () => {
-      if (preview) URL.revokeObjectURL(preview);
-    },
-    [preview],
-  );
-  useEffect(() => {
-    const close = (e) => {
-      if (e.key === "Escape") setPreview("");
-    };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, []);
-  function openPaste() {
-    if (
-      !/<(?:!doctype|html|body|head|div|canvas|script|style|main|section)\b/i.test(
-        html,
-      )
-    ) {
-      setError("Paste an HTML document or snippet to preview.");
-      return;
-    }
-    setError("");
-    setPreview(URL.createObjectURL(new Blob([html], { type: "text/html" })));
-  }
-  function reset() {
-    setFamily("");
+    const query = params.toString();
+    history.replaceState(null, "", query ? `?${query}` : location.pathname);
+  }, [mode, family, model, search]);
+
+  const pickFamily = (name) => {
+    setFamily(family === name && !model ? "" : name);
     setModel("");
-    setGame("");
-    setSearch("");
-  }
+  };
+  const pickModel = (fam, name) => {
+    setFamily(fam);
+    setModel(model === name ? "" : name);
+  };
+  const activeFamily = familyTree.find((f) => f.family === family);
 
   return (
-    <main className="app-shell">
-      <header className="masthead">
+    <div className="page">
+      <div className="stripe" aria-hidden="true">
+        <i /><i /><i /><i /><i />
+      </div>
+      <header className="top">
         <a className="brand" href={import.meta.env.BASE_URL}>
-          <span className="brand-icon">1</span> ONESHOTS
-          <span className="brand-note">THE GAME ARCHIVE</span>
+          <Logo />
+          <span>OneShots</span>
         </a>
-        <button onClick={() => setPaste(!paste)} aria-expanded={paste}>
-          Paste HTML
+        <input
+          className="search"
+          type="search"
+          placeholder="Search"
+          aria-label="Search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <button
+          className="ghost"
+          onClick={() => setPaste(true)}
+          aria-label="Paste HTML"
+        >
+          <span className="long">Paste HTML</span>
+          <span className="short" aria-hidden="true">
+            &lt;/&gt;
+          </span>
         </button>
       </header>
-      <section className="intro">
-        <p className="eyebrow">ONE PROMPT. MANY POSSIBILITIES.</p>
-        <h1>
-          Same idea.
-          <br />
-          <span>Different minds.</span>
-        </h1>
-        <p>
-          Explore little games made by AI. Follow a model, or pick a game and
-          see how each model plays it.
-        </p>
-        <div className="stats">
-          <span>
-            <b>{games.length}</b> versions
-          </span>
-          <span>
-            <b>{gameNames.length}</b> games
-          </span>
-          <span>
-            <b>{families.filter((f) => f !== "Unspecified").length}</b> model
-            families
-          </span>
-        </div>
-      </section>
-      {paste && (
-        <section className="panel paste-panel">
-          <h2>Try something new</h2>
-          <p>Preview pasted HTML in this browser.</p>
-          <label htmlFor="paste-html">HTML document</label>
-          <textarea
-            id="paste-html"
-            value={html}
-            onChange={(e) => setHtml(e.target.value)}
-            placeholder="<!doctype html>…"
-            spellCheck={false}
-          />
-          <div className="actions">
-            <button className="primary" onClick={openPaste}>
-              Open preview
-            </button>
-            <button
-              onClick={() => {
-                setHtml("");
-                setError("");
-              }}
-            >
-              Clear
-            </button>
-          </div>
-          {error && (
-            <p role="alert" className="error">
-              {error}
-            </p>
-          )}
-        </section>
-      )}
-      <section className="browser" aria-label="Browse archive">
-        <div className="browse-top">
-          <div className="switch" role="group" aria-label="Browse by">
-            <button
-              aria-pressed={mode === "game"}
-              onClick={() => setMode("game")}
-            >
-              By game
-            </button>
-            <button
-              aria-pressed={mode === "model"}
-              onClick={() => setMode("model")}
-            >
-              By model
-            </button>
-          </div>
-          <label className="search">
-            <span className="sr-only">Search archive</span>
-            <input
-              type="search"
-              placeholder="Search games, models, versions…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </label>
-        </div>
-        <div className="filters">
-          {mode === "game" ? (
-            <label>
-              Game
-              <select value={game} onChange={(e) => setGame(e.target.value)}>
-                <option value="">All games</option>
-                {gameNames.map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <>
-              <label>
-                Model family
-                <select
-                  value={family}
-                  onChange={(e) => {
-                    setFamily(e.target.value);
-                    setModel("");
-                  }}
-                >
-                  <option value="">All families</option>
-                  {families.map((name) => (
-                    <option key={name}>{name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Model
-                <select
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                >
-                  <option value="">All models</option>
-                  {models.map((name) => (
-                    <option key={name}>{name}</option>
-                  ))}
-                </select>
-              </label>
-            </>
-          )}
-          <button className="text-button" onClick={reset}>
-            Reset filters
+
+      <div className="layout">
+        <nav className="models" aria-label="Models">
+          <button
+            className="fam"
+            aria-pressed={!family}
+            onClick={() => {
+              setFamily("");
+              setModel("");
+            }}
+          >
+            <span>All</span>
+            <em>{games.length}</em>
           </button>
-        </div>
-        <div className="results-bar">
-          <span>
-            {filtered.length} version{filtered.length === 1 ? "" : "s"}
-          </span>
-          <span>
-            {mode === "game"
-              ? "Compare the models. Find your favorite."
-              : "Everything this model made."}
-          </span>
-        </div>
-        <div className="groups">
-          {Object.entries(groups)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([name, entries]) => (
-              <section className="game-group" key={name}>
-                <div className="group-title">
-                  <h2>{name}</h2>
-                  <span>
-                    {entries.length} version{entries.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <div className="game-grid">
-                  {entries.map((item) => (
-                    <a className="game-card" href={item.href} key={item.id}>
-                      <div className="card-top">
-                        <span className="family" data-family={item.family}>
-                          {item.family}
-                        </span>
-                        <span className="play-label">PLAY</span>
-                      </div>
-                      <h3>{mode === "game" ? item.model : item.game}</h3>
-                      <p>{item.variant || "Original"}</p>
-                      <span className="file-name">
-                        {item.file.split("/").at(-1)}
-                      </span>
-                    </a>
+          {familyTree.map((f) => (
+            <div className="fam-group" key={f.family}>
+              <button
+                className="fam"
+                aria-pressed={family === f.family && !model}
+                aria-expanded={family === f.family}
+                onClick={() => pickFamily(f.family)}
+              >
+                <i className="dot" style={{ background: familyColor(f.family) }} />
+                <span>{f.family}</span>
+                <em>{f.count}</em>
+              </button>
+              {family === f.family && f.family !== UNSPECIFIED && (
+                <div className="model-list">
+                  {f.models.map((m) => (
+                    <button
+                      key={m.model}
+                      aria-pressed={model === m.model}
+                      onClick={() => pickModel(f.family, m.model)}
+                    >
+                      <span>{m.model}</span>
+                      <em>{m.count}</em>
+                    </button>
                   ))}
                 </div>
-              </section>
-            ))}
-        </div>
-        {!filtered.length && (
-          <div className="empty">
-            <h2>No matching games</h2>
-            <p>Try another search or clear your filters.</p>
-            <button onClick={reset}>Show all games</button>
-          </div>
-        )}
-      </section>
-      <footer>
-        <span>ONESHOTS / Made once. Played again.</span>
-        <a href="https://github.com/ka2le/oneshot-testers">Source on GitHub</a>
-      </footer>
-      {preview && (
-        <div
-          className="preview-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Pasted HTML preview"
-        >
-          <div className="preview-toolbar">
-            <strong>Pasted HTML preview</strong>
-            <button autoFocus onClick={() => setPreview("")}>
-              Close preview
+              )}
+            </div>
+          ))}
+        </nav>
+
+        {/* Mobile: chip rows instead of the sidebar */}
+        <div className="chips" aria-label="Models">
+          <div className="chip-row">
+            <button aria-pressed={!family} onClick={() => pickFamily("")}>
+              All
             </button>
+            {familyTree.map((f) => (
+              <button
+                key={f.family}
+                aria-pressed={family === f.family}
+                onClick={() => pickFamily(f.family)}
+              >
+                <i className="dot" style={{ background: familyColor(f.family) }} />
+                {f.family}
+              </button>
+            ))}
           </div>
-          <iframe
-            src={preview}
-            title="Pasted HTML preview"
-            sandbox="allow-scripts allow-pointer-lock"
-          />
+          {activeFamily && activeFamily.family !== UNSPECIFIED && (
+            <div className="chip-row sub">
+              {activeFamily.models.map((m) => (
+                <button
+                  key={m.model}
+                  aria-pressed={model === m.model}
+                  onClick={() => pickModel(family, m.model)}
+                >
+                  {m.model}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-    </main>
+
+        <main>
+          <div className="toolbar">
+            <div className="tabs" role="group" aria-label="Group by">
+              <button
+                aria-pressed={mode === "game"}
+                onClick={() => setMode("game")}
+              >
+                Games
+              </button>
+              <button
+                aria-pressed={mode === "model"}
+                onClick={() => setMode("model")}
+              >
+                Models
+              </button>
+            </div>
+            {(family || model || search) && (
+              <button
+                className="clear"
+                onClick={() => {
+                  setFamily("");
+                  setModel("");
+                  setSearch("");
+                }}
+              >
+                {[model || family, search && `“${search}”`]
+                  .filter(Boolean)
+                  .join(" · ")}{" "}
+                <span aria-hidden="true">×</span>
+                <span className="sr-only">Clear filters</span>
+              </button>
+            )}
+          </div>
+
+          <div className="grid">
+            {cards.map((card) =>
+              mode === "game" ? (
+                <Card
+                  key={card.title}
+                  title={card.title}
+                  color={ringColor(card.title)}
+                  rows={card.rows}
+                  rowColor={(item) => familyColor(item.family)}
+                />
+              ) : (
+                <Card
+                  key={card.title}
+                  title={card.title}
+                  subtitle={
+                    card.title === UNSPECIFIED ? "" : card.items[0].family
+                  }
+                  color={familyColor(card.items[0].family)}
+                  rows={card.rows}
+                />
+              ),
+            )}
+          </div>
+          {!cards.length && <p className="empty">Nothing found.</p>}
+        </main>
+      </div>
+
+      <footer>
+        <span>OneShots</span>
+        <a href="https://github.com/ka2le/oneshot-testers">GitHub</a>
+      </footer>
+      {paste && <PasteDialog onClose={() => setPaste(false)} />}
+    </div>
   );
 }
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />

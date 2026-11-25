@@ -1,6 +1,6 @@
 # OneShots
 
-A game archive with two ways to explore: **By game** compares versions from every model; **By model** filters by family, then model. Search covers game names, models, versions and original filenames. Filters stay in the URL. Paste HTML opens an isolated temporary preview.
+A game archive. Pick a model family or model on the left (chips on mobile); switch between **Games** (each game lists the models that made it) and **Models** (each model lists its games). Builds without a known model are grouped under **Unspecified**. Search and filters stay in the URL. Paste HTML opens an isolated temporary preview.
 
 Live archive: https://ka2le.github.io/oneshot-testers/
 
@@ -13,9 +13,9 @@ npm ci
 npm run uploader
 ```
 
-Open **http://127.0.0.1:4397**. Name the game, pick or type its model, and optionally set the family and version. Choose files, a folder, or ZIPs. Drag and drop works too. ZIPs and folders retain their paths; use relative asset references such as `css/style.css` and `images/cover.png`. Mixed ZIPs and loose assets can be uploaded together, provided paths do not collide. Choose the HTML entry page when there is more than one.
+Open **http://127.0.0.1:4397**. Fill in **Game**, **Model** (e.g. `Qwen`), **Version** (e.g. `3.6-35B-A3B`) and optional **Quant** (e.g. `Q4_K_M`). Model and version are joined into the model name; the family is detected from it. Choose files, a folder, or ZIPs. Drag and drop works too. ZIPs and folders retain their paths; use relative asset references such as `css/style.css` and `images/cover.png`. Mixed ZIPs and loose assets can be uploaded together, provided paths do not collide. Choose the HTML entry page when there is more than one.
 
-Press **Deploy game**. The server runs `scripts/deploy.mjs` on your computer to:
+Press **Publish game**. The server runs `scripts/deploy.mjs` on your computer to:
 
 1. Check that source is clean, on `main`, and not behind `origin/main`.
 2. Add the upload under its own `games/uploads/<game>/<model>-<id>/` folder and register its metadata. Other HTML pages in the upload remain available as supporting pages.
@@ -23,7 +23,9 @@ Press **Deploy game**. The server runs `scripts/deploy.mjs` on your computer to:
 4. Commit only that game's files and `catalog.json`, then push `main`.
 5. Publish `dist/` to the existing `gh-pages` branch.
 
-Progress and errors appear in the form and terminal. Build failures roll back the import before committing. If publishing fails after a commit, **Retry publishing** pushes and publishes the existing commit. After restarting the server, `npm run deploy` provides the same recovery. GitHub Pages can take a minute to update.
+For design or feature changes, use **Publish site changes** above the upload form. It needs no game name, model or upload. It builds the current checkout, commits changed project files, pushes `main`, publishes GitHub Pages, and waits for the live deployment marker before reporting success. It also works when there are no new source changes.
+
+Progress and errors appear in the form and terminal. Build failures roll back the import before committing. If publishing fails after a commit, **Retry publishing** pushes and publishes the existing commit. After restarting the server, `npm run deploy` provides the same recovery. While GitHub Pages updates, the job remains Publishing; Published means the new deployment was verified live.
 
 The server binds only to `127.0.0.1`, checks the request origin and a session token, and never executes uploaded code on the server. Limits: 100 MB total input, 500 selected files, 2,000 extracted files, 250 MB expanded. Links, unsafe paths, encrypted archives and path collisions are rejected. Staged files expire after one hour. Close the uploader's terminal to stop it; drafts remain in the browser, but staged uploads must be selected again after a restart. Change the port using `ONESHOTS_UPLOAD_PORT`.
 
@@ -34,7 +36,7 @@ Requires Node **22.12+**, Git, and GitHub credentials with push access to this r
 - `src/`: React archive and styles.
 - `games/`: original static game files and assets; recursive discovery.
 - New local game files were imported on 2026-11-25. Existing repository versions were preserved; local copies that differed only in line endings were omitted. Identical HTML copies are listed once.
-- `catalog.json`: optional per-path overrides for `game`, `family`, `model`, `variant`, `hidden`, and `keepDuplicate`. Filename inference fills gaps; unknown model credits stay **Unspecified**.
+- `catalog.json`: optional per-path overrides for `game`, `family`, `model`, `quant`, `variant`, `hidden`, and `keepDuplicate`. Filename inference fills gaps (quant suffixes such as `Q4_K_M` or `UD-IQ4_NL` are split from the model name); unknown model credits stay **Unspecified**.
 - `uploader/`: separate local HTTP server and upload form. It is excluded from the published website.
 - `scripts/`: catalog discovery, raw-asset copying and deployment.
 - `tests/`: upload and Git/deployment integration tests, using temporary repositories.
@@ -54,10 +56,10 @@ Open Vite's printed URL. Games are served as raw files during development and co
 
 `npm test` runs catalog/upload/deployment checks, Wildfang's gameplay regressions and Ninth Tide's exhaustive story traversal. See `qa/README.md` for longer simulations and optional real-browser checks.
 
-To publish changes you have already committed:
+To build, commit and publish the current site from the command line:
 
 ```sh
 npm run deploy
 ```
 
-This pushes `main`, builds, and publishes GitHub Pages. `npm run publish` builds and publishes the current files without creating or pushing a source commit; use it only when source is already saved. `Deploy.cmd` is a Windows shortcut for `npm run deploy`.
+This builds the current project, commits its changed source files, pushes `main`, publishes GitHub Pages, and verifies the live update. Build failures preserve your local edits. `npm run publish` builds and publishes the current files without creating or pushing a source commit; use it only when source is already saved. `Deploy.cmd` is a Windows shortcut for `npm run deploy`.

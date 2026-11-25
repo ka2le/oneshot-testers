@@ -3,136 +3,137 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>OneShots · Local publisher</title>
+    <title>OneShots · Publish</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="stylesheet" href="/style.css" />
     <script src="/app.js" defer></script>
   </head>
   <body>
+    <div class="stripe" aria-hidden="true">
+      <i></i><i></i><i></i><i></i><i></i>
+    </div>
+    <header class="top">
+      <a href="/" class="brand"
+        ><img src="/favicon.svg" alt="" />OneShots <span>Publish</span></a
+      >
+      <a
+        class="site"
+        href="https://ka2le.github.io/oneshot-testers/"
+        target="_blank"
+        rel="noopener"
+        >Site ↗</a
+      >
+    </header>
     <main>
-      <header>
-        <a href="/" class="brand">1 / ONESHOTS</a><span>LOCAL PUBLISHER</span>
-      </header>
-      <section class="intro">
-        <p class="eyebrow">FROM YOUR COMPUTER TO THE ARCHIVE</p>
-        <h1>A new game.<br /><em>One big button.</em></h1>
-        <p>
-          Name it, credit the model, and drop in your files. Deploy adds it to
-          the archive and publishes it.
+      <section class="sheet site-publish" aria-label="Publish current site">
+        <div>
+          <h1>Site changes</h1>
+          <p>Publish the current design, features and existing games.</p>
+        </div>
+        <button id="publish-site" class="publish" type="button" disabled>
+          Publish site changes
+        </button>
+        <p class="publish-note">
+          Builds, commits, pushes and updates the live site. No upload needed.
         </p>
       </section>
-      <form id="upload-form">
+      <form id="upload-form" class="sheet">
+        <h2 class="section-title">Add a game</h2>
         <fieldset id="fields">
-          <div class="pair">
-            <label
-              >Game name<input
-                id="game"
-                name="game"
-                required
-                maxlength="120"
-                list="game-list"
-                placeholder="e.g. Snake" /><datalist
-                id="game-list"
-              ></datalist></label
-            ><label
-              >Version <span class="optional">optional</span
-              ><input
-                id="variant"
-                name="variant"
-                maxlength="120"
-                placeholder="e.g. Second attempt, Q4, reskin"
-            /></label>
-          </div>
-          <div class="pair">
-            <label
-              >Model family <span class="optional">optional</span
-              ><input
-                id="family"
-                name="family"
-                maxlength="120"
-                list="family-list"
-                placeholder="Auto-detect or type a family" /><datalist
-                id="family-list"
-              ></datalist></label
-            ><label
-              >Model<input
+          <label class="field"
+            >Game
+            <input
+              id="game"
+              required
+              maxlength="120"
+              list="game-list"
+              placeholder="Snake"
+              autocomplete="off"
+            />
+            <datalist id="game-list"></datalist>
+          </label>
+          <div class="trio">
+            <label class="field"
+              >Model
+              <input
                 id="model"
-                name="model"
                 required
-                maxlength="120"
+                maxlength="60"
                 list="model-list"
-                placeholder="Pick or type a model" /><datalist
-                id="model-list"
-              ></datalist
-            ></label>
+                placeholder="Qwen"
+                autocomplete="off"
+              />
+              <datalist id="model-list"></datalist>
+            </label>
+            <label class="field"
+              >Version
+              <input
+                id="version"
+                maxlength="60"
+                list="version-list"
+                placeholder="3.6-35B-A3B"
+                autocomplete="off"
+              />
+              <datalist id="version-list"></datalist>
+            </label>
+            <label class="field"
+              >Quant
+              <input
+                id="quant"
+                maxlength="60"
+                list="quant-list"
+                placeholder="Q4_K_M"
+                autocomplete="off"
+              />
+              <datalist id="quant-list"></datalist>
+            </label>
           </div>
-          <section class="upload-area" id="drop-zone">
-            <h2>Drop your game here</h2>
-            <p>
-              HTML, images, CSS, JavaScript, or ZIPs.<br />Use a folder or ZIP
-              to keep subfolders together.
-            </p>
-            <div class="file-actions">
-              <label class="file-button"
-                >Choose files or ZIPs<input
-                  id="files"
-                  type="file"
-                  multiple /></label
-              ><label class="file-button secondary"
-                >Choose a folder<input
-                  id="folder"
-                  type="file"
-                  webkitdirectory
-                  multiple
+
+          <div id="drop-zone" class="drop">
+            <span>Drop files, a folder or a ZIP</span>
+            <div class="pick">
+              <label class="pill"
+                >Files<input id="files" type="file" multiple
+              /></label>
+              <label class="pill"
+                >Folder<input id="folder" type="file" webkitdirectory multiple
               /></label>
             </div>
-            <p class="limit">
-              100 MB upload · 250 MB expanded · up to 2,000 extracted files
-            </p>
-          </section>
-          <section id="staged" hidden>
-            <div class="section-heading">
-              <h2 id="file-summary"></h2>
-              <button id="remove" type="button" class="small">
-                Remove files
-              </button>
-            </div>
-            <label>Page to open<select id="entry" required></select></label>
-            <details>
-              <summary>Included files</summary>
-              <ul id="file-list"></ul>
-            </details>
-          </section>
-          <p id="notice" role="status" aria-live="polite">
-            Choose your files to get started.
-          </p>
-          <button id="deploy" class="deploy" type="submit" disabled>
-            Deploy game
+          </div>
+
+          <div id="staged" class="staged" hidden>
+            <span id="file-summary"></span>
+            <select id="entry" aria-label="Page to open"></select>
+            <button
+              id="remove"
+              type="button"
+              class="x"
+              aria-label="Remove files"
+            >
+              ×
+            </button>
+          </div>
+
+          <p id="notice" role="status" aria-live="polite"></p>
+          <button id="deploy" class="publish" type="submit" disabled>
+            Publish game
           </button>
-          <p class="deploy-note">
-            Commits and pushes to your repository, then publishes GitHub Pages.
-          </p>
         </fieldset>
       </form>
-      <section id="job-panel" hidden aria-label="Deployment progress">
-        <div class="section-heading">
-          <h2 id="job-state">Deploying…</h2>
-          <a id="live-link" hidden target="_blank" rel="noopener"
-            >Open archive</a
-          >
+
+      <section id="job-panel" class="sheet job" hidden aria-label="Publishing">
+        <div class="job-head">
+          <h2 id="job-state">Publishing…</h2>
+          <a id="live-link" hidden target="_blank" rel="noopener">Open ↗</a>
         </div>
         <p id="job-error" class="error" hidden></p>
-        <pre id="log" tabindex="0" aria-label="Deployment log"></pre>
-        <button id="retry" type="button" hidden>Retry publishing</button>
+        <details id="log-box">
+          <summary>Log</summary>
+          <pre id="log" tabindex="0"></pre>
+        </details>
+        <button id="retry" type="button" class="pill" hidden>Retry</button>
       </section>
-      <footer>
-        Runs only on this computer.
-        <a
-          href="https://ka2le.github.io/oneshot-testers/"
-          target="_blank"
-          rel="noopener"
-          >Visit the archive</a
-        >
-      </footer>
     </main>
   </body>
 </html>

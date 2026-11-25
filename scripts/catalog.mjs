@@ -74,7 +74,22 @@ export function inferMetadata(file) {
     .replace(/^Claude-Opus-?/i, "Claude Opus ")
     .replace(/^Claude-Sonnet-?/i, "Claude Sonnet ");
   game = game.replace(/[- ]+$/, "").replace(/-/g, " ");
-  return { game: game || stem, family, model, variant };
+  const { model: base, quant } = splitQuant(model);
+  return { game: game || stem, family, model: base, quant, variant };
+}
+
+// "Qwen3.6-35B-A3B-UD-Q4_K_XL" -> model "Qwen3.6-35B-A3B", quant "UD-Q4_K_XL"
+export function splitQuant(model) {
+  const match =
+    /[- ]((?:UD-)?I?Q\d(?:[_-](?:K|XL|M|S|L|NL|N|0|1))*|bf16|fp16)(?=$|[- ])/i.exec(
+      model,
+    );
+  if (!match || match.index === 0) return { model, quant: "" };
+  return {
+    model: (model.slice(0, match.index) + model.slice(match.index + match[0].length))
+      .replace(/[- ]+$/, ""),
+    quant: match[1],
+  };
 }
 
 export async function readCatalog(directory = root) {
@@ -108,6 +123,7 @@ export async function readCatalog(directory = root) {
     if (seen.has(hash) && !metadata?.keepDuplicate) continue;
     seen.add(hash);
     const inferred = inferMetadata(file);
+    if (metadata?.model && !("quant" in metadata)) inferred.quant = "";
     entries.push({ id: file, file, ...inferred, ...metadata });
   }
   return entries.sort(

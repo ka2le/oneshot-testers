@@ -7,11 +7,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { root, readCatalog, inferMetadata } from "../scripts/catalog.mjs";
-import { deployUpload, retryPublish } from "../scripts/deploy.mjs";
+import { deployUpload, deploySite, retryPublish } from "../scripts/deploy.mjs";
 import { limits, prepareFiles, cleanLabel, assertEntry } from "./uploads.mjs";
 
 export function createUploader({
   deploy = deployUpload,
+  publishSite = deploySite,
   retry = retryPublish,
   directory = root,
 } = {}) {
@@ -64,19 +65,15 @@ export function createUploader({
   }).array("files", 500);
   app.post("/api/uploads", async (req, res, next) => {
     if (preparing || busy)
-      return res
-        .status(409)
-        .json({
-          error:
-            "An upload or deployment is already running. Wait for it to finish.",
-        });
+      return res.status(409).json({
+        error:
+          "An upload or deployment is already running. Wait for it to finish.",
+      });
     if (uploads.size >= 10)
-      return res
-        .status(429)
-        .json({
-          error:
-            "Too many staged uploads. Remove one or restart the local uploader.",
-        });
+      return res.status(429).json({
+        error:
+          "Too many staged uploads. Remove one or restart the local uploader.",
+      });
     preparing = true;
     let temp;
     try {
@@ -131,10 +128,10 @@ export function createUploader({
     }
     res.json({ ok: true });
   });
-  function startJob(operation, res) {
+  function startJob(operation, res, kind = "upload") {
     busy = true;
     const id = randomUUID(),
-      job = { id, state: "running", log: "", created: Date.now() };
+      job = { id, kind, state: "running", log: "", created: Date.now() };
     jobs.set(id, job);
     if (jobs.size > 30) jobs.delete(jobs.keys().next().value);
     const log = (text) => {
@@ -145,9 +142,7 @@ export function createUploader({
       .then(() => operation(log))
       .then((result) => {
         Object.assign(job, { state: "succeeded", result });
-        log(
-          "\nDeployment completed. GitHub Pages may take a minute to update.\n",
-        );
+        log("\nDeployment completed and verified on the live site.\n");
       })
       .catch((error) => {
         Object.assign(job, {
@@ -162,6 +157,13 @@ export function createUploader({
       });
     res.status(202).json({ id });
   }
+  app.post("/api/publish", (req, res) => {
+    if (busy || preparing)
+      return res
+        .status(409)
+        .json({ error: "A deployment or upload is already running." });
+    startJob((log) => publishSite({ cwd: directory, log }), res, "site");
+  });
   app.post("/api/deploy", async (req, res) => {
     if (busy || preparing)
       return res
@@ -174,7 +176,8 @@ export function createUploader({
         .json({ error: "Choose your files again; this upload has expired." });
     const game = cleanLabel(req.body.game, "Game name"),
       model = cleanLabel(req.body.model, "Model"),
-      variant = cleanLabel(req.body.variant || "", "Version", true);
+      variant = cleanLabel(req.body.variant || "", "Version", true),
+      quant = cleanLabel(req.body.quant || "", "Quant", true);
     const inferredFamily = inferMetadata(`Upload-${model}.html`).family;
     const family = cleanLabel(
       req.body.family ||
@@ -190,7 +193,15 @@ export function createUploader({
     startJob(async (log) => {
       try {
         const result = await deploy(
-          { ...staged, game, family, model, variant, entry: req.body.entry },
+          {
+            ...staged,
+            game,
+            family,
+            model,
+            quant,
+            variant,
+            entry: req.body.entry,
+          },
           { cwd: directory, log },
         );
         uploads.delete(req.body.uploadId);
@@ -215,7 +226,7 @@ export function createUploader({
     if (!jobs.get(req.params.id)?.canRetry)
       return res
         .status(400)
-        .json({ error: "This deployment has no committed upload to retry." });
+        .json({ error: "This deployment has no saved source to retry." });
     startJob(
       (log) =>
         retry({ cwd: directory, log }).catch((error) => {
@@ -223,16 +234,15 @@ export function createUploader({
           throw error;
         }),
       res,
+      jobs.get(req.params.id).kind,
     );
   });
   app.get("/api/jobs/:id", (req, res) => {
     const job = jobs.get(req.params.id);
     if (!job)
-      return res
-        .status(404)
-        .json({
-          error: "Deployment not found. Check your terminal for the last run.",
-        });
+      return res.status(404).json({
+        error: "Deployment not found. Check your terminal for the last run.",
+      });
     res.json(job);
   });
   app.use(express.static(path.join(root, "uploader", "public")));

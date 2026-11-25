@@ -209,3 +209,64 @@ test("local server stages uploads, checks origin/token and exposes deployment re
   assert.equal((await fetch(url + "/api/deploy", post(metadata))).status, 400);
   assert.equal((await fetch(url + "/scripts/deploy.mjs")).status, 404);
 });
+
+test("site publishing needs no upload, rejects concurrent operations and retains retry kind", async (t) => {
+  let release,
+    calls = 0;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const uploader = createUploader({
+    publishSite: async ({ log }) => {
+      calls++;
+      log("Publishing existing site\n");
+      await gate;
+      const error = new Error("Saved source; simulated Pages failure");
+      error.committed = true;
+      throw error;
+    },
+    retry: async () => ({ url: "https://example.com/verified" }),
+  });
+  const server = await new Promise((resolve) => {
+    const s = uploader.app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  t.after(async () => {
+    release();
+    await new Promise((resolve) => server.close(resolve));
+    await uploader.close();
+  });
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const { token } = await (await fetch(url + "/api/catalog")).json();
+  const post = {
+    method: "POST",
+    headers: { "X-Upload-Token": token, "Content-Type": "application/json" },
+    body: "{}",
+  };
+  assert.equal(
+    (await fetch(url + "/api/publish", { method: "POST" })).status,
+    403,
+  );
+  const response = await fetch(url + "/api/publish", post);
+  assert.equal(response.status, 202);
+  const job = await response.json();
+  assert.equal((await fetch(url + "/api/publish", post)).status, 409);
+  assert.equal((await fetch(url + "/api/deploy", post)).status, 409);
+  release();
+  async function completed(id) {
+    for (let i = 0; i < 100; i++) {
+      const state = await (await fetch(url + "/api/jobs/" + id)).json();
+      if (state.state !== "running") return state;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.fail("job did not complete");
+  }
+  const failed = await completed(job.id);
+  assert.equal(failed.kind, "site");
+  assert.equal(failed.canRetry, true);
+  assert.equal(calls, 1);
+  const retry = await fetch(`${url}/api/jobs/${job.id}/retry`, post);
+  assert.equal(retry.status, 202);
+  const recovered = await completed((await retry.json()).id);
+  assert.equal(recovered.kind, "site");
+  assert.equal(recovered.state, "succeeded");
+});
