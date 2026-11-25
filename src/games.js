@@ -1,25 +1,21 @@
-const base = import.meta.env.BASE_URL
-
-const gameModules = import.meta.glob('../games/*.html', {
-  eager: true,
-  query: '?url',
-  import: 'default',
-})
-
-const labels = {
-  'drinks': 'Drinks',
+import catalog from "virtual:games";
+export const games = catalog.map((game) => ({
+  ...game,
+  href: `${import.meta.env.BASE_URL}games/${game.file.split("/").map(encodeURIComponent).join("/")}`,
+}));
+export const unique = (values) =>
+  [...new Set(values)].sort((a, b) => a.localeCompare(b));
+export function filterGames(entries, { mode, family, model, game, search }) {
+  const query = search.trim().toLowerCase();
+  return entries.filter(
+    (item) =>
+      (mode !== "model" ||
+        ((!family || item.family === family) &&
+          (!model || item.model === model))) &&
+      (mode !== "game" || !game || item.game === game) &&
+      (!query ||
+        `${item.game} ${item.family} ${item.model} ${item.variant} ${item.file}`
+          .toLowerCase()
+          .includes(query)),
+  );
 }
-
-export const games = Object.entries(gameModules)
-  .map(([path, href]) => {
-    const fileName = path.split('/').pop() ?? ''
-    const slug = fileName.replace(/\.html$/i, '')
-    const name = labels[slug] ?? slug
-
-    return {
-      slug,
-      name,
-      href: typeof href === 'string' && href.startsWith('/') ? href : `${base}games/${fileName}`,
-    }
-  })
-  .sort((a, b) => a.name.localeCompare(b.name))

@@ -8,14 +8,26 @@
     "build": "vite build",
     "preview": "vite preview",
     "publish": "node scripts/publish.mjs",
-    "deploy": "npm run publish"
+    "deploy": "node scripts/deploy.mjs",
+    "uploader": "node uploader/server.mjs",
+    "test": "node --test tests/*.test.mjs && node qa/wildfang.test.cjs && node qa/ninth-tide.test.cjs",
+    "test:flow": "node qa/simulate-flow.cjs --full",
+    "test:browser": "node qa/ninth-tide.browser.cjs && node qa/ninth-tide-mobile.cjs"
   },
   "dependencies": {
+    "express": "^5.3.0",
+    "multer": "^2.5.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.0",
+    "gh-pages": "^6.3.0",
+    "playwright": "^1.65.1",
     "vite": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

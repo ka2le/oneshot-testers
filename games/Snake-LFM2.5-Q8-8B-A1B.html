@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Snake Game</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      border: 2px solid #333;
+      background: #fff;
+      cursor: none;
+    }
+    #score {
+      margin-top: 5px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="400" height="300"></canvas>
+<div id="score">Score: <span id="score">0</span></div>
+
+<script>
+/* -------------------------------------------------------------
+   Snake game – single file, all in HTML
+   ------------------------------------------------------------- */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+
+const CELL = 20;               // size of each grid cell (px)
+const WIDTH = canvas.width / CELL;
+const HEIGHT = canvas.height / CELL;
+const GRID_WIDTH = WIDTH / CELL;
+const GRID_HEIGHT = HEIGHT / CELL;
+
+let snake = [{ x: 10 + Math.floor(Math.random() * GRID_WIDTH), y: 10 + Math.floor(Math.random() * GRID_HEIGHT) }];
+let food = null;
+let direction = null;          // {dx, dy}
+let score = 0;
+let gameLoop = null;
+let running = true;
+
+// ----- Input handling -------------------------------------------------
+document.addEventListener('keydown', e => {
+  if (e.key === 'r' || e.key === 'R') {
+    restartGame();
+  }
+});
+
+// ----- Utility functions ---------------------------------------------
+function clearCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawFood() {
+  if (!food) return;
+  ctx.fillStyle = '#28a745';
+  ctx.fillRect(food.x * CELL, food.y * CELL, CELL, CELL);
+}
+
+function drawSnake() {
+  ctx.fillStyle = '#2ecc71';
+  for (let i = 0; i < snake.length; i++) {
+    ctx.fillRect(snake[i].x * CELL, snake[i].y * CELL, CELL, CELL);
+  }
+}
+
+function update() {
+  if (!running) return;
+
+  // ---- Snake movement ------------------------------------------------
+  if (direction) {
+    const newX = snake[0].x + direction.dx;
+    const newY = snake[0].y + direction.dy;
+    const head = snake[0];
+
+    // Wall collision
+    if (newX < 0 || newX >= GRID_WIDTH || newY < 0 || newY >= GRID_HEIGHT) {
+      gameLoop = null;
+      return;
+    }
+
+    // Self‑collision
+    const collidesSelf = snake.every(segment => segment.x === newX && segment.y === newY);
+    if (collidesSelf) {
+      gameLoop = null;
+      return;
+    }
+
+    // Food collision – eat and grow
+    if (head === food) {
+      score++;
+      scoreEl.textContent = score;
+      // generate new food
+      food = { x: Math.floor(Math.random() * GRID_WIDTH) * CELL,
+              y: Math.floor(Math.random() * GRID_HEIGHT) * CELL };
+      return;
+    }
+
+    // Normal move: push new head, pop tail
+    snake.unshift({ x: newX, y: newY });
+    if (snake.length > 3) snake.pop();
+  }
+
+  // ---- Drawing --------------------------------------------------------
+  clearCanvas();
+  drawFood();
+  drawSnake();
+
+  // ---- Request next frame ---------------------------------------------
+  gameLoop = requestAnimationFrame(update);
+}
+
+function restartGame() {
+  // reset everything
+  snake = [{ x: 10 + Math.floor(Math.random() * GRID_WIDTH), y: 10 + Math.floor(Math.random() * GRID_HEIGHT) }];
+  score = 0;
+  scoreEl.textContent = score;
+  food = null;
+  direction = null;
+  running = true;
+  update();
+}
+
+// ----- Initialise -------------------------------------------------------
+function initGame() {
+  snake = [{ x: 10 + Math.floor(Math.random() * GRID_WIDTH), y: 10 + Math.floor(Math.random() * GRID_HEIGHT) }];
+  food = { x: Math.floor(Math.random() * GRID_WIDTH) * CELL,
+          y: Math.floor(Math.random() * GRID_HEIGHT) * CELL };
+  direction = { dx: 1, dy: 0 };
+  update();
+}
+
+initGame();
+gameLoop = requestAnimationFrame(update);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>OneShots · Local publisher</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <a href="/" class="brand">1 / ONESHOTS</a><span>LOCAL PUBLISHER</span>
+      </header>
+      <section class="intro">
+        <p class="eyebrow">FROM YOUR COMPUTER TO THE ARCHIVE</p>
+        <h1>A new game.<br /><em>One big button.</em></h1>
+        <p>
+          Name it, credit the model, and drop in your files. Deploy adds it to
+          the archive and publishes it.
+        </p>
+      </section>
+      <form id="upload-form">
+        <fieldset id="fields">
+          <div class="pair">
+            <label
+              >Game name<input
+                id="game"
+                name="game"
+                required
+                maxlength="120"
+                list="game-list"
+                placeholder="e.g. Snake" /><datalist
+                id="game-list"
+              ></datalist></label
+            ><label
+              >Version <span class="optional">optional</span
+              ><input
+                id="variant"
+                name="variant"
+                maxlength="120"
+                placeholder="e.g. Second attempt, Q4, reskin"
+            /></label>
+          </div>
+          <div class="pair">
+            <label
+              >Model family <span class="optional">optional</span
+              ><input
+                id="family"
+                name="family"
+                maxlength="120"
+                list="family-list"
+                placeholder="Auto-detect or type a family" /><datalist
+                id="family-list"
+              ></datalist></label
+            ><label
+              >Model<input
+                id="model"
+                name="model"
+                required
+                maxlength="120"
+                list="model-list"
+                placeholder="Pick or type a model" /><datalist
+                id="model-list"
+              ></datalist
+            ></label>
+          </div>
+          <section class="upload-area" id="drop-zone">
+            <h2>Drop your game here</h2>
+            <p>
+              HTML, images, CSS, JavaScript, or ZIPs.<br />Use a folder or ZIP
+              to keep subfolders together.
+            </p>
+            <div class="file-actions">
+              <label class="file-button"
+                >Choose files or ZIPs<input
+                  id="files"
+                  type="file"
+                  multiple /></label
+              ><label class="file-button secondary"
+                >Choose a folder<input
+                  id="folder"
+                  type="file"
+                  webkitdirectory
+                  multiple
+              /></label>
+            </div>
+            <p class="limit">
+              100 MB upload · 250 MB expanded · up to 2,000 extracted files
+            </p>
+          </section>
+          <section id="staged" hidden>
+            <div class="section-heading">
+              <h2 id="file-summary"></h2>
+              <button id="remove" type="button" class="small">
+                Remove files
+              </button>
+            </div>
+            <label>Page to open<select id="entry" required></select></label>
+            <details>
+              <summary>Included files</summary>
+              <ul id="file-list"></ul>
+            </details>
+          </section>
+          <p id="notice" role="status" aria-live="polite">
+            Choose your files to get started.
+          </p>
+          <button id="deploy" class="deploy" type="submit" disabled>
+            Deploy game
+          </button>
+          <p class="deploy-note">
+            Commits and pushes to your repository, then publishes GitHub Pages.
+          </p>
+        </fieldset>
+      </form>
+      <section id="job-panel" hidden aria-label="Deployment progress">
+        <div class="section-heading">
+          <h2 id="job-state">Deploying…</h2>
+          <a id="live-link" hidden target="_blank" rel="noopener"
+            >Open archive</a
+          >
+        </div>
+        <p id="job-error" class="error" hidden></p>
+        <pre id="log" tabindex="0" aria-label="Deployment log"></pre>
+        <button id="retry" type="button" hidden>Retry publishing</button>
+      </section>
+      <footer>
+        Runs only on this computer.
+        <a
+          href="https://ka2le.github.io/oneshot-testers/"
+          target="_blank"
+          rel="noopener"
+          >Visit the archive</a
+        >
+      </footer>
+    </main>
+  </body>
+</html>

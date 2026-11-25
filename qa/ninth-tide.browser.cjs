@@ -1,0 +1,51 @@
+const {chromium}=require('playwright');
+const assert=require('assert'),fs=require('fs'),path=require('path');
+(async()=>{
+ const browser=await chromium.launch({channel:process.env.QA_BROWSER_CHANNEL||'chrome',headless:true});
+ const context=await browser.newContext({viewport:{width:1440,height:960}}),page=await context.newPage();page.setDefaultTimeout(10000);
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto((process.env.QA_BASE_URL||'http://127.0.0.1:5175/oneshot-testers/games')+'/the-ninth-tide.html');
+ await page.screenshot({path:path.join(__dirname,'ninth-tide-desktop.png'),fullPage:true,animations:'disabled'});
+ await page.locator('#begin').click();
+ assert.equal(await page.evaluate(()=>run.node),'well');
+ await page.keyboard.press('ArrowUp');await page.waitForFunction(()=>run.node==='letter');
+ await page.keyboard.press('1');await page.waitForFunction(()=>run.node==='rim');
+ await page.keyboard.press('2');await page.waitForFunction(()=>run.node==='landing');
+ await page.keyboard.press('ArrowUp');await page.waitForFunction(()=>run.node==='veil');
+ await page.screenshot({path:path.join(__dirname,'ninth-tide-story.png'),fullPage:true,animations:'disabled'});
+ await page.keyboard.press('j');assert(await page.locator('#modal').isVisible());
+ const before=await page.evaluate(()=>run.node);await page.keyboard.press('2');assert.equal(await page.evaluate(()=>run.node),before);
+ await page.keyboard.press('Escape');assert(!(await page.locator('#modal').isVisible()));
+ await page.reload();assert.match(await page.locator('#begin').innerText(),/Continue/i);
+ await page.locator('#begin').click();assert.equal(await page.evaluate(()=>run.node),'veil');
+ console.log('PASS keyboard choice input, modal isolation, and save/resume after reload.');
+ await page.locator('[data-item="needle"]').click();assert.match(await page.locator('#modalBody').innerText(),/seams/i);await page.keyboard.press('Escape');
+ await page.locator('#sound').click();assert.equal(await page.locator('#sound').getAttribute('aria-pressed'),'true');await page.locator('#sound').click();
+ console.log('PASS item inspection and optional Web Audio.');
+ await page.locator('#help').click();await page.locator('#restartHelp').click();await page.locator('#restartYes').click();
+ const routes=JSON.parse(fs.readFileSync(path.join(__dirname,'ninth-tide-routes.json'),'utf8'));
+ for(const step of routes.dawn){assert.equal(await page.evaluate(()=>run.node),step.node);await page.locator(`[data-choice="${step.choice-1}"]`).click();await page.waitForFunction(()=>!locked);}
+ assert.equal(await page.evaluate(()=>run.node),'end:dawn');assert.equal(await page.evaluate(()=>book.endings.includes('dawn')),true);
+ await page.locator('#readEnding').click();assert.match(await page.locator('#modalBody').innerText(),/never what kept it beating/);await page.keyboard.press('Escape');
+ await page.locator('#again').click();assert.equal(await page.evaluate(()=>run.items.length),0);assert.equal(await page.evaluate(()=>book.endings.includes('dawn')),true);
+ console.log('PASS complete best-ending playthrough, ending reveal, and persistent discoveries on replay.');
+ const mobile=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});
+ const phone=await mobile.newPage();await phone.bringToFront();phone.setDefaultTimeout(10000);phone.on('pageerror',e=>errors.push(e.message));await phone.goto((process.env.QA_BASE_URL||'http://127.0.0.1:5175/oneshot-testers/games')+'/the-ninth-tide.html');
+ await phone.screenshot({path:path.join(__dirname,'ninth-tide-mobile.png'),fullPage:true,animations:'disabled'});
+ assert.equal(await phone.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await phone.locator('#begin').tap();await phone.waitForFunction(()=>getComputedStyle(document.querySelector('.scene-card')).opacity==='1',{},{polling:100});await phone.locator('#gesture').scrollIntoViewIfNeeded();
+ const rect=await phone.locator('#gesture').boundingBox(),cdp=await mobile.newCDPSession(phone);
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:rect.x+rect.width/2,y:rect.y+rect.height/2}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:rect.x+rect.width/2,y:rect.y+rect.height/2-70}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await phone.waitForFunction(()=>run.node==='letter',{},{polling:100});
+ await phone.waitForFunction(()=>getComputedStyle(document.querySelector('.scene-card')).opacity==='1',{},{polling:100});await phone.locator('[data-choice="0"]').tap();await phone.waitForFunction(()=>run.node==='rim',{},{polling:100});
+ await phone.screenshot({path:path.join(__dirname,'ninth-tide-mobile-choices.png'),fullPage:true,animations:'disabled'});
+ assert.equal(await phone.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ for(const b of await phone.locator('.choice').all()){const r=await b.boundingBox();assert(r.height>=44);}
+ console.log('PASS 390px layout, real touchscreen swipe, tapping, and touch-target sizes.');
+ // Verify that a downloaded copy works with file:// and no server.
+ const offline=await context.newPage();await offline.goto('file:///'+path.join(__dirname,'../the-ninth-tide.html').replace(/\\/g,'/'));
+ await offline.locator('#begin').click();assert.equal(await offline.evaluate(()=>run.node),'well');
+ console.log('PASS standalone file:// gameplay.');
+ assert.deepEqual(errors,[]);console.log('PASS no browser JavaScript errors.');await browser.close();
+})().catch(e=>{console.error(e);process.exit(1);});

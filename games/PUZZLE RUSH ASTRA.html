@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="theme-color" content="#101a1e">
+<meta name="description" content="A wordless collection of curious little puzzle rooms. One file. No dependencies.">
+<title>Elsewhere</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101a1e}body{font-family:system-ui;overscroll-behavior:none}canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}button{position:fixed;z-index:2;width:44px;height:44px;border:1px solid #ffffff16;border-radius:50%;background:#152126bb;color:#c5d6d0;display:grid;place-items:center;cursor:pointer;transition:background .2s,transform .2s;touch-action:manipulation}button:hover{background:#304448;transform:scale(1.06)}button:focus-visible{outline:2px solid #b6efcc;outline-offset:5px}button svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}#sound{left:max(22px,env(safe-area-inset-left));top:max(22px,env(safe-area-inset-top))}#pause{right:max(22px,env(safe-area-inset-right));top:max(22px,env(safe-area-inset-top))}#retry{right:max(22px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom))}@media(max-width:600px){button{width:38px;height:38px}#sound{left:14px;top:14px}#pause{right:14px;top:14px}#retry{right:14px;bottom:14px}}@media(prefers-reduced-motion:reduce){button{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="0" aria-label="Wordless puzzle rooms. Use pointer clicks and drags. Escape pauses, R restarts this room. Arrow keys rotate in rotation rooms. Progress saves automatically."></canvas>
+<button id="sound" aria-label="Mute sound" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M10 5 5 9H2v6h3l5 4zM14 8q5 4 0 8M17 4q9 8 0 16"/></svg></button>
+<button id="pause" aria-label="Pause" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+<button id="retry" aria-label="Restart this room"><svg viewBox="0 0 24 24"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg></button>
+<script>
+'use strict';
+/* ELSEWHERE — a wordless puzzle cabinet.
+   Add rooms to ROOMS below. Each room is a { type, ...options } object.
+   A mechanic implements init(), draw(), and optional update/down/move/up/key.
+   Coordinates use a 1000 × 760 artboard. Nothing is fetched from the network. */
+(()=>{
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+const TAU=Math.PI*2,clamp=(n,a,b)=>Math.max(a,Math.min(b,n)),lerp=(a,b,t)=>a+(b-a)*t;
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y),mod=(a,b)=>(a%b+b)%b;
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W=0,H=0,scale=1,ox=0,oy=0,dpr=1,t=0,last=0,dt=0;
+let pointer={x:-1000,y:-1000,down:false},particles=[],ripples=[],motif=0;
+let room,level=0,roomTime=0,totalTime=0,idle=0,paused=false,won=false,winTime=0,transition=1,muted=false,audio=null,saveClock=0;
+let results=[],best={},seed=1,shake=0,flash=0,started=false;
+const palettes=[['#f28b72','#b6efcf','#e8c981'],['#adc8f5','#f5b680','#c1e7c5'],['#d8b0e9','#b9e8d9','#e5c77b'],['#eecb72','#a9d4e4','#f1a29b'],['#a3deca','#eea8be','#d5d5ee']];
+let C={a:palettes[0][0],b:palettes[0][1],c:palettes[0][2],ink:'#102025',line:'#3c5257',paper:'#e7eee2',dim:'#6b8589'};
+// Campaign pacing: eight introductions, then familiar returns between discoveries.
+// Short tactile rooms separate the longer observation and spatial challenges.
+const ROOMS=[
+ // Opening: launch / chase / observe / swipe / time / reveal / think / watch.
+ {type:'slingshot',par:16},
+ {type:'chase',hits:3,par:7},
+ {type:'feed',par:14},
+ {type:'cut',ropes:3,par:9},
+ {type:'orbit',rounds:2,par:10},
+ {type:'zipper',par:8},
+ {type:'untangle',count:5,par:22},
+ {type:'shell',swaps:3,par:12},
+ // The first return. Then two discoveries between each familiar beat.
+ {type:'slingshot',moving:true,par:22},
+ {type:'plant',par:16},
+ {type:'gravity',par:20},
+ {type:'cut',ropes:5,par:10},
+ {type:'crank',turns:2,par:14},
+ {type:'camera',rounds:3,par:16},
+ {type:'orbit',rounds:3,reverse:true,par:15},
+ {type:'sneeze',par:12},
+ {type:'shadow',par:12},
+ {type:'feed',fussy:true,par:16},
+ {type:'maze',variant:0,par:14},
+ {type:'laser',count:2,par:10},
+ {type:'shell',swaps:5,fast:true,par:14},
+ {type:'stack',count:3,par:18},
+ {type:'rotate',rounds:1,par:7},
+ {type:'untangle',count:6,par:26},
+ {type:'herd',count:5,par:24},
+ {type:'memory',length:3,par:12},
+ {type:'gravity',speed:140,par:24},
+ {type:'portal',par:12},
+ // Second act: more callbacks, with unfamiliar rooms still arriving.
+ {type:'camera',rounds:4,small:true,par:22},
+ {type:'trace',count:6,par:10},
+ {type:'crank',turns:3,par:18},
+ {type:'socket',count:3,par:12},
+ {type:'chase',hits:5,decoy:true,warp:true,par:13},
+ {type:'balance',couple:false,par:12},
+ {type:'laser',count:4,par:18},
+ {type:'scratch',par:8},
+ {type:'sort',count:6,par:12},
+ {type:'herd',count:7,par:28},
+ {type:'odd',rounds:2,count:6,par:10},
+ {type:'sneeze',par:11},
+ {type:'hold',rounds:2,par:9},
+ {type:'lights',scramble:2,par:12},
+ {type:'stack',count:4,par:23},
+ {type:'shadow',moving:true,par:16},
+ {type:'memory',length:4,rotate:true,par:18},
+ {type:'zipper',reverse:true,par:9},
+ {type:'orbit',rounds:3,reverse:true,narrow:true,par:17},
+ {type:'portal',par:12}
+];
+// The encore favors the most expressive rooms, rather than repeating the whole catalog.
+const ENCORE=['slingshot','feed','orbit','untangle','shell','gravity','crank','camera','laser','herd','maze','stack','cut','rotate','memory','shadow','sneeze','zipper'];
+function rng(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296}
+function pick(n){return Math.floor(rng()*n)}
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=pick(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
+function readSave(){try{let s=JSON.parse(localStorage.getItem('elsewhere.rhythm.v1')||'null');if(s&&Number.isInteger(s.level)&&s.level>=0&&s.level<100000){level=s.level;totalTime=+s.totalTime||0;muted=!!s.muted;results=Array.isArray(s.results)?s.results.slice(-60):[];best=s.best&&typeof s.best==='object'?s.best:{}}}catch(e){}}
+function save(){try{localStorage.setItem('elsewhere.rhythm.v1',JSON.stringify({level,totalTime,muted,results:results.slice(-60),best}))}catch(e){}}
+function tone(freq=440,duration=.1,type='sine',volume=.045,slide=0){if(muted)return;try{if(!audio)audio=new(window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume();let o=audio.createOscillator(),g=audio.createGain();o.type=type;o.frequency.setValueAtTime(freq,audio.currentTime);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(40,freq+slide),audio.currentTime+duration);g.gain.setValueAtTime(volume,audio.currentTime);g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+duration);o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+duration)}catch(e){}}
+function tick(n=0){tone(280+n*85,.12,'sine',.06,180)}
+function wrong(x=500,y=380){shake=5;flash=.2;burst(x,y,C.a,9);tone(115,.15,'triangle',.035,-35)}
+function burst(x,y,color=C.b,n=22){for(let i=0;i<n;i++){let a=rng()*TAU,s=30+rng()*160;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-25,life:.45+rng()*.65,max:1.1,r:2+rng()*3,color})}}
+function ripple(x,y,color=C.b){ripples.push({x,y,r:8,life:.7,color})}
+function success(){if(won)return;won=true;winTime=0;let stars=roomTime<=room.opts.par?3:roomTime<=room.opts.par*2?2:1;results.push(stars);best[level]=Math.min(best[level]||Infinity,roomTime);room.rating=stars;burst(500,365,C.b,65);ripple(500,365,C.b);[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,.3,'sine',.04),i*85));save()}
+function step(x,y,n=0){burst(x,y,C.b,12);ripple(x,y,C.b);tick(n);idle=0}
+function rr(x,y,w,h,r=14,fill,stroke,lw=1){ctx.beginPath();ctx.roundRect(x,y,w,h,r);if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke()}}
+function circle(x,y,r,fill,stroke,lw=1){ctx.beginPath();ctx.arc(x,y,Math.max(.01,r),0,TAU);if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke()}}
+function line(x1,y1,x2,y2,color=C.line,width=2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.stroke()}
+function arc(x,y,r,start,end,color,width=3){ctx.beginPath();ctx.arc(x,y,r,start,end);ctx.lineWidth=width;ctx.strokeStyle=color;ctx.lineCap='round';ctx.stroke()}
+function glow(x,y,r,color,alpha=.15){ctx.save();ctx.globalAlpha=alpha;let g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,color);g.addColorStop(1,'transparent');circle(x,y,r,g);ctx.restore()}
+function diamond(x,y,r,color){ctx.save();ctx.translate(x,y);ctx.rotate(Math.PI/4);rr(-r/2,-r/2,r,r,2,color);ctx.restore()}
+function dots(count,filled,y=570){for(let i=0;i<count;i++){let x=500+(i-(count-1)/2)*24;circle(x,y,4,i<filled?C.b:'#33494e');if(i<filled)glow(x,y,14,C.b,.15)}}
+function socket(x,y,r=40){circle(x,y+3,r+5,'#0b171c');circle(x,y,r,'#132328',C.line,1.5);arc(x,y,r-5,Math.PI,TAU,'#08181d',2)}
+function button(x,y,r=43,color=C.a,pressed=false){glow(x,y,r*2,color,.12);circle(x,y+7,r+5,'#09161a');circle(x,y+2,r+5,'#30454a','#526368',1);let g=ctx.createLinearGradient(x-r,y-r,x+r,y+r);g.addColorStop(0,color);g.addColorStop(1,color+'bb');circle(x,y+(pressed?4:0),r,g);arc(x,y+(pressed?4:0),r-5,3.65,5.5,'#ffffff50',2);circle(x,y+(pressed?4:0),r-10,null,'#10202520',1)}
+function arrow(x,y,angle=0,color=C.paper,size=16){ctx.save();ctx.translate(x,y);ctx.rotate(angle);line(-size,0,size,0,color,3);line(size,0,size-7,-7,color,3);line(size,0,size-7,7,color,3);ctx.restore()}
+function rotateIcon(x,y,reverse=false,color=C.paper){ctx.save();ctx.translate(x,y);ctx.scale(reverse?-1:1,1);arc(0,0,13,-.7,4.5,color,2.5);line(11,-9,13,-1,color,2.5);line(13,-1,5,-3,color,2.5);ctx.restore()}
+function hand(x,y,dragX=0,dragY=0){if(idle<7)return;let p=mod(t*.55,1),a=Math.sin(p*Math.PI)*.5;ctx.save();ctx.globalAlpha=a;let xx=x+dragX*p,yy=y+dragY*p;circle(xx,yy,17,null,C.paper,2);circle(xx,yy,5,C.paper);if(dragX||dragY){ctx.setLineDash([3,8]);line(x,y,x+dragX,y+dragY,C.paper,1);ctx.setLineDash([])}ctx.restore()}
+function shape(x,y,r,kind=0,color=C.a,angle=0,outline=false){ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.beginPath();if(kind===0){ctx.moveTo(0,-r);ctx.lineTo(r*.9,r*.65);ctx.lineTo(-r*.9,r*.65);ctx.closePath()}else if(kind===1){ctx.roundRect(-r*.78,-r*.78,r*1.56,r*1.56,8)}else if(kind===2){for(let i=0;i<6;i++){let a=i*TAU/6-Math.PI/2;let xx=Math.cos(a)*r,yy=Math.sin(a)*r;i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy)}ctx.closePath()}else if(kind===3){ctx.moveTo(-r*.6,-r);ctx.lineTo(r*.35,-r);ctx.lineTo(r*.35,-r*.2);ctx.lineTo(r,r*.45);ctx.lineTo(r*.3,r);ctx.lineTo(-r*.6,r);ctx.closePath()}else{for(let i=0;i<10;i++){let a=i*TAU/10-Math.PI/2,rad=i%2?r*.48:r;i?ctx.lineTo(Math.cos(a)*rad,Math.sin(a)*rad):ctx.moveTo(Math.cos(a)*rad,Math.sin(a)*rad)}ctx.closePath()}if(outline){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke()}else{ctx.fillStyle=color;ctx.fill();ctx.strokeStyle='#ffffff25';ctx.lineWidth=1.5;ctx.stroke()}ctx.restore()}
+function sigil(x,y,index,color=C.dim,r=12){let n=3+index%5;ctx.save();ctx.translate(x,y);ctx.rotate(index*.7);circle(0,0,r,null,color,1);for(let i=0;i<n;i++){let a=i*TAU/n;line(Math.cos(a)*r*.45,Math.sin(a)*r*.45,Math.cos(a)*r,Math.sin(a)*r,color,1.5)}circle(0,0,2,color);ctx.restore()}
+function hover(p,r=40){return dist(pointer,p)<r}
+const mechanics={};
+
+// 01 · A button that learns to escape.
+mechanics.chase={
+ init(o){this.n=0;this.x=500;this.y=355;this.tx=500;this.ty=355;this.r=49;this.trail=[];this.phase=rng()*TAU},
+ update(){let speed=this.n>2?1:0;if(speed&&!won){this.phase+=dt*(this.opts.warp?1.35:1);let k=this.n;this.tx=500+Math.sin(this.phase*1.5)*Math.min(245,85+k*24);this.ty=355+Math.sin(this.phase*2.1)*Math.min(125,35+k*17)}this.x=lerp(this.x,this.tx,1-Math.exp(-dt*10));this.y=lerp(this.y,this.ty,1-Math.exp(-dt*10));this.trail.push({x:this.x,y:this.y});if(this.trail.length>20)this.trail.shift()},
+ draw(){for(let j=0;j<3;j++){circle(500,355,105+j*62,null,'#34494c55',1);arc(500,355,105+j*62,t*.12+j,t*.12+j+.5,C.line,3)}for(let i=0;i<8;i++){let a=i*TAU/8;sigil(500+Math.cos(a)*270,355+Math.sin(a)*178,i,'#3b5155',8)}this.trail.forEach((p,i)=>{ctx.globalAlpha=i/this.trail.length*.12;circle(p.x,p.y,this.r,C.a)});ctx.globalAlpha=1;if(this.opts.decoy&&this.n>0){let dx=1000-this.x,dy=710-this.y;button(dx,dy,this.r,C.dim);circle(dx,dy,11,null,C.ink,3);line(dx-8,dy-8,dx+8,dy+8,C.ink,3)}button(this.x,this.y,this.r,C.a,pointer.down&&hover(this,this.r));circle(this.x,this.y,12,C.ink);circle(this.x,this.y,5,C.a);arc(this.x,this.y,this.r+14,-Math.PI/2,-Math.PI/2+TAU*this.n/this.opts.hits,C.b,3);dots(this.opts.hits,this.n);hand(this.x,this.y)},
+ down(p){if(dist(p,this)<this.r+5){step(this.x,this.y,this.n);this.n++;if(this.n>=this.opts.hits)success();else{this.tx=250+rng()*500;this.ty=230+rng()*250;this.phase+=1.7}}else if(this.opts.decoy&&dist(p,{x:1000-this.x,y:710-this.y})<this.r)wrong(p.x,p.y)}
+};
+
+// 02 · Turn the key until the silhouettes agree.
+mechanics.rotate={
+ init(){this.n=0;this.angle=pick(8);this.target=mod(this.angle+2+pick(5),8);this.visual=this.angle*Math.PI/4;this.targetVisual=this.target*Math.PI/4;this.match=0},
+ draw(){let x=500,y=330;circle(x,y,143,null,C.line,1);for(let i=0;i<32;i++){let a=i*TAU/32;line(x+Math.cos(a)*137,y+Math.sin(a)*137,x+Math.cos(a)*(i%4?131:125),y+Math.sin(a)*(i%4?131:125),i%4?C.line:C.dim,2)}glow(x,y,145,C.b,.08);shape(x,y,102,3,'#07171c',this.targetVisual);shape(x,y,102,3,C.b,this.targetVisual,true);shape(x,y,80,3,C.a,this.visual);circle(x,y,18,C.ink,'#ffffff30',1);circle(x,y,6,C.c);button(380,520,34,C.b);button(620,520,34,C.b);rotateIcon(380,520,true,C.ink);rotateIcon(620,520,false,C.ink);if(this.opts.reverse){line(421,520,480,495,C.line,2);line(520,495,579,520,C.line,2);line(421,495,579,545,C.line,2);arrow(455,533,0,C.dim,8);arrow(545,507,Math.PI,C.dim,8)}dots(this.opts.rounds,this.n,600);hand(620,520)},
+ update(){this.visual=lerp(this.visual,this.angle*Math.PI/4,1-Math.exp(-dt*14));this.targetVisual=lerp(this.targetVisual,this.target*Math.PI/4,1-Math.exp(-dt*9));if(mod(this.angle,8)===mod(this.target,8)){this.match+=dt;if(this.match>.3){this.n++;step(500,330,this.n);this.match=0;if(this.n>=this.opts.rounds)success();else this.target+=2+pick(5)}}else this.match=0},
+ turn(d){this.angle+=d*(this.opts.reverse?-1:1);tick();idle=0},
+ down(p){if(dist(p,{x:380,y:520})<44)this.turn(-1);if(dist(p,{x:620,y:520})<44)this.turn(1)},
+ key(k){if(k==='ArrowLeft')this.turn(-1);if(k==='ArrowRight')this.turn(1)}
+};
+
+// 03 · Objects and their shadows.
+mechanics.socket={
+ init(o){this.items=Array.from({length:o.count},(_,i)=>({x:250+i*500/(o.count-1),y:480,homeX:250+i*500/(o.count-1),homeY:480,kind:i,placed:false}));this.order=shuffle(Array.from({length:o.count},(_,i)=>i));this.drag=-1;this.n=0},
+ target(i){let slot=this.order.indexOf(i);return{x:250+slot*500/(this.opts.count-1),y:275+(this.opts.drift?Math.sin(t*.8+slot*1.7)*27:0)}},
+ draw(){line(215,375,785,375,C.line,1);for(let i=0;i<11;i++)circle(250+i*50,375,2,C.line);this.items.forEach((s,i)=>{let q=this.target(i);socket(q.x,q.y,49);shape(q.x,q.y,31,s.kind,s.placed?C.b:'#476064',0,true);if(s.placed){shape(q.x,q.y,29,s.kind,C.b);circle(q.x,q.y+67,3,C.b)}else{line(s.homeX-20,543,s.homeX+20,543,C.line,2)}});this.items.forEach((s,i)=>{if(s.placed)return;let lift=i===this.drag;glow(s.x,s.y,65,C.a,lift?.22:.06);shape(s.x,s.y+(lift?12:7),36,s.kind,'#0b171b');shape(s.x,s.y,36,s.kind,C.a);if(lift)circle(s.x,s.y,51,null,C.a+'66',1)});dots(this.opts.count,this.n,602);let i=this.items.findIndex(s=>!s.placed);if(i>=0){let s=this.items[i],q=this.target(i);hand(s.x,s.y,q.x-s.x,q.y-s.y)}},
+ down(p){for(let i=this.items.length-1;i>=0;i--)if(!this.items[i].placed&&dist(p,this.items[i])<49){this.drag=i;this.offset={x:this.items[i].x-p.x,y:this.items[i].y-p.y};tick();break}},
+ move(p){if(this.drag<0)return;let s=this.items[this.drag];s.x=clamp(p.x+this.offset.x,160,840);s.y=clamp(p.y+this.offset.y,190,555)},
+ up(){if(this.drag<0)return;let s=this.items[this.drag],q=this.target(this.drag);if(dist(s,q)<49){s.placed=true;this.n++;step(q.x,q.y,this.n);if(this.n===this.opts.count)success()}else{s.x=s.homeX;s.y=s.homeY;tone(170,.1)}this.drag=-1}
+};
+
+// 04 · A small moving moon and a very particular orbit.
+mechanics.orbit={
+ init(){this.a=-Math.PI/2;this.target=.3;this.n=0;this.dir=1;this.cool=0},
+ update(){this.a+=dt*(1.15+this.n*.18)*this.dir;this.cool=Math.max(0,this.cool-dt)},
+ draw(){let r=142,half=this.opts.narrow?.16:.24;for(let i=0;i<60;i++){let a=i*TAU/60;line(500+Math.cos(a)*(r+19),350+Math.sin(a)*(r+19),500+Math.cos(a)*(r+23+(i%5===0?5:0)),350+Math.sin(a)*(r+23+(i%5===0?5:0)),C.line,1.5)}circle(500,350,r,null,'#0a181d',16);circle(500,350,r,null,C.line,1);arc(500,350,r,this.target-half,this.target+half,C.b,18);let x=500+Math.cos(this.a)*r,y=350+Math.sin(this.a)*r;for(let i=1;i<8;i++){ctx.globalAlpha=(1-i/8)*.2;circle(500+Math.cos(this.a-i*.045*this.dir)*r,350+Math.sin(this.a-i*.045*this.dir)*r,9,C.a)}ctx.globalAlpha=1;circle(x,y,13,C.a,C.ink,3);button(500,350,57,this.cool?C.c:C.a,pointer.down);circle(500,350,18,null,C.ink,2);circle(500,350,5,C.ink);dots(this.opts.rounds,this.n,570);hand(500,350)},
+ hit(){if(this.cool)return;let delta=Math.abs(Math.atan2(Math.sin(this.a-this.target),Math.cos(this.a-this.target)));if(delta<(this.opts.narrow?.20:.29)){this.n++;step(500+Math.cos(this.a)*142,350+Math.sin(this.a)*142,this.n);if(this.n===this.opts.rounds)success();else{this.target=this.a+(1.2+rng()*2)*this.dir;if(this.opts.reverse){this.dir*=-1;this.target=this.a+(1.2+rng()*2)*this.dir}}}else{wrong(500,350);this.cool=.3}},
+ down(p){if(dist(p,{x:500,y:350})<72)this.hit()},key(k){if(k===' ')this.hit()}
+};
+
+// 05 · Listen with your eyes. A diamond row records the echo.
+mechanics.memory={
+ init(o){this.seq=Array.from({length:o.length},()=>pick(4));this.time=-.7;this.input=0;this.show=true;this.lit=-1;this.litTime=0;this.rotation=0;this.spinTarget=0;this.replay={x:500,y:552}},
+ pos(i){let a=-Math.PI/2+i*TAU/4+this.rotation;return{x:500+Math.cos(a)*120,y:348+Math.sin(a)*120}},
+ update(){this.rotation=lerp(this.rotation,this.spinTarget,1-Math.exp(-dt*7));if(this.show){this.time+=dt;let s=Math.floor(this.time/.8);this.lit=this.time>=0&&mod(this.time,.8)<.5?this.seq[s]??-1:-1;if(s>=this.seq.length){this.show=false;this.lit=-1;this.input=0;if(this.opts.rotate)this.spinTarget+=Math.PI/2}}else if(this.litTime>0){this.litTime-=dt;if(this.litTime<=0)this.lit=-1}},
+ draw(){circle(500,348,120,null,C.line,1);for(let i=0;i<4;i++){let p=this.pos(i),on=this.lit===i;line(500,348,p.x,p.y,C.line,2);button(p.x,p.y,45,on?C.b:C.a);shape(p.x,p.y,15,i,C.ink);if(on){glow(p.x,p.y,100,C.b,.25);circle(p.x,p.y,55,null,C.b,2)}}circle(500,348,29,C.ink,C.line,1);if(this.show){for(let i=0;i<3;i++)circle(490+i*10,348,2+Math.sin(t*8+i)*1.2,C.c)}else{diamond(500,348,13,C.b)}dots(this.seq.length,this.show?0:this.input,510);circle(this.replay.x,this.replay.y,22,null,C.line,1);rotateIcon(this.replay.x,this.replay.y,false,C.dim);if(!this.show)hand(this.pos(this.seq[this.input]).x,this.pos(this.seq[this.input]).y)},
+ down(p){if(dist(p,this.replay)<28){this.time=-.4;this.show=true;this.input=0;return}if(this.show||Math.abs(this.rotation-this.spinTarget)>.03)return;for(let i=0;i<4;i++)if(dist(p,this.pos(i))<50){this.lit=i;this.litTime=.25;tick(i);if(i===this.seq[this.input]){this.input++;idle=0;if(this.input===this.seq.length)success()}else{wrong(p.x,p.y);this.input=0;this.time=-.7;this.show=true}break}}
+};
+
+// 06 · Wipe away the frost, then touch what it was hiding.
+mechanics.scratch={
+ init(){this.tiles=[];this.n=0;for(let y=0;y<14;y++)for(let x=0;x<20;x++)this.tiles.push({x:262+x*25,y:200+y*25,a:1,z:rng()});this.ready=false},
+ center(){return{x:500+(this.opts.moving?Math.sin(t)*55:0),y:365}},
+ draw(){let p=this.center();rr(230,170,540,390,30,'#0b191e',C.line,2);button(p.x,p.y,66,C.a);for(let i=0;i<12;i++){let a=i*TAU/12;line(p.x+Math.cos(a)*84,p.y+Math.sin(a)*84,p.x+Math.cos(a)*97,p.y+Math.sin(a)*97,C.c,2)}this.tiles.forEach(s=>{if(s.a<=0)return;ctx.globalAlpha=s.a;rr(s.x-12,s.y-12,25.8,25.8,2,s.z>.75?'#668082':s.z>.4?'#526d72':'#496267');ctx.globalAlpha=s.a*.35;line(s.x-6,s.y-5,s.x+6,s.y+5,'#a3c5bf',1)});ctx.globalAlpha=1;rr(230,170,540,390,30,null,'#91b4ae55',2);arc(500,590,13,-Math.PI/2,-Math.PI/2+TAU*this.n/this.tiles.length,C.b,3);if(!this.ready)hand(360,310,220,80);else hand(p.x,p.y)},
+ wipe(p){this.tiles.forEach(s=>{if(s.a>0&&dist(p,s)<44){s.a=0;this.n++;if(this.n%10===0){burst(s.x,s.y,'#a9c9c0',3);tone(600+rng()*500,.04,'sine',.006)}}});this.ready=this.n>this.tiles.length*.55},
+ down(p){let q=this.center();if(this.ready&&dist(p,q)<70){success();return}this.wipe(p)},move(p){if(pointer.down)this.wipe(p)}
+};
+
+// 07 · Light bends, it never lies. Mirrors toggle between two diagonals.
+mechanics.laser={
+ init(o){this.mirrors=o.count===2?[{gx:2,gy:2,good:0},{gx:2,gy:0,good:0}]:[{gx:2,gy:2,good:0},{gx:2,gy:0,good:0},{gx:5,gy:0,good:1},{gx:5,gy:4,good:1}];this.mirrors.forEach((m,i)=>{m.flip=1-m.good;m.rot=m.flip?Math.PI/4:-Math.PI/4});if(o.decoy)this.mirrors.push({gx:4,gy:2,good:0,flip:1,rot:Math.PI/4});this.target={gx:7,gy:o.count===2?0:4};this.match=0;this.path=[]},
+ point(gx,gy){return{x:255+gx*70,y:220+gy*63}},
+ cast(){let x=0,y=2,dx=1,dy=0,points=[this.point(x,y)],hit=false;for(let n=0;n<60;n++){x+=dx;y+=dy;if(x<0||x>7||y<0||y>4){points.push(this.point(x,y));break}points.push(this.point(x,y));if(x===this.target.gx&&y===this.target.gy){hit=true;break}let m=this.mirrors.find(m=>m.gx===x&&m.gy===y);if(m){let old=dx;if(m.flip===0){dx=-dy;dy=-old}else{dx=dy;dy=old}}}this.path=points;return hit},
+ update(){this.mirrors.forEach(m=>m.rot=lerp(m.rot,m.flip?Math.PI/4:-Math.PI/4,1-Math.exp(-dt*16)));if(this.cast()){this.match+=dt;if(this.match>.4)success()}else this.match=0},
+ draw(){for(let y=0;y<5;y++)for(let x=0;x<8;x++){let p=this.point(x,y);circle(p.x,p.y,2,C.line)}let start=this.point(0,2),goal=this.point(this.target.gx,this.target.gy);socket(goal.x,goal.y,25);circle(goal.x,goal.y,12,null,C.b,3);glow(goal.x,goal.y,50,C.b,.13);ctx.save();ctx.beginPath();this.path.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.strokeStyle=C.c;ctx.lineWidth=4;ctx.shadowColor=C.c;ctx.shadowBlur=17;ctx.lineJoin='round';ctx.stroke();ctx.shadowBlur=0;ctx.lineWidth=1;ctx.strokeStyle='#fff6d5';ctx.stroke();ctx.restore();this.mirrors.forEach(m=>{let p=this.point(m.gx,m.gy);circle(p.x,p.y+4,28,'#0b181c');circle(p.x,p.y,28,'#273f45',C.line,1.5);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(m.rot);rr(-22,-5,44,10,4,C.b);line(-17,-3,18,-3,'#ffffff99',1);ctx.restore();circle(p.x,p.y,3,C.ink)});button(start.x,start.y,23,C.c);arrow(start.x,start.y,0,C.ink,10);for(let i=0;i<3;i++){let x=465+i*35;diamond(x,575,8,C.line)}let m=this.mirrors.find(m=>m.flip!==m.good);if(m){let p=this.point(m.gx,m.gy);hand(p.x,p.y)}} ,
+ down(p){for(let m of this.mirrors){let q=this.point(m.gx,m.gy);if(dist(p,q)<32){m.flip=1-m.flip;tick();ripple(q.x,q.y);break}}}
+};
+
+// 08 · Pressure. Release inside the soft green band.
+mechanics.hold={
+ init(){this.n=0;this.p=0;this.holding=false;this.recoil=0;this.goal=.64},
+ update(){this.goal=this.opts.drift?.63+Math.sin(t*1.3)*.13:.64;if(this.holding){this.p+=dt*.36;if(this.p>=1){this.holding=false;this.recoil=.5;wrong();this.p=0}}else this.p=Math.max(0,this.p-dt*.9);this.recoil=Math.max(0,this.recoil-dt)},
+ draw(){let r=97+this.p*95,targetR=97+this.goal*95;for(let i=0;i<5;i++)circle(500,350,97+i*24,null,C.line+'66',1);circle(500,350,targetR,null,C.b+'33',22);circle(500,350,targetR,null,C.b,2);circle(500,350,r,null,this.recoil?C.a:C.c,5);glow(500,350,r,C.a,this.p*.1);button(500,350,60,C.a,this.holding);circle(500,350,21,null,C.ink,2);circle(500,350,this.holding?10:5,C.ink);for(let i=0;i<4;i++){let a=i*Math.PI/2;line(500+Math.cos(a)*209,350+Math.sin(a)*209,500+Math.cos(a)*218,350+Math.sin(a)*218,C.dim,2)}dots(this.opts.rounds,this.n,600);hand(500,350)},
+ down(p){if(dist(p,{x:500,y:350})<74&&!this.recoil){this.holding=true;tone(180,.2,'sine',.03,80)}},
+ up(){if(!this.holding)return;this.holding=false;if(Math.abs(this.p-this.goal)<.115){this.n++;step(500,350,this.n);this.p=0;if(this.n===this.opts.rounds)success()}else{wrong();this.p=0;this.recoil=.35}},key(k,up){if(k===' '){if(up)this.up();else this.down({x:500,y:350})}}
+};
+
+// 09 · One specimen doesn't belong.
+mechanics.odd={
+ init(o){this.n=0;this.newBoard()},
+ newBoard(){this.odd=pick(this.opts.count);this.kind=pick(3);this.angle=pick(4)*Math.PI/2;this.mode=this.opts.twist?(this.n%2):0;this.spawn=t},
+ pos(i){let cols=this.opts.count<=6?3:4,rows=Math.ceil(this.opts.count/cols);return{x:500+(i%cols-(cols-1)/2)*126,y:355+(Math.floor(i/cols)-(rows-1)/2)*122}},
+ draw(){for(let i=0;i<this.opts.count;i++){let p=this.pos(i);rr(p.x-48,p.y-46,96,96,19,'#102126',C.line,1);ctx.save();ctx.translate(p.x,p.y);let a=this.angle+(this.opts.twist?Math.sin(t*.65)*.25:0);if(this.mode===1){shape(0,0,26,3,C.a,a);circle((i===this.odd?-1:1)*12,-5,4,C.ink)}else{shape(0,0,27,this.kind,C.a,a);let pos=i===this.odd?12:-12;circle(pos,0,5,C.ink);circle(-pos,0,2,C.paper)}ctx.restore();circle(p.x,p.y+36,2,C.dim)}dots(this.opts.rounds,this.n,590);let p=this.pos(this.odd);hand(p.x,p.y)},
+ down(p){for(let i=0;i<this.opts.count;i++){let q=this.pos(i);if(Math.abs(p.x-q.x)<48&&Math.abs(p.y-q.y)<48){if(i===this.odd){this.n++;step(q.x,q.y,this.n);if(this.n===this.opts.rounds)success();else this.newBoard()}else wrong(q.x,q.y);break}}}
+};
+
+// 10 · Follow a constellation without lifting your finger.
+mechanics.trace={
+ init(o){this.nodes=Array.from({length:o.count},(_,i)=>{let a=-Math.PI/2+i*TAU/o.count;return{x:500+Math.cos(a)*(i%2?180:140),y:350+Math.sin(a)*(i%2?150:120)}});this.n=0;this.drawing=false;this.decoys=o.decoys?Array.from({length:4},(_,i)=>({x:320+i*120,y:350+(i%2?20:-15)})):[]},
+ draw(){this.nodes.forEach((p,i)=>{if(i>0){let prev=this.nodes[i-1];ctx.setLineDash(i<this.n?[]:[2,9]);line(prev.x,prev.y,p.x,p.y,i<this.n?C.b:C.line,i<this.n?4:1.5);ctx.setLineDash([])}});if(this.drawing&&this.n>0){let p=this.nodes[this.n-1];line(p.x,p.y,pointer.x,pointer.y,C.b+'88',2)}this.decoys.forEach(p=>{circle(p.x,p.y,12,'#1a2c31',C.line,1);line(p.x-4,p.y-4,p.x+4,p.y+4,C.dim,1);line(p.x+4,p.y-4,p.x-4,p.y+4,C.dim,1)});this.nodes.forEach((p,i)=>{let next=i===this.n;circle(p.x,p.y,i===0?21:17,i<this.n?C.b:'#122328',next?C.a:C.line,next?3:2);if(next){glow(p.x,p.y,48,C.a,.15);circle(p.x,p.y,5+Math.sin(t*5),C.a)}else if(i<this.n)circle(p.x,p.y,4,C.ink);if(i===this.nodes.length-1)circle(p.x,p.y,24,null,C.b,1)});dots(this.nodes.length,this.n,575);let p=this.nodes[0],q=this.nodes[1];hand(p.x,p.y,q.x-p.x,q.y-p.y)},
+ down(p){if(dist(p,this.nodes[0])<30){this.n=1;this.drawing=true;step(p.x,p.y)}},
+ move(p){if(!this.drawing)return;let q=this.nodes[this.n];if(q&&dist(p,q)<31){this.n++;step(q.x,q.y,this.n/2);if(this.n===this.nodes.length){this.drawing=false;success()}}},
+ up(){if(this.drawing){this.drawing=false;this.n=0;tone(180,.1)}}
+};
+
+// 11 · Slide frequencies into harmony. Later, the controls are coupled.
+mechanics.balance={
+ init(o){this.values=[.18,.83,.3];this.targets=[.72,.32,.66];this.drag=-1;this.match=0;this.solved=[false,false,false]},
+ draw(){let cols=[C.a,C.b,C.c];for(let i=0;i<3;i++){let y=270+i*100;line(280,y,720,y,'#0b191e',16);line(280,y,720,y,C.line,2);for(let j=0;j<=10;j++)line(280+j*44,y+20,280+j*44,y+25,C.line,1);let tx=280+this.targets[i]*440,vx=280+this.values[i]*440;rr(tx-16,y-29,32,58,15,null,cols[i]+'aa',2);circle(tx,y,4,cols[i]);button(vx,y,24,cols[i],this.drag===i);line(vx-4,y-6,vx-4,y+6,C.ink,2);line(vx+4,y-6,vx+4,y+6,C.ink,2);let match=Math.abs(this.values[i]-this.targets[i])<.037;circle(775,y,7,match?cols[i]:C.ink,cols[i],1);if(this.opts.couple&&i<2){line(228,y,228,y+100,C.line,2);arc(228,y+50,13,-Math.PI/2,Math.PI/2,C.dim,1.5)}}if(this.match>0)arc(500,570,17,-Math.PI/2,-Math.PI/2+TAU*this.match/.65,C.b,3);let i=this.values.findIndex((v,i)=>Math.abs(v-this.targets[i])>.037);if(i>=0)hand(280+this.values[i]*440,270+i*100,(this.targets[i]-this.values[i])*440,0)},
+ update(){if(this.values.every((v,i)=>Math.abs(v-this.targets[i])<.037)){this.match+=dt;if(this.match>.65)success()}else this.match=0},
+ down(p){for(let i=0;i<3;i++)if(Math.abs(p.y-(270+i*100))<36&&p.x>250&&p.x<750){this.drag=i;this.move(p);break}},
+ move(p){if(this.drag<0)return;let i=this.drag,v=clamp((p.x-280)/440,0,1),delta=v-this.values[i];this.values[i]=v;if(this.opts.couple&&i<2)this.values[i+1]=clamp(this.values[i+1]+delta*.45,0,1)},up(){this.drag=-1}
+};
+
+// 12 · Carry the pearl through a corridor. Collision returns to the last beacon.
+mechanics.maze={
+ init(o){let paths=[[[250,490],[250,250],[440,250],[440,450],[630,450],[630,250],[755,250]],[[250,490],[250,230],[440,230],[440,480],[620,480],[620,290],[755,290]],[[245,490],[245,235],[420,235],[420,470],[590,470],[590,240],[755,240]]];this.path=paths[o.variant%3].map(([x,y])=>({x,y}));this.x=this.path[0].x;this.y=this.path[0].y;this.check=0;this.drag=false;this.width=o.variant===2?47:58;this.lastPoint={x:this.x,y:this.y};this.bonk=0},
+ near(p,a,b){let dx=b.x-a.x,dy=b.y-a.y,l=dx*dx+dy*dy,u=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/l,0,1);return Math.hypot(p.x-a.x-u*dx,p.y-a.y-u*dy)},
+ safe(p){return this.path.some((q,i)=>i>0&&this.near(p,this.path[i-1],q)<this.width/2-9)},
+ draw(){ctx.save();ctx.beginPath();this.path.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.lineJoin='round';ctx.lineCap='round';ctx.lineWidth=this.width+8;ctx.strokeStyle=C.line;ctx.stroke();ctx.lineWidth=this.width+4;ctx.strokeStyle='#0a171c';ctx.stroke();ctx.lineWidth=1;ctx.setLineDash([2,11]);ctx.strokeStyle='#587076';ctx.stroke();ctx.restore();this.path.forEach((p,i)=>{if(i===2||i===4){circle(p.x,p.y,12,null,i<=this.check?C.b:C.dim,2);circle(p.x,p.y,3,i<=this.check?C.b:C.dim)}});let end=this.path[this.path.length-1];circle(end.x,end.y,23,null,C.b,2);circle(end.x,end.y,14,null,C.b+'88',1);glow(end.x,end.y,50,C.b,.2);if(this.opts.variant>0){let g=this.gate();line(g.x-27,g.y,g.x+27,g.y,this.isOpen()?C.b+'35':C.a,7);if(!this.isOpen())for(let i=-1;i<=1;i++)line(g.x+i*15-5,g.y-7,g.x+i*15+5,g.y+7,C.ink,2)}glow(this.x,this.y,45,C.c,.2);circle(this.x,this.y+4,13,'#050e12');circle(this.x,this.y,13,C.c);circle(this.x-3,this.y-4,4,'#fff7d9');if(this.drag)circle(this.x,this.y,21,null,C.c+'55',1);hand(this.x,this.y,0,-80)},
+ gate(){return{x:this.path[3].x,y:350}},isOpen(){return mod(t,3.2)>1.2},
+ down(p){if(dist(p,this)<29){this.drag=true;this.lastPoint={x:this.x,y:this.y}}},
+ move(p){if(!this.drag)return;let from={x:this.x,y:this.y},d=dist(from,p),steps=Math.max(1,Math.ceil(d/5));for(let i=1;i<=steps;i++){let q={x:lerp(from.x,p.x,i/steps),y:lerp(from.y,p.y,i/steps)};if(!this.safe(q)){this.fail();return}if(this.opts.variant>0&&!this.isOpen()){let g=this.gate();if(Math.abs(q.x-g.x)<28&&Math.abs(q.y-g.y)<13){return}}this.x=q.x;this.y=q.y;for(let c of [2,4])if(c>this.check&&dist(q,this.path[c])<20){this.check=c;step(q.x,q.y)}if(dist(q,this.path[this.path.length-1])<20){this.drag=false;success();return}}},
+ fail(){wrong(this.x,this.y);this.x=this.path[this.check].x;this.y=this.path[this.check].y;this.drag=false},up(){this.drag=false}
+};
+
+// 13 · Little things go home. Homes may change places.
+mechanics.sort={
+ init(o){this.n=0;this.drag=-1;this.order=[0,1,2];this.balls=shuffle(Array.from({length:o.count},(_,i)=>({kind:i%3}))).map((b,i)=>({...b,x:300+(i%5)*100,y:245+Math.floor(i/5)*90,done:false}));this.centers=[300,500,700];this.want=[300,500,700]},
+ update(){this.centers=this.centers.map((x,i)=>lerp(x,this.want[i],1-Math.exp(-dt*8)))},
+ draw(){let colors=this.opts.shapes?[C.paper,C.paper,C.paper]:[C.a,C.b,C.c];for(let i=0;i<3;i++){let x=this.centers[i];rr(x-73,450,146,108,24,'#0b181d',colors[i]+'88',2);rr(x-65,458,130,92,18,null,colors[i]+'22',1);shape(x,501,21,i,colors[i],0,true);for(let j=0;j<this.balls.filter(b=>b.kind===i&&b.done).length;j++)circle(x-16+j*16,538,3,colors[i])}this.balls.forEach((b,i)=>{if(b.done)return;circle(b.x,b.y+6,25,'#09171b');circle(b.x,b.y,25,colors[b.kind]);shape(b.x,b.y,11,b.kind,C.ink);if(i===this.drag)circle(b.x,b.y,33,null,colors[b.kind]+'88',1)});dots(this.opts.count,this.n,602);let b=this.balls.find(b=>!b.done);if(b)hand(b.x,b.y,this.centers[b.kind]-b.x,500-b.y)},
+ down(p){for(let i=this.balls.length-1;i>=0;i--)if(!this.balls[i].done&&dist(p,this.balls[i])<33){this.drag=i;this.home={x:this.balls[i].x,y:this.balls[i].y};tick();break}},
+ move(p){if(this.drag>=0){this.balls[this.drag].x=clamp(p.x,170,830);this.balls[this.drag].y=clamp(p.y,185,570)}},
+ up(){if(this.drag<0)return;let b=this.balls[this.drag];if(Math.abs(b.x-this.centers[b.kind])<70&&b.y>450&&b.y<568){b.done=true;this.n++;step(b.x,b.y,this.n/2);if(this.n===this.opts.count)success();else if(this.opts.shuffle){let old=[...this.want];this.want=[old[1],old[2],old[0]]}}else{b.x=this.home.x;b.y=this.home.y;tone(150,.08)}this.drag=-1}
+};
+
+// 14 · A touch toggles its neighbors. Scrambles are constructed from solved states.
+mechanics.lights={
+ init(o){this.cells=Array(9).fill(true);this.history=[];let choices=shuffle(Array.from({length:9},(_,i)=>i)).slice(0,o.scramble);choices.forEach(i=>this.flip(i));this.history=[...choices];this.pulse=Array(9).fill(0)},
+ neighbors(i){let x=i%3,y=Math.floor(i/3);return Array.from({length:9},(_,j)=>j).filter(j=>Math.abs(j%3-x)+Math.abs(Math.floor(j/3)-y)<=1)},
+ flip(i){this.neighbors(i).forEach(j=>this.cells[j]=!this.cells[j])},
+ pos(i){return{x:390+(i%3)*110,y:245+Math.floor(i/3)*110}},
+ draw(){for(let i=0;i<9;i++){let p=this.pos(i);if(i%3<2)line(p.x,p.y,p.x+110,p.y,C.line,3);if(i<6)line(p.x,p.y,p.x,p.y+110,C.line,3)}for(let i=0;i<9;i++){let p=this.pos(i),on=this.cells[i];socket(p.x,p.y,38);circle(p.x,p.y,29,on?C.b:'#294046',on?'#d2f6dc':C.line,1);if(on)glow(p.x,p.y,48,C.b,.12);line(p.x-8,p.y,p.x+8,p.y,on?C.ink:C.dim,2);line(p.x,p.y-8,p.x,p.y+8,on?C.ink:C.dim,2);if(hover(p,39)){this.neighbors(i).forEach(j=>{let q=this.pos(j);circle(q.x,q.y,43,null,C.c+'77',1)})}}for(let i=0;i<9;i++)circle(420+i*20,563,3,this.cells[i]?C.b:C.line);if(idle>10){let solution=this.solution();if(solution.length){let p=this.pos(solution[0]);hand(p.x,p.y)}}},
+ solution(){for(let mask=0;mask<512;mask++){let a=[...this.cells],moves=[];for(let i=0;i<9;i++)if(mask&(1<<i)){moves.push(i);this.neighbors(i).forEach(j=>a[j]=!a[j])}if(a.every(Boolean))return moves}return[]},
+ down(p){for(let i=0;i<9;i++){let q=this.pos(i);if(dist(p,q)<42){this.flip(i);tick();ripple(q.x,q.y);if(this.cells.every(Boolean))success();break}}}
+};
+
+// 15 · A quiet threshold. Three orbiting keys open the next collection.
+mechanics.portal={
+ init(){this.n=0;this.keys=[false,false,false]},
+ pos(i){let a=-Math.PI/2+i*TAU/3+t*.12;return{x:500+Math.cos(a)*180,y:350+Math.sin(a)*160}},
+ draw(){glow(500,350,240,C.b,.17);for(let i=0;i<6;i++){let r=75+i*13;arc(500,350,r,t*.12+i*.45,t*.12+i*.45+4.3,i%2?C.line:C.b+'66',1.5)}rr(457,274,86,152,42,'#071619',C.b,2);if(this.n===3){glow(500,350,100,C.b,.4);arrow(500,350,0,C.b,22)}else{line(500,327,500,367,C.line,3);circle(500,323,6,C.line)}for(let i=0;i<3;i++){let p=this.pos(i);line(p.x,p.y,500,350,this.keys[i]?C.b+'55':C.line,1);if(!this.keys[i]){button(p.x,p.y,30,[C.a,C.b,C.c][i]);diamond(p.x,p.y,14,C.ink)}else diamond(p.x,p.y,10,C.b)}if(this.n===3)hand(500,350)},
+ down(p){for(let i=0;i<3;i++)if(!this.keys[i]&&dist(p,this.pos(i))<40){this.keys[i]=true;this.n++;step(p.x,p.y,this.n)}if(this.n===3&&Math.abs(p.x-500)<45&&Math.abs(p.y-350)<80)success()}
+};
+
+// 16 · Pull back, let go. A real ballistic arc and a forgiving little cup.
+mechanics.slingshot={
+ init(){this.anchor={x:320,y:435};this.x=320;this.y=435;this.vx=0;this.vy=0;this.drag=false;this.flying=false;this.trail=[];this.resetTime=0},
+ cup(){return{x:700,y:this.opts.moving?450+Math.sin(t*.8)*30:450}},
+ reset(){this.x=320;this.y=435;this.vx=this.vy=0;this.flying=false;this.trail=[]},
+ update(){if(!this.flying)return;this.vy+=420*dt;this.x+=this.vx*dt;this.y+=this.vy*dt;this.trail.push({x:this.x,y:this.y});if(this.trail.length>24)this.trail.shift();let c=this.cup();if(this.vy>0&&Math.abs(this.x-c.x)<42&&this.y>c.y-20&&this.y<c.y+32){step(c.x,c.y);success();this.flying=false}if(this.y>585||this.x>875||this.x<145){burst(this.x,Math.min(this.y,575),C.a,8);this.reset()}},
+ draw(){for(let i=0;i<5;i++){let x=250+i*120;line(x,556,x+55,556,C.line,2)}line(320,510,320,466,C.c,13);line(320,473,291,425,C.c,11);line(320,473,349,425,C.c,11);if(!this.flying)line(292,425,this.x,this.y,C.ink,7);if(!this.flying)line(292,425,this.x,this.y,C.a,4);else line(292,425,348,425,C.a,3);let c=this.cup();glow(c.x,c.y,85,C.b,.09);rr(c.x-51,c.y,102,65,12,'#0b1b20',C.b,3);rr(c.x-57,c.y-7,114,14,6,C.b);shape(c.x,c.y+33,15,4,C.b);line(c.x-35,c.y+65,c.x+35,c.y+65,C.dim,5);if(this.drag){let vx=(320-this.x)*4,vy=(435-this.y)*4;for(let i=1;i<24;i++){let time=i*.055,xx=this.x+vx*time,yy=this.y+vy*time+210*time*time;if(yy>565)break;circle(xx,yy,2,i%3===0?C.c:C.dim)}}this.trail.forEach((p,i)=>{ctx.globalAlpha=i/this.trail.length*.4;circle(p.x,p.y,4,C.c)});ctx.globalAlpha=1;circle(this.x,this.y+3,14,C.ink);circle(this.x,this.y,14,C.c);circle(this.x-4,this.y-4,4,C.paper);if(!this.flying)line(348,425,this.x,this.y,C.a,4);arc(320,435,52,.6,2.5,C.line,1);if(!this.flying)hand(this.x,this.y,-80,65)},
+ down(p){if(!this.flying&&dist(p,this)<32){this.drag=true;tick()}},
+ move(p){if(this.drag){let dx=p.x-320,dy=p.y-435,d=Math.hypot(dx,dy),k=Math.min(1,140/Math.max(d,1));this.x=320+dx*k;this.y=435+dy*k}},
+ up(){if(!this.drag)return;this.drag=false;this.vx=(320-this.x)*4;this.vy=(435-this.y)*4;this.flying=true;tone(220,.18,'sine',.06,650)}
+};
+
+// 17 · The entire room is zipped shut.
+mechanics.zipper={
+ init(){this.p=0;this.drag=false;this.open=false},
+ handle(){return{x:500,y:this.opts.reverse?525-this.p*315:210+this.p*315}},
+ draw(){button(500,350,53,C.b);shape(500,350,17,4,C.ink);for(let i=0;i<8;i++){let a=i*TAU/8;line(500+Math.cos(a)*80,350+Math.sin(a)*80,500+Math.cos(a)*90,350+Math.sin(a)*90,C.c,2)}let gap=this.p*275;for(let side of [-1,1]){ctx.beginPath();ctx.moveTo(500+side*gap,185);ctx.lineTo(500+side*280,185);ctx.lineTo(500+side*280,560);ctx.lineTo(500+side*gap,560);ctx.quadraticCurveTo(500+side*gap*.45,370,500+side*gap,185);ctx.fillStyle=side<0?'#355763':'#2b4652';ctx.fill();for(let i=0;i<5;i++){let xx=500+side*(gap+20+i*(260-gap)/5);line(xx,200,xx,545,'#ffffff09',2)}}if(this.p<.95){let h=this.handle();for(let i=0;i<30;i++){let y=202+i*11;if(this.opts.reverse?y<h.y:y>h.y){rr(488,y,10,5,1,C.c);rr(502,y+4,10,5,1,C.c)}}line(500,h.y,500,h.y+18,C.c,5);rr(485,h.y+11,30,42,12,C.c);rr(492,h.y+20,16,24,6,C.ink);hand(h.x,h.y+25,0,this.opts.reverse?-210:210)}else{hand(500,350)}},
+ down(p){let h=this.handle();if(this.p>.94&&dist(p,{x:500,y:350})<64){success();return}if(Math.abs(p.x-h.x)<38&&Math.abs(p.y-h.y-25)<45)this.drag=true},
+ move(p){if(this.drag){let next=clamp((this.opts.reverse?525-p.y+25:p.y-235)/315,0,1);if(Math.floor(next*20)!==Math.floor(this.p*20))tone(220+next*400,.03,'triangle',.015);this.p=next;if(this.p>.94){this.p=1;this.drag=false;step(500,350)}}},up(){this.drag=false}
+};
+
+function candy(x,y,kind,r=23){let colors=[C.a,C.c,C.b];if(kind===0){circle(x,y,r,colors[0]);circle(x-6,y-6,5,'#ffffff66');line(x,y-r,x+3,y-r-9,C.b,3);shape(x+10,y-r-8,8,0,C.b,1)}else if(kind===1){shape(x,y,r,0,colors[1],Math.PI);for(let i=-1;i<=1;i++)line(x+i*3,y-r*.6,x+i*9,y-r-12,C.b,3)}else{circle(x,y,r,colors[2]);circle(x,y,r*.35,C.ink);for(let i=0;i<7;i++){let a=i*TAU/7;line(x+Math.cos(a)*r*.65,y+Math.sin(a)*r*.65,x+Math.cos(a+.13)*r*.75,y+Math.sin(a+.13)*r*.75,C.a,2)}}}
+// 18 · A hungry creature with very specific tastes, and very elastic cheeks.
+mechanics.feed={
+ init(){this.order=this.opts.fussy?[1,2,0]:[2,0,1];this.n=0;this.drag=-1;this.food=[0,1,2].map((kind,i)=>({kind,x:285+i*76,y:470,homeX:285+i*76,done:false}));this.chew=0;this.mood=0},
+ update(){this.chew=Math.max(0,this.chew-dt);this.mood=Math.max(0,this.mood-dt)},
+ draw(){let chew=Math.sin(this.chew*28)*this.chew*7;glow(675,365,150,C.b,.08);line(635,290,615,252,C.b,7);line(715,290,734,252,C.b,7);circle(614,250,11,C.c);circle(735,250,11,C.c);ctx.save();ctx.translate(675,365);ctx.scale(1+chew*.01,1-chew*.01);rr(-95,-85,190,180,68,C.b);for(let side of [-1,1]){circle(side*38,-27,24,C.paper);let dx=clamp((pointer.x-675)/100,-5,5),dy=clamp((pointer.y-365)/100,-5,5);circle(side*38+dx,-27+dy,10,C.ink);circle(side*57,15,12,C.a+'99')}let near=this.drag>=0&&dist(this.food[this.drag],{x:675,y:385})<130;rr(-40,15,80,near?55:32,20,C.ink);rr(-25,15,17,12,3,C.paper);rr(8,15,17,12,3,C.paper);if(near)rr(-20,42,40,19,10,C.a);ctx.restore();if(this.n<3){circle(675,207,38,C.ink,C.dim,1);circle(650,252,8,C.paper);candy(675,207,this.order[this.n],19)}line(235,510,490,510,C.line,4);this.food.forEach((f,i)=>{if(!f.done){if(i!==this.drag)circle(f.x,f.y+28,22,C.ink);candy(f.x,f.y,f.kind)}});dots(3,this.n,565);let f=this.food.find(f=>f.kind===this.order[this.n]);if(f)hand(f.x,f.y,675-f.x,385-f.y)},
+ down(p){for(let i=0;i<3;i++)if(!this.food[i].done&&dist(p,this.food[i])<33){this.drag=i;break}},
+ move(p){if(this.drag>=0){this.food[this.drag].x=clamp(p.x,180,805);this.food[this.drag].y=clamp(p.y,185,550)}},
+ up(){if(this.drag<0)return;let f=this.food[this.drag];if(dist(f,{x:675,y:385})<69&&f.kind===this.order[this.n]){f.done=true;this.n++;this.chew=.8;step(675,385,this.n);tone(100,.25,'triangle',.04,70);if(this.n===3)success()}else{if(dist(f,{x:675,y:385})<69){wrong(675,390);this.mood=.5}f.x=f.homeX;f.y=470}this.drag=-1}
+};
+
+// 19 · Swipe to cut ropes. The balloon remembers how to fly.
+function segmentDistance(p,a,b){let dx=b.x-a.x,dy=b.y-a.y,u=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/Math.max(1,dx*dx+dy*dy),0,1);return Math.hypot(p.x-a.x-u*dx,p.y-a.y-u*dy)}
+function segmentsCross(a,b,c,d){let cross=(p,q,r)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x);return cross(a,b,c)*cross(a,b,d)<0&&cross(c,d,a)*cross(c,d,b)<0}
+mechanics.cut={
+ init(o){this.ropes=Array.from({length:o.ropes},(_,i)=>({x:270+i*460/(o.ropes-1),y:535,cut:false}));this.y=300;this.drag=false;this.last=null;this.swipe=[]},
+ update(){if(this.ropes.every(r=>r.cut)){this.y-=dt*110;if(this.y<205)success()}this.swipe=this.swipe.filter(p=>(p.life-=dt)>0)},
+ draw(){arc(500,210,65,Math.PI,TAU,C.b,3);line(435,208,435,233,C.b,3);line(565,208,565,233,C.b,3);shape(500,190,14,4,C.b,0,true);this.ropes.forEach(r=>{socket(r.x,r.y,12);if(!r.cut){line(500,this.y+50,r.x,r.y,C.c,2);for(let i=1;i<5;i++)circle(lerp(500,r.x,i/5),lerp(this.y+50,r.y,i/5),2,C.c)}});glow(500,this.y,95,C.a,.12);ctx.save();ctx.translate(500,this.y);ctx.scale(.8,1);circle(0,0,54,C.a);arc(0,0,43,3.7,4.9,'#ffffff66',4);ctx.restore();shape(500,this.y+53,8,0,C.a);line(496,this.y+13,504,this.y+13,C.ink,2);circle(487,this.y-1,3,C.ink);circle(513,this.y-1,3,C.ink);for(let i=1;i<this.swipe.length;i++){ctx.globalAlpha=this.swipe[i].life/.3;line(this.swipe[i-1].x,this.swipe[i-1].y,this.swipe[i].x,this.swipe[i].y,C.b,4)}ctx.globalAlpha=1;hand(265,445,470,0)},
+ down(p){this.drag=true;this.last={...p};this.swipe=[]},
+ move(p){if(!this.drag)return;for(let r of this.ropes)if(!r.cut&&segmentsCross(this.last,p,{x:500,y:this.y+50},r)){r.cut=true;step(lerp(500,r.x,.6),lerp(this.y+50,r.y,.6));tone(500,.1,'triangle',.02,-200)}this.last={...p};this.swipe.push({...p,life:.3})},up(){this.drag=false;this.last=null}
+};
+
+// 20 · Water, sunlight, and an unexpectedly enthusiastic flower.
+mechanics.plant={
+ init(){this.water=0;this.growth=0;this.bloom=0;this.drag=-1;this.can={x:300,y:395};this.sun={x:725,y:240}},
+ update(){if(this.drag===0&&Math.abs(this.can.x+42-500)<72&&this.can.y>230&&this.can.y<390){this.water=clamp(this.water+dt*.65,0,1);if(rng()<dt*16)burst(500,451,C.b,2)}this.growth=lerp(this.growth,this.water,1-Math.exp(-dt*3));if(this.water>=1&&dist(this.sun,{x:500,y:245})<90){this.bloom+=dt;if(this.bloom>1.25)success()}else this.bloom=Math.max(0,this.bloom-dt*.5)},
+ draw(){let gy=470-this.growth*140;line(500,479,500,gy,C.b,7);for(let i=0;i<3;i++){let yy=450-i*37;if(yy>gy+15){ctx.save();ctx.translate(500,yy);ctx.rotate(i%2?-.6:.6);ctx.beginPath();ctx.ellipse(i%2?-19:19,-9,25,11,i%2?.6:-.6,0,TAU);ctx.fillStyle=C.b;ctx.fill();ctx.restore()}}rr(455,470,90,67,12,'#bc7663');rr(448,465,104,17,5,C.a);ctx.beginPath();ctx.ellipse(500,469,43,8,0,0,TAU);ctx.fillStyle='#3b3030';ctx.fill();if(this.growth>.75){for(let i=0;i<8;i++){let a=i*TAU/8;circle(500+Math.cos(a)*(8+this.bloom*13),gy+Math.sin(a)*(8+this.bloom*13),9+this.bloom*7,C.a)}circle(500,gy,12+this.bloom*4,C.c);circle(495,gy-2,2,C.ink);circle(505,gy-2,2,C.ink)}let c=this.can;ctx.save();ctx.translate(c.x,c.y);rr(-31,-18,62,46,10,C.b);arc(-29,-2,24,1.5,4.9,C.b,7);ctx.beginPath();ctx.moveTo(26,2);ctx.lineTo(60,-20);ctx.lineTo(66,-9);ctx.lineTo(30,21);ctx.fillStyle=C.b;ctx.fill();line(56,-25,70,-8,C.paper,5);ctx.restore();if(this.drag===0&&this.water<1){for(let i=0;i<10;i++){let yy=c.y+mod(t*190+i*18,130);if(yy<460)line(c.x+55+Math.sin(i)*10,yy,c.x+54+Math.sin(i)*10,yy+7,C.b,2)}}let s=this.sun;glow(s.x,s.y,75,C.c,.2);for(let i=0;i<12;i++){let a=i*TAU/12+t*.1;line(s.x+Math.cos(a)*35,s.y+Math.sin(a)*35,s.x+Math.cos(a)*44,s.y+Math.sin(a)*44,C.c,2)}circle(s.x,s.y,25,C.c);circle(s.x-7,s.y-2,2,C.ink);circle(s.x+7,s.y-2,2,C.ink);if(this.drag!==1&&s.x>650){circle(700,265,22,'#496268');circle(729,270,29,'#496268');circle(757,267,19,'#496268')}if(this.water<1){arc(500,560,14,-Math.PI/2,-Math.PI/2+TAU*this.water,C.b,3);hand(c.x,c.y,160,-85)}else{circle(500,245,40,null,C.c+'44',1);hand(s.x,s.y,500-s.x,245-s.y)}},
+ down(p){if(dist(p,this.can)<65)this.drag=0;else if(dist(p,this.sun)<60)this.drag=1},
+ move(p){if(this.drag>=0){let q=this.drag===0?this.can:this.sun;q.x=clamp(p.x,220,790);q.y=clamp(p.y,200,490)}},up(){this.drag=-1}
+};
+
+// 21 · Follow the pearl, not the cups.
+mechanics.shell={
+ init(o){this.cups=[0,1,2].map((id,i)=>({id,x:340+i*160,y:390}));this.pearl=pick(3);this.stage='reveal';this.clock=0;this.n=0;this.selected=-1;this.swap=null},
+ beginSwap(){let a=pick(3),b=(a+1+pick(2))%3;this.swap={a,b,ax:this.cups[a].x,bx:this.cups[b].x};this.clock=0;this.stage='swap'},
+ update(){this.clock+=dt;if(this.stage==='reveal'&&this.clock>1.6)this.beginSwap();else if(this.stage==='swap'){let u=clamp(this.clock/(this.opts.fast?.65:.85),0,1),s=u*u*(3-2*u),a=this.cups[this.swap.a],b=this.cups[this.swap.b];a.x=lerp(this.swap.ax,this.swap.bx,s);b.x=lerp(this.swap.bx,this.swap.ax,s);a.y=390-Math.sin(u*Math.PI)*44;b.y=390+Math.sin(u*Math.PI)*44;if(u===1){this.n++;if(this.n>=this.opts.swaps){this.stage='choose';this.clock=0}else this.beginSwap()}}else if(this.stage==='wrong'&&this.clock>1.5){this.n=0;this.stage='reveal';this.clock=0;this.selected=-1}},
+ draw(){line(260,458,740,458,C.line,3);for(let c of this.cups)circle(c.x,448,47,'#102025');let pearl=this.cups[this.pearl],reveal=this.stage==='reveal'||this.stage==='wrong'||won;circle(pearl.x,424,15,C.c);glow(pearl.x,424,30,C.c,.2);let order=[...this.cups].sort((a,b)=>a.y-b.y);for(let c of order){let lift=reveal&&c.id===this.pearl?65:0;ctx.beginPath();ctx.moveTo(c.x-36,c.y-57-lift);ctx.quadraticCurveTo(c.x,c.y-70-lift,c.x+36,c.y-57-lift);ctx.lineTo(c.x+52,c.y+52-lift);ctx.quadraticCurveTo(c.x,c.y+67-lift,c.x-52,c.y+52-lift);ctx.closePath();ctx.fillStyle=C.a;ctx.fill();line(c.x-25,c.y-40-lift,c.x-36,c.y+32-lift,'#ffffff30',4);rr(c.x-56,c.y+45-lift,112,12,6,C.a);arc(c.x,c.y-55-lift,28,Math.PI,TAU,'#ffffff30',2)}if(this.stage==='choose'){for(let c of this.cups)circle(c.x,490,4,C.b);hand(pearl.x,pearl.y)}else{for(let i=0;i<3;i++)circle(486+i*14,545,3+Math.sin(t*5+i),C.dim)}},
+ down(p){if(this.stage!=='choose')return;let c=this.cups.find(c=>Math.abs(p.x-c.x)<58&&Math.abs(p.y-c.y)<72);if(!c)return;this.selected=c.id;if(c.id===this.pearl){step(c.x,c.y);success()}else{wrong(c.x,c.y);this.stage='wrong';this.clock=0}}
+};
+
+// 22 · Untie a constellation. Crossing threads show their own problem.
+mechanics.untangle={
+ init(o){let order=o.count===6?[0,2,4,1,3,5]:[0,2,4,1,3];this.nodes=order.map(i=>{let a=-Math.PI/2+i*TAU/o.count;return{x:500+Math.cos(a)*175,y:355+Math.sin(a)*155}});this.drag=-1;this.touched=false;this.match=0},
+ crossings(){let bad=new Set(),n=this.nodes.length;for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){let ni=(i+1)%n,nj=(j+1)%n;if(i===nj||ni===j)continue;if(segmentsCross(this.nodes[i],this.nodes[ni],this.nodes[j],this.nodes[nj])||Math.min(segmentDistance(this.nodes[i],this.nodes[j],this.nodes[nj]),segmentDistance(this.nodes[ni],this.nodes[j],this.nodes[nj]),segmentDistance(this.nodes[j],this.nodes[i],this.nodes[ni]),segmentDistance(this.nodes[nj],this.nodes[i],this.nodes[ni]))<9){bad.add(i);bad.add(j)}}return bad},
+ update(){let apart=this.nodes.every((a,i)=>this.nodes.every((b,j)=>i===j||dist(a,b)>55));if(this.touched&&apart&&!this.crossings().size){this.match+=dt;if(this.match>.55)success()}else this.match=0},
+ draw(){let bad=this.crossings();this.nodes.forEach((p,i)=>{let q=this.nodes[(i+1)%this.nodes.length];line(p.x,p.y+4,q.x,q.y+4,C.ink,7);line(p.x,p.y,q.x,q.y,bad.has(i)?C.a:C.b,4)});this.nodes.forEach((p,i)=>{socket(p.x,p.y,19);circle(p.x,p.y,13,i===this.drag?C.c:C.paper);circle(p.x,p.y,5,C.ink)});for(let i=0;i<3;i++)diamond(475+i*25,573,8,bad.size?C.line:C.b);if(idle>7){let p=this.nodes[1];hand(p.x,p.y,-80,70)}},
+ down(p){this.drag=this.nodes.findIndex(q=>dist(q,p)<29);if(this.drag>=0){this.touched=true;tick()}},
+ move(p){if(this.drag>=0){this.nodes[this.drag].x=clamp(p.x,210,790);this.nodes[this.drag].y=clamp(p.y,210,515)}},up(){this.drag=-1}
+};
+
+// 23 · Reel in an impossible fish, one physical turn at a time.
+mechanics.crank={
+ init(){this.angle=0;this.wound=0;this.drag=false;this.lastAngle=0},
+ handle(){return{x:320+Math.cos(this.angle)*63,y:400+Math.sin(this.angle)*63}},
+ draw(){let p=clamp(this.wound/(this.opts.turns*TAU),0,1),fy=490-p*225;for(let j=0;j<3;j++){ctx.beginPath();for(let x=210;x<=800;x+=8){let y=494+j*17+Math.sin(x*.025+t*1.6+j)*4;x===210?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.strokeStyle=j===0?C.b+'66':C.line;ctx.lineWidth=2;ctx.stroke()}line(320,327,320,240,C.line,8);line(320,240,645,240,C.line,8);circle(640,240,16,C.ink,C.c,2);line(320,340,320,240,C.c,2);line(320,240,640,240,C.c,2);line(640,240,640,fy-24,C.c,2);arc(635,fy-23,8,0,Math.PI*1.6,C.paper,2);ctx.save();ctx.translate(633,fy);ctx.rotate(Math.sin(t*4)*.1);ctx.beginPath();ctx.moveTo(-32,0);ctx.quadraticCurveTo(0,-33,40,0);ctx.quadraticCurveTo(0,33,-32,0);ctx.lineTo(-53,20);ctx.lineTo(-53,-20);ctx.closePath();ctx.fillStyle=C.a;ctx.fill();circle(22,-4,7,C.paper);circle(24,-4,3,C.ink);arc(7,0,9,1.8,4.4,C.ink,1.5);ctx.restore();socket(320,400,78);for(let i=0;i<6;i++){let a=this.angle+i*TAU/6;line(320,400,320+Math.cos(a)*62,400+Math.sin(a)*62,C.dim,5)}circle(320,400,63,null,C.c,7);circle(320,400,17,C.c);let h=this.handle();button(h.x,h.y,18,C.a,this.drag);arc(320,400,98,-2.5,1.5,C.b+'66',2);arrow(328,497,Math.PI,C.b,9);if(idle>7){let a=t*2;hand(320+Math.cos(a)*63,400+Math.sin(a)*63)}},
+ down(p){let h=this.handle();if(dist(p,h)<33||Math.abs(dist(p,{x:320,y:400})-63)<23){this.drag=true;this.lastAngle=Math.atan2(p.y-400,p.x-320)}},
+ move(p){if(!this.drag||dist(p,{x:320,y:400})<28)return;let a=Math.atan2(p.y-400,p.x-320),delta=Math.atan2(Math.sin(a-this.lastAngle),Math.cos(a-this.lastAngle));this.angle+=delta;this.wound=Math.max(0,this.wound+delta);this.lastAngle=a;if(Math.floor(this.wound*3)!==Math.floor((this.wound-delta)*3))tone(210+this.wound*7,.03,'triangle',.013);if(this.wound>=this.opts.turns*TAU){step(640,265);success()}},up(){this.drag=false}
+};
+
+// 24 · Move a lamp, not the silhouette. The rays reveal the geometry.
+mechanics.shadow={
+ init(){this.y=260;this.drag=false;this.match=0;this.target=430},
+ projection(y){return y+(380-y)*(730-280)/(480-280)},
+ update(){this.target=this.opts.moving?430+Math.sin(t*.7)*20:430;if(Math.abs(this.y-this.target)<10){this.match+=dt;if(this.match>.7)success()}else this.match=0},
+ draw(){let py=this.projection(this.y),ty=this.projection(this.target);rr(675,200,110,350,12,'#617b77');for(let i=0;i<8;i++)line(685,220+i*41,775,220+i*41,'#ffffff09',1);ctx.beginPath();ctx.moveTo(280,this.y);ctx.lineTo(730,py-72);ctx.lineTo(730,py+72);ctx.closePath();ctx.fillStyle=C.c+'13';ctx.fill();line(280,this.y,730,py-72,C.c+'44',1);line(280,this.y,730,py+72,C.c+'44',1);ctx.save();ctx.beginPath();ctx.roundRect(675,200,110,350,12);ctx.clip();shape(730,ty,49,3,C.b,0,true);shape(730,py,43,3,C.ink);ctx.restore();line(480,414,480,510,C.dim,7);line(452,510,508,510,C.dim,7);shape(480,380,27,3,C.a);line(280,220,280,520,C.ink,13);line(280,220,280,520,C.line,2);button(280,this.y,30,C.c,this.drag);ctx.beginPath();ctx.moveTo(294,this.y-15);ctx.lineTo(314,this.y);ctx.lineTo(294,this.y+15);ctx.fillStyle=C.ink;ctx.fill();circle(730,571,5,this.match?C.b:C.line);hand(280,this.y,0,this.target-this.y)},
+ down(p){if(Math.abs(p.x-280)<45&&p.y>200&&p.y<540){this.drag=true;this.move(p)}},move(p){if(this.drag)this.y=clamp(p.y,220,520)},up(){this.drag=false}
+};
+
+// 25 · Flip gravity. The pearl skates across both the ceiling and the floor.
+mechanics.gravity={
+ init(){this.x=250;this.y=500;this.vx=this.opts.speed||110;this.vy=0;this.g=1;this.go=false;this.stars=[{x:340,y:220},{x:510,y:500},{x:700,y:220}].map(p=>({...p,done:false}));this.n=0},
+ update(){if(!this.go)return;this.vy+=this.g*1050*dt;this.y+=this.vy*dt;this.x+=this.vx*dt;if(this.x>770){this.x=770;this.vx=-Math.abs(this.vx)}if(this.x<230){this.x=230;this.vx=Math.abs(this.vx)}if(this.y<220){this.y=220;this.vy=0}if(this.y>500){this.y=500;this.vy=0}for(let s of this.stars)if(!s.done&&dist(s,this)<29){s.done=true;this.n++;step(s.x,s.y,this.n);if(this.n===3)success()}},
+ draw(){for(let yy of [196,524]){rr(210,yy-7,580,14,7,C.line);for(let i=0;i<20;i++)line(220+i*29,yy-3,227+i*29,yy+3,C.dim,2)}for(let i=0;i<5;i++){let x=295+i*100;arrow(x,355,this.g>0?Math.PI/2:-Math.PI/2,C.line,12)}this.stars.forEach(s=>{if(!s.done){glow(s.x,s.y,35,C.c,.14);shape(s.x,s.y,17,4,C.c,t*.3)}else circle(s.x,s.y,5,C.b)});glow(this.x,this.y,40,C.a,.2);circle(this.x,this.y,14,C.a);circle(this.x-4,this.y-4,4,C.paper);button(500,577,28,C.b,pointer.down);arrow(500,577,this.g>0?-Math.PI/2:Math.PI/2,C.ink,13);hand(500,577)},
+ down(){this.go=true;this.g*=-1;tone(this.g>0?220:440,.14,'sine',.05)},key(k,up){if(k===' '&&!up)this.down()}
+};
+
+// 26 · You are the sheepdog. Tiny creatures flee the cursor into their pen.
+mechanics.herd={
+ init(o){this.sheep=Array.from({length:o.count},(_,i)=>({x:290+(i%3)*90,y:300+Math.floor(i/3)*75,vx:0,vy:0,done:false}));this.n=0},
+ update(){for(let s of this.sheep){if(s.done)continue;let dx=s.x-pointer.x,dy=s.y-pointer.y,d=Math.hypot(dx,dy);if(d<135&&d>1){let f=(1-d/135)*850;s.vx+=dx/d*f*dt;s.vy+=dy/d*f*dt}s.vx*=Math.exp(-dt*4);s.vy*=Math.exp(-dt*4);s.x=clamp(s.x+s.vx*dt,220,790);s.y=clamp(s.y+s.vy*dt,245,485);if(s.x>680&&s.y>270&&s.y<465){s.done=true;s.x=715+(this.n%2)*48;s.y=310+Math.floor(this.n/2)*44;this.n++;step(s.x,s.y,this.n/2);if(this.n===this.sheep.length)success()}}},
+ draw(){rr(670,250,145,240,16,'#adcfa410',C.b+'55',2);for(let x of [672,814])for(let y=254;y<=488;y+=39){if(x===672&&y>270&&y<470)continue;rr(x-4,y-10,8,22,2,C.c)}for(let x=690;x<810;x+=32){rr(x-4,245,8,22,2,C.c);rr(x-4,479,8,22,2,C.c)}for(let i=0;i<24;i++){let x=235+(i*89)%400,y=240+(i*67)%250;line(x,y,x-4,y-7,C.line,1);line(x,y,x+5,y-9,C.line,1)}for(let s of this.sheep){circle(s.x,s.y+13,15,C.ink);for(let i=0;i<5;i++){let a=i*TAU/5;circle(s.x+Math.cos(a)*10,s.y+Math.sin(a)*9,10,s.done?C.b:C.paper)}let dx=clamp(s.vx*.07,-7,7),dy=clamp(s.vy*.07,-5,5);circle(s.x+dx,s.y+dy,10,C.ink);circle(s.x+dx-4,s.y+dy-2,2,C.paper);circle(s.x+dx+4,s.y+dy-2,2,C.paper)}if(pointer.x>180&&pointer.x<840&&pointer.y>200&&pointer.y<540){circle(pointer.x,pointer.y,32,null,C.a+'77',1);circle(pointer.x,pointer.y,7,C.a)}dots(this.sheep.length,this.n,572);let s=this.sheep.find(s=>!s.done);if(s)hand(s.x-75,s.y,75,0)}
+};
+
+// 27 · A feather, a nose, and a sneeze that blows the room open.
+mechanics.sneeze={
+ init(){this.feather={x:300,y:465};this.drag=false;this.tickle=0;this.last=null;this.achoo=0},
+ update(){if(this.achoo>0){this.achoo+=dt;if(this.achoo>.85)success()}else this.tickle=Math.max(0,this.tickle-dt*18)},
+ draw(){let p=clamp(this.tickle/650,0,1),sn=this.achoo>0;let sx=sn?Math.sin(this.achoo*32)*9:Math.sin(p*30)*p*3;ctx.save();ctx.translate(sx,0);rr(391,248,218,230,85,C.c);for(let side of [-1,1]){circle(500+side*107,365,24,C.a);if(p>.7||sn){arc(500+side*43,326,18,Math.PI+.2,TAU-.2,C.ink,4)}else{circle(500+side*43,326,24,C.paper);circle(500+side*43+clamp((pointer.x-500)/80,-6,6),326+clamp((pointer.y-326)/100,-5,5),9,C.ink)}arc(500+side*43,309-p*12,23,3.7,5.7,C.ink,3)}circle(500,365,27+p*13,C.a);circle(491,377,4,C.ink);circle(509,377,4,C.ink);if(sn)circle(500,425,30,C.ink);else arc(500,405,22,.2,Math.PI-.2,C.ink,3);ctx.restore();let f=this.feather;ctx.save();ctx.translate(f.x,f.y);ctx.rotate(-.5);line(0,30,0,-50,C.paper,2);for(let i=0;i<10;i++){let yy=-45+i*7,w=Math.sin(i/10*Math.PI)*21;line(0,yy+9,-w,yy,C.b,4);line(0,yy+9,w,yy,C.b,4)}ctx.restore();if(sn){for(let i=0;i<8;i++){let a=i*TAU/8,r=80+this.achoo*210;line(500+Math.cos(a)*r,365+Math.sin(a)*r,500+Math.cos(a)*(r+30),365+Math.sin(a)*(r+30),C.b+'66',3)}}else if(dist(f,{x:500,y:365})<100)hand(470,365,60,0);else hand(f.x,f.y,200,-100)},
+ down(p){if(dist(p,this.feather)<65){this.drag=true;this.last={...p}}},
+ move(p){if(!this.drag||this.achoo)return;let d=dist(p,this.last);this.feather.x=p.x;this.feather.y=p.y;if(dist(p,{x:500,y:365})<65){this.tickle+=Math.min(d,90);if(Math.floor(this.tickle/75)!==Math.floor((this.tickle-d)/75))tone(280+this.tickle,.06,'sine',.025);if(this.tickle>=650){this.achoo=.01;burst(500,365,C.b,65);tone(90,.4,'sawtooth',.035,300)}}this.last={...p}},up(){this.drag=false}
+};
+
+// 28 · Hunt friendly ghosts with a flashlight. The darkness is part of the puzzle.
+mechanics.camera={
+ init(){this.n=0;this.ghost={x:500,y:350};this.wink=0},
+ light(){return pointer.x>180&&pointer.x<820&&pointer.y>180&&pointer.y<550?pointer:{x:500,y:350}},
+ draw(){rr(198,181,604,369,26,'#08131c');let l=this.light(),radius=this.opts.small?72:105;for(let i=0;i<33;i++){let x=222+(i*97)%552,y=210+(i*61)%305;circle(x,y,1.2,'#547486');if(i%7===0)arc(x,y,9,0,Math.PI,'#334c62',1)}ctx.save();ctx.beginPath();ctx.arc(l.x,l.y,radius,0,TAU);ctx.clip();let g=ctx.createRadialGradient(l.x,l.y,0,l.x,l.y,radius);g.addColorStop(0,'#354d60');g.addColorStop(1,'#122435');rr(198,181,604,369,26,g);for(let i=0;i<8;i++)sigil(240+(i*113)%510,230+(i*79)%270,i,'#78939a',12);let p=this.ghost,yy=p.y+Math.sin(t*3)*5;ctx.beginPath();ctx.moveTo(p.x-25,yy+25);ctx.lineTo(p.x-25,yy);ctx.arc(p.x,yy,25,Math.PI,TAU);ctx.lineTo(p.x+25,yy+25);for(let i=0;i<5;i++)ctx.lineTo(p.x+25-i*12.5,yy+25+(i%2?-9:0));ctx.closePath();ctx.fillStyle=C.paper;ctx.fill();circle(p.x-8,yy,4,C.ink);circle(p.x+8,yy,4,C.ink);circle(p.x,yy+13,4,C.a);ctx.restore();circle(l.x,l.y,radius,null,'#b6d8d533',1);for(let side of [-1,1]){line(l.x+side*20,l.y-21,l.x+side*20,l.y-13,C.b,2);line(l.x+side*20,l.y+21,l.x+side*20,l.y+13,C.b,2);line(l.x+side*20,l.y-21,l.x+side*12,l.y-21,C.b,2);line(l.x+side*20,l.y+21,l.x+side*12,l.y+21,C.b,2)}dots(this.opts.rounds,this.n,582);hand(this.ghost.x,this.ghost.y)},
+ down(p){if(dist(p,this.ghost)<37){this.n++;flash=.08;step(p.x,p.y,this.n);if(this.n===this.opts.rounds)success();else this.ghost={x:270+rng()*460,y:245+rng()*240}}}
+};
+
+// 29 · A tiny balancing act. Bad placements tumble, then return to the workbench.
+mechanics.stack={
+ init(o){this.n=0;this.top=510;this.cx=675;this.width=135;this.drag=-1;this.blocks=Array.from({length:o.count},(_,i)=>({x:285+(i%2)*137,y:310+Math.floor(i/2)*110,homeX:285+(i%2)*137,homeY:310+Math.floor(i/2)*110,w:120-i*14,h:36,done:false,fall:0,angle:0}));this.order=shuffle(Array.from({length:o.count},(_,i)=>i))},
+ update(){for(let b of this.blocks)if(b.fall){b.fall+=dt;b.y+=b.fall*350*dt;b.angle+=dt*2;if(b.y>590){b.x=b.homeX;b.y=b.homeY;b.fall=0;b.angle=0}}},
+ draw(){rr(602,510,146,16,7,C.dim);line(784,510,784,490-this.opts.count*36,C.line,2);shape(777,490-this.opts.count*36,15,4,C.c);for(let i=0;i<this.opts.count;i++)line(779,492-i*36,789,492-i*36,C.dim,2);let next=this.blocks.find(b=>!b.done&&!b.fall);if(next){ctx.setLineDash([4,7]);rr(this.cx-next.w/2,this.top-next.h,next.w,next.h,7,null,C.b+'77',1.5);ctx.setLineDash([])}this.blocks.forEach((b,i)=>{ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);rr(-b.w/2,-b.h/2+5,b.w,b.h,7,C.ink);rr(-b.w/2,-b.h/2,b.w,b.h,7,[C.a,C.b,C.c,C.paper][i%4]);for(let k=0;k<3;k++)line(-b.w/2+12,-9+k*8,b.w/2-12,-9+k*8,C.ink+'22',1);ctx.restore()});dots(this.opts.count,this.n,574);if(next)hand(next.x,next.y,this.cx-next.x,this.top-next.h/2-next.y)},
+ down(p){for(let i=this.blocks.length-1;i>=0;i--){let b=this.blocks[i];if(!b.done&&!b.fall&&Math.abs(p.x-b.x)<b.w/2+10&&Math.abs(p.y-b.y)<30){this.drag=i;break}}},
+ move(p){if(this.drag>=0){this.blocks[this.drag].x=clamp(p.x,220,780);this.blocks[this.drag].y=clamp(p.y,220,540)}},
+ up(){if(this.drag<0)return;let b=this.blocks[this.drag];if(Math.abs(b.x-this.cx)<Math.min(this.width,b.w)/2-15&&Math.abs(b.y+b.h/2-this.top)<33){b.y=this.top-b.h/2;b.done=true;this.cx=b.x;this.top-=b.h;this.width=b.w;this.n++;step(b.x,b.y,this.n);if(this.n===this.opts.count)success()}else{b.fall=.1;tone(170,.1)}this.drag=-1}
+};
+
+function descriptor(n){if(n<ROOMS.length)return{...ROOMS[n]};let cycle=Math.floor((n-ROOMS.length)/ENCORE.length),index=(n-ROOMS.length)%ENCORE.length;let type=ENCORE[mod(index*5+cycle*7,ENCORE.length)],all=ROOMS.filter(r=>r.type===type),o={...all[all.length-1]};o.par=Math.max(8,o.par-1);if(type==='memory')o.length=Math.min(6,4+Math.floor(cycle/3));return o}
+function loadRoom(n){level=n;seed=(n*92821+17137)>>>0;let p=palettes[Math.floor(n/3)%palettes.length];C={...C,a:p[0],b:p[1],c:p[2]};let opts=descriptor(n);room=Object.create(mechanics[opts.type]);room.opts=opts;room.init(opts);won=false;winTime=0;roomTime=0;idle=0;transition=1;particles=[];ripples=[];pointer.down=false;save();}
+function resize(){W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);scale=Math.min(W/(W/H<.8?800:1000),H/760);ox=(W-1000*scale)/2;oy=(H-760*scale)/2;}
+function background(){ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#101a1e';ctx.fillRect(0,0,W,H);let g=ctx.createRadialGradient(W*.5,H*.42,0,W*.5,H*.42,Math.max(W,H)*.65);g.addColorStop(0,'#2b4242');g.addColorStop(1,'#101a1e');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.strokeStyle='#9bccbd07';ctx.lineWidth=1;let spacing=44*scale;for(let x=ox%spacing;x<W;x+=spacing){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=oy%spacing;y<H;y+=spacing){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}ctx.setTransform(dpr*scale,0,0,dpr*scale,dpr*ox,dpr*oy);}
+function cabinet(){let x=125,y=125,w=750,h=510;ctx.save();ctx.shadowColor='#00000065';ctx.shadowBlur=40;ctx.shadowOffsetY=22;rr(x,y,w,h,35,'#182b30');ctx.restore();let g=ctx.createLinearGradient(125,125,875,635);g.addColorStop(0,'#2b4246');g.addColorStop(.5,'#1a2d32');g.addColorStop(1,'#17292e');rr(x,y,w,h,35,g,'#63807866',1.5);rr(x+10,y+10,w-20,h-20,27,null,'#0d2026',1);ctx.save();ctx.beginPath();ctx.roundRect(x+12,y+12,w-24,h-24,26);ctx.clip();glow(300,170,340,C.a,.055);glow(750,590,320,C.b,.055);for(let i=0;i<70;i++){let xx=147+(i*127.13)%706,yy=147+(i*91.91)%466;circle(xx,yy,.65,'#afcbc417')}ctx.restore();for(let [xx,yy]of[[151,151],[849,151],[151,609],[849,609]]){circle(xx,yy,4,'#0b1c21','#385258',1);line(xx-1.5,yy+1.5,xx+1.5,yy-1.5,C.line,1)}line(180,155,265,155,C.line,2);line(735,605,820,605,C.line,2);for(let i=0;i<3;i++){line(188+i*9,602,188+i*9,608,C.dim,2);circle(798+i*9,155,1.5,C.dim)}sigil(500,89,level,C.b,13);line(438,89,468,89,C.line,1);line(532,89,562,89,C.line,1);}
+function ribbon(){let count=9,start=Math.max(0,level-4);for(let i=0;i<count;i++){let n=start+i,x=500+(i-4)*29,y=687;if(i<count-1)line(x+7,y,x+22,y,'#354b4e',1);if(n===level){circle(x,y,8,null,C.b,1.5);circle(x,y,3,C.b)}else if(n<level){diamond(x,y,7,C.dim)}else circle(x,y,3,'#35494e')}let p=clamp(roomTime/room.opts.par,0,1);arc(500,89,22,-Math.PI/2,-Math.PI/2+TAU*p,roomTime<room.opts.par?C.c:C.line,1.5);}
+function drawParticles(){particles.forEach(p=>{ctx.globalAlpha=clamp(p.life/.5,0,1);circle(p.x,p.y,p.r,p.color)});ctx.globalAlpha=1;ripples.forEach(p=>{ctx.globalAlpha=p.life/.7;circle(p.x,p.y,p.r,null,p.color,1.5)});ctx.globalAlpha=1;}
+function pauseScreen(){ctx.fillStyle='#061216d9';ctx.fillRect(0,0,1000,760);glow(500,375,210,C.b,.07);circle(500,375,98,null,C.line,1);button(500,375,56,C.b);ctx.beginPath();ctx.moveTo(489,354);ctx.lineTo(489,396);ctx.lineTo(520,375);ctx.closePath();ctx.fillStyle=C.ink;ctx.fill();button(350,375,29,C.dim);rotateIcon(350,375,false,C.ink);button(650,375,29,C.dim);if(muted){line(641,366,659,384,C.ink,2);line(659,366,641,384,C.ink,2)}else{arc(643,375,12,-1,1,C.ink,2);arc(643,375,19,-1,1,C.ink,2)}}
+function frame(now){if(!last)last=now;dt=Math.min(.035,(now-last)/1000);last=now;if(!paused){t+=dt;idle+=dt;transition=Math.max(0,transition-dt*2.8);if(!won&&transition<.1){if(started){roomTime+=dt;totalTime+=dt}room.update?.()}if(won){winTime+=dt;if(winTime>1.35){loadRoom(level+1)}}particles.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=90*dt;p.life-=dt});particles=particles.filter(p=>p.life>0);ripples.forEach(p=>{p.r+=dt*110;p.life-=dt});ripples=ripples.filter(p=>p.life>0);shake=Math.max(0,shake-dt*23);flash=Math.max(0,flash-dt);saveClock+=dt;if(saveClock>8){saveClock=0;save()}}background();ctx.save();if(shake&&!reduced)ctx.translate(Math.sin(t*91)*shake,Math.cos(t*77)*shake*.5);cabinet();ctx.save();ctx.beginPath();ctx.roundRect(138,138,724,484,23);ctx.clip();if(transition>0){ctx.globalAlpha=1-transition;ctx.translate(0,reduced?0:transition*35)}room.draw();ctx.restore();drawParticles();if(won){let k=clamp(winTime*3,0,1);ctx.globalAlpha=k;for(let i=0;i<3;i++)diamond(478+i*22,652,8,i<room.rating?C.c:C.line);ctx.globalAlpha=1;rr(126,126,748,508,34,null,C.b+'88',2)}if(flash)rr(126,126,748,508,34,null,C.a+'77',2);ctx.restore();ribbon();if(paused)pauseScreen();requestAnimationFrame(frame)}
+function point(e){return{x:(e.clientX-ox)/scale,y:(e.clientY-oy)/scale}}
+function cancelGesture(){pointer.down=false;if(room){if('drag'in room)room.drag=typeof room.drag==='number'?-1:false;if(room.holding){room.holding=false;room.p=0}if(room.drawing){room.drawing=false;room.n=0}}}
+function setPause(v){paused=v;cancelGesture();document.getElementById('pause').setAttribute('aria-label',v?'Resume':'Pause');document.getElementById('pause').setAttribute('aria-pressed',String(v));document.getElementById('pause').innerHTML=v?'<svg viewBox="0 0 24 24"><path d="m8 4 12 8-12 8z"/></svg>':'<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>';last=performance.now();save()}
+function soundButton(){document.getElementById('sound').setAttribute('aria-label',muted?'Enable sound':'Mute sound');document.getElementById('sound').setAttribute('aria-pressed',String(muted));document.getElementById('sound').innerHTML=muted?'<svg viewBox="0 0 24 24"><path d="M10 5 5 9H2v6h3l5 4zM15 8l7 8M22 8l-7 8"/></svg>':'<svg viewBox="0 0 24 24"><path d="M10 5 5 9H2v6h3l5 4zM14 8q5 4 0 8M17 4q9 8 0 16"/></svg>'}
+function toggleSound(){muted=!muted;soundButton();if(!muted)tick();save()}
+canvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();canvas.focus({preventScroll:true});canvas.setPointerCapture(e.pointerId);pointer={...point(e),down:true};started=true;if(paused){if(dist(pointer,{x:500,y:375})<68)setPause(false);else if(dist(pointer,{x:350,y:375})<38){loadRoom(level);setPause(false)}else if(dist(pointer,{x:650,y:375})<38)toggleSound();return}if(won||transition>.35)return;idle=0;if(audio?.state==='suspended')audio.resume();room.down?.(pointer)});
+canvas.addEventListener('pointermove',e=>{Object.assign(pointer,point(e));if(!paused&&!won&&transition<.35)room.move?.(pointer);canvas.style.cursor=pointer.down?'grabbing':'default'});
+canvas.addEventListener('pointerup',e=>{Object.assign(pointer,point(e));if(!paused&&!won)room.up?.(pointer);pointer.down=false;canvas.style.cursor='default'});
+canvas.addEventListener('pointercancel',cancelGesture);
+document.getElementById('pause').addEventListener('click',()=>setPause(!paused));
+document.getElementById('sound').addEventListener('click',toggleSound);
+document.getElementById('retry').addEventListener('click',()=>{loadRoom(level);if(paused)setPause(false);tick()});
+window.addEventListener('keydown',e=>{if(e.target.tagName==='BUTTON'&&(e.key===' '||e.key==='Enter'))return;if(e.key==='Escape'){setPause(!paused);return}if(e.key.toLowerCase()==='r'){loadRoom(level);return}if([' ','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();if(!paused&&!won&&!e.repeat){started=true;idle=0;room.key?.(e.key,false)}}});
+window.addEventListener('keyup',e=>{if(!paused&&!won&&room.opts.type==='hold')room.key?.(e.key,true)});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&!paused)setPause(true)});
+window.addEventListener('blur',()=>{if(started&&!paused)setPause(true)});
+window.addEventListener('resize',resize);window.addEventListener('pagehide',save);
+readSave();resize();loadRoom(level);soundButton();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

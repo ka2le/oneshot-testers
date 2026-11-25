@@ -1,0 +1,70 @@
+{
+  "elsewhere.html": {
+    "game": "Elsewhere",
+    "family": "Unspecified",
+    "model": "Unspecified"
+  },
+  "the-ninth-tide.html": {
+    "game": "The Ninth Tide",
+    "family": "Unspecified",
+    "model": "Unspecified"
+  },
+  "wildfang.html": {
+    "game": "Wildfang",
+    "family": "Unspecified",
+    "model": "Unspecified"
+  },
+  "wildfang-flow-lab.html": {
+    "hidden": true
+  },
+  "SNAKE ROUGELIKE  ASTRA.html": {
+    "hidden": true
+  },
+  "PUZZLE RUSH ASTRA.html": {
+    "hidden": true
+  },
+  "TEXT TPG ASTRA.html": {
+    "hidden": true
+  },
+  "LASBINGO.html": {
+    "game": "Läsbingo",
+    "family": "Unspecified",
+    "model": "Unspecified"
+  },
+  "Snake-Qwen3.8-Flash-Next-resumed.html": {
+    "game": "Snake",
+    "family": "Qwen",
+    "model": "Qwen3.8-Flash-Next",
+    "variant": "Resumed"
+  },
+  "SnakeExplore-GPT5.6-sol.html": {
+    "game": "Snake Explore",
+    "family": "OpenAI",
+    "model": "GPT5.6-sol"
+  },
+  "TowerFood-GPT5.5-5shot-reskin-Claude-Sonnet4.6.html": {
+    "game": "Tower Food",
+    "family": "Claude",
+    "model": "Claude-Sonnet4.6",
+    "variant": "Reskin of GPT5.5 · 5shot"
+  },
+  "TowerFood-GPT5.5-5shot-reskin-Gemini3.1-pro.html": {
+    "game": "Tower Food",
+    "family": "Gemini",
+    "model": "Gemini3.1-pro",
+    "variant": "Reskin of GPT5.5 · 5shot"
+  },
+  "drinks.html": {
+    "game": "Drinks",
+    "family": "Unspecified",
+    "model": "Unspecified"
+  },
+  "Aura-Farm-v2.html": {
+    "game": "Aura Farm",
+    "variant": "v2"
+  },
+  "Aura-Farm-reblanced.html": {
+    "game": "Aura Farm",
+    "variant": "Rebalanced"
+  }
+}

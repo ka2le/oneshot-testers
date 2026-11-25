@@ -1,0 +1,477 @@
+{
+  "shore": [
+    {
+      "node": "well",
+      "choice": 2,
+      "label": "Look into the chimney."
+    },
+    {
+      "node": "rim",
+      "choice": 1,
+      "label": "Take the shield."
+    },
+    {
+      "node": "landing",
+      "choice": 3,
+      "label": "Follow the dry corridor."
+    },
+    {
+      "node": "hall",
+      "choice": 4,
+      "label": "Descend the breathing stair."
+    },
+    {
+      "node": "stair",
+      "choice": 3,
+      "label": "Take the stairs back to the surface."
+    },
+    {
+      "node": "leaving",
+      "choice": 1,
+      "label": "Climb."
+    }
+  ],
+  "hounds": [
+    {
+      "node": "well",
+      "choice": 2,
+      "label": "Look into the chimney."
+    },
+    {
+      "node": "rim",
+      "choice": 2,
+      "label": "Take the needle."
+    },
+    {
+      "node": "landing",
+      "choice": 3,
+      "label": "Follow the dry corridor."
+    },
+    {
+      "node": "hall",
+      "choice": 1,
+      "label": "The servants’ passage."
+    },
+    {
+      "node": "kitchen",
+      "choice": 3,
+      "label": "Take the key from its claw."
+    },
+    {
+      "node": "hounds",
+      "choice": 1,
+      "label": "Stand your ground."
+    }
+  ],
+  "drowned": [
+    {
+      "node": "well",
+      "choice": 2,
+      "label": "Look into the chimney."
+    },
+    {
+      "node": "rim",
+      "choice": 2,
+      "label": "Take the needle."
+    },
+    {
+      "node": "landing",
+      "choice": 3,
+      "label": "Follow the dry corridor."
+    },
+    {
+      "node": "hall",
+      "choice": 2,
+      "label": "The music gallery."
+    },
+    {
+      "node": "ballroom",
+      "choice": 3,
+      "label": "Cross the flooded floor."
+    },
+    {
+      "node": "pool",
+      "choice": 1,
+      "label": "Swim across."
+    }
+  ],
+  "flood": [
+    {
+      "node": "well",
+      "choice": 2,
+      "label": "Look into the chimney."
+    },
+    {
+      "node": "rim",
+      "choice": 1,
+      "label": "Take the shield."
+    },
+    {
+      "node": "landing",
+      "choice": 3,
+      "label": "Follow the dry corridor."
+    },
+    {
+      "node": "hall",
+      "choice": 2,
+      "label": "The music gallery."
+    },
+    {
+      "node": "ballroom",
+      "choice": 2,
+      "label": "Look behind the orchestra."
+    },
+    {
+      "node": "capstan",
+      "choice": 2,
+      "label": "Pull the release."
+    },
+    {
+      "node": "release",
+      "choice": 2,
+      "label": "Put your weight on it."
+    }
+  ],
+  "keeper": [
+    {
+      "node": "well",
+      "choice": 2,
+      "label": "Look into the chimney."
+    },
+    {
+      "node": "rim",
+      "choice": 1,
+      "label": "Take the shield."
+    },
+    {
+      "node": "landing",
+      "choice": 3,
+      "label": "Follow the dry corridor."
+    },
+    {
+      "node": "hall",
+      "choice": 4,
+      "label": "Descend the breathing stair."
+    },
+    {
+      "node": "stair",
+      "choice": 1,
+      "label": "Say “Mother.”"
+    },
+    {
+      "node": "mother",
+      "choice": 2,
+      "label": "Find a way to take her home."
+    },
+    {
+      "node": "rescue",
+      "choice": 1,
+      "label": "Offer to take her place."
+    },
+    {
+      "node": "offer",
+      "choice": 1,
+      "label": "Keep the thread."
+    }
+  ],
+  "mother": [
+    {
+      "node": "well",
+      "choice": 2,
+      "label": "Look into the chimney."
+    },
+    {
+      "node": "rim",
+      "choice": 2,
+      "label": "Take the needle."
+    },
+    {
+      "node": "landing",
+      "choice": 3,
+      "label": "Follow the dry corridor."
+    },
+    {
+      "node": "hall",
+      "choice": 4,
+      "label": "Descend the breathing stair."
+    },
+    {
+      "node": "stair",
+      "choice": 1,
+      "label": "Say “Mother.”"
+    },
+    {
+      "node": "mother",
+      "choice": 2,
+      "label": "Find a way to take her home."
+    },
+    {
+      "node": "rescue",
+      "choice": 1,
+      "label": "Pin the seam. Lift her free."
+    },
+    {
+      "node": "pin",
+      "choice": 1,
+      "label": "A while is enough."
+    }
+  ],
+  "tide": [
+    {
+      "node": "well",
+      "choice": 2,
+      "label": "Look into the chimney."
+    },
+    {
+      "node": "rim",
+      "choice": 1,
+      "label": "Take the shield."
+    },
+    {
+      "node": "landing",
+      "choice": 3,
+      "label": "Follow the dry corridor."
+    },
+    {
+      "node": "hall",
+      "choice": 4,
+      "label": "Descend the breathing stair."
+    },
+    {
+      "node": "stair",
+      "choice": 1,
+      "label": "Say “Mother.”"
+    },
+    {
+      "node": "mother",
+      "choice": 1,
+      "label": "Ask what you are carrying."
+    },
+    {
+      "node": "truth",
+      "choice": 1,
+      "label": "Go to the sea."
+    },
+    {
+      "node": "heart",
+      "choice": 1,
+      "label": "Give the sea its name back."
+    },
+    {
+      "node": "returnname",
+      "choice": 1,
+      "label": "Say “Iona.” Give it back."
+    }
+  ],
+  "king": [
+    {
+      "node": "well",
+      "choice": 2,
+      "label": "Look into the chimney."
+    },
+    {
+      "node": "rim",
+      "choice": 1,
+      "label": "Take the shield."
+    },
+    {
+      "node": "landing",
+      "choice": 3,
+      "label": "Follow the dry corridor."
+    },
+    {
+      "node": "hall",
+      "choice": 4,
+      "label": "Descend the breathing stair."
+    },
+    {
+      "node": "stair",
+      "choice": 1,
+      "label": "Say “Mother.”"
+    },
+    {
+      "node": "mother",
+      "choice": 3,
+      "label": "Ask about the king."
+    },
+    {
+      "node": "throne",
+      "choice": 1,
+      "label": "Read the gold plate."
+    },
+    {
+      "node": "throneoath",
+      "choice": 1,
+      "label": "Lay the crown inside his ribs."
+    },
+    {
+      "node": "debt",
+      "choice": 1,
+      "label": "Finish the oath."
+    }
+  ],
+  "voice": [
+    {
+      "node": "well",
+      "choice": 2,
+      "label": "Look into the chimney."
+    },
+    {
+      "node": "rim",
+      "choice": 1,
+      "label": "Take the shield."
+    },
+    {
+      "node": "landing",
+      "choice": 3,
+      "label": "Follow the dry corridor."
+    },
+    {
+      "node": "hall",
+      "choice": 3,
+      "label": "The nursery stair."
+    },
+    {
+      "node": "nursery",
+      "choice": 2,
+      "label": "Take down the bell."
+    },
+    {
+      "node": "bell",
+      "choice": 1,
+      "label": "Put it in your pocket. Read the wall."
+    },
+    {
+      "node": "marks",
+      "choice": 1,
+      "label": "Open the birth record."
+    },
+    {
+      "node": "birth",
+      "choice": 1,
+      "label": "Return to the landing."
+    },
+    {
+      "node": "hall",
+      "choice": 3,
+      "label": "Descend the breathing stair."
+    },
+    {
+      "node": "stair",
+      "choice": 1,
+      "label": "Say “Mother.”"
+    },
+    {
+      "node": "mother",
+      "choice": 2,
+      "label": "Find a way to take her home."
+    },
+    {
+      "node": "rescue",
+      "choice": 1,
+      "label": "Keep her voice in the bell."
+    },
+    {
+      "node": "voice",
+      "choice": 1,
+      "label": "Carry her story home."
+    }
+  ],
+  "dawn": [
+    {
+      "node": "well",
+      "choice": 2,
+      "label": "Look into the chimney."
+    },
+    {
+      "node": "rim",
+      "choice": 1,
+      "label": "Take the shield."
+    },
+    {
+      "node": "landing",
+      "choice": 3,
+      "label": "Follow the dry corridor."
+    },
+    {
+      "node": "hall",
+      "choice": 1,
+      "label": "The servants’ passage."
+    },
+    {
+      "node": "kitchen",
+      "choice": 1,
+      "label": "Show Mother’s letter."
+    },
+    {
+      "node": "cook",
+      "choice": 2,
+      "label": "Follow the silver thread."
+    },
+    {
+      "node": "seamroom",
+      "choice": 1,
+      "label": "Follow the spider’s line."
+    },
+    {
+      "node": "pattern",
+      "choice": 1,
+      "label": "Take the apprentice’s needle."
+    },
+    {
+      "node": "hall",
+      "choice": 2,
+      "label": "The nursery stair."
+    },
+    {
+      "node": "nursery",
+      "choice": 2,
+      "label": "Take down the bell."
+    },
+    {
+      "node": "bell",
+      "choice": 1,
+      "label": "Put it in your pocket. Read the wall."
+    },
+    {
+      "node": "marks",
+      "choice": 1,
+      "label": "Open the birth record."
+    },
+    {
+      "node": "birth",
+      "choice": 1,
+      "label": "Return to the landing."
+    },
+    {
+      "node": "hall",
+      "choice": 2,
+      "label": "Descend the breathing stair."
+    },
+    {
+      "node": "stair",
+      "choice": 1,
+      "label": "Say “Mother.”"
+    },
+    {
+      "node": "mother",
+      "choice": 1,
+      "label": "Ask what you are carrying."
+    },
+    {
+      "node": "truth",
+      "choice": 1,
+      "label": "Go to the sea."
+    },
+    {
+      "node": "heart",
+      "choice": 1,
+      "label": "Give your heartbeat somewhere to wait."
+    },
+    {
+      "node": "unpick",
+      "choice": 1,
+      "label": "Pull the last stitch."
+    }
+  ]
+}

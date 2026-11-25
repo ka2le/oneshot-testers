@@ -1,0 +1,194 @@
+import { spawn } from "node:child_process";
+import { readFile, writeFile, cp, mkdir, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { root, readCatalog } from "./catalog.mjs";
+
+export function run(command, args, { cwd = root, log = console.log } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      shell: false,
+      windowsHide: true,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    });
+    let output = "";
+    for (const stream of [child.stdout, child.stderr])
+      stream.on("data", (chunk) => {
+        const text = chunk.toString();
+        output += text;
+        log(text);
+      });
+    child.once("error", reject);
+    child.once("close", (code) =>
+      code === 0
+        ? resolve(output.trim())
+        : reject(
+            new Error(`${command} failed (${code}). ${output.slice(-2000)}`),
+          ),
+    );
+  });
+}
+
+export async function publish({
+  cwd = root,
+  log = console.log,
+  built = false,
+} = {}) {
+  // Build without invoking a shell, including on Windows.
+  if (!built)
+    await run(
+      process.execPath,
+      [path.join(cwd, "node_modules/vite/bin/vite.js"), "build"],
+      { cwd, log },
+    );
+  const { default: ghpages } = await import("gh-pages");
+  const repo = await run("git", ["remote", "get-url", "origin"], {
+    cwd,
+    log: () => {},
+  });
+  log("Publishing the built archive to GitHub Pages…\n");
+  await writeFile(path.join(cwd, "dist", ".nojekyll"), "");
+  await new Promise((resolve, reject) =>
+    ghpages.publish(
+      path.join(cwd, "dist"),
+      {
+        repo,
+        branch: "gh-pages",
+        dotfiles: true,
+        message: "Deploy OneShots archive",
+      },
+      (error) => (error ? reject(error) : resolve()),
+    ),
+  );
+  return "https://ka2le.github.io/oneshot-testers/";
+}
+
+export async function deployUpload(
+  upload,
+  { cwd = root, log = console.log, publisher = publish } = {},
+) {
+  const options = { cwd, log };
+  const branch = await run("git", ["branch", "--show-current"], {
+    ...options,
+    log: () => {},
+  });
+  if (branch !== "main")
+    throw new Error("Switch this checkout to main before deploying uploads.");
+  if (
+    await run("git", ["status", "--porcelain"], { ...options, log: () => {} })
+  )
+    throw new Error(
+      "The source checkout has uncommitted changes. Commit or stash them before deploying an upload.",
+    );
+  log("Checking the remote branch…\n");
+  await run("git", ["fetch", "origin", "main"], options);
+  const behind = await run(
+    "git",
+    ["rev-list", "--count", "HEAD..origin/main"],
+    { ...options, log: () => {} },
+  );
+  if (behind !== "0")
+    throw new Error(
+      "Remote main has newer commits. Run git pull --ff-only in source, then retry.",
+    );
+  const slug = (value) =>
+    value
+      .normalize("NFKD")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48) || "game";
+  const folder = `uploads/${slug(upload.game)}/${slug(upload.model)}-${randomUUID().slice(0, 8)}`;
+  const file = `${folder}/${upload.entry}`;
+  const destination = path.join(cwd, "games", folder);
+  const catalogPath = path.join(cwd, "catalog.json");
+  const original = await readFile(catalogPath, "utf8");
+  let committed = false;
+  try {
+    await mkdir(path.dirname(destination), { recursive: true });
+    await cp(upload.directory, destination, {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+    });
+    const catalog = JSON.parse(original);
+    // Auxiliary HTML pages belong to this game, but should not become extra launcher entries.
+    for (const entry of upload.entries)
+      catalog[`${folder}/${entry}`] =
+        entry === upload.entry
+          ? {
+              game: upload.game,
+              family: upload.family,
+              model: upload.model,
+              variant: upload.variant,
+              keepDuplicate: true,
+            }
+          : { hidden: true };
+    const temp = catalogPath + ".tmp";
+    await writeFile(temp, JSON.stringify(catalog, null, 2) + "\n");
+    await rename(temp, catalogPath);
+    await readCatalog(cwd);
+    // A failed build never creates a source commit.
+    await run(
+      process.execPath,
+      [path.join(cwd, "node_modules/vite/bin/vite.js"), "build"],
+      options,
+    );
+    await run("git", ["add", "--", `games/${folder}`, "catalog.json"], options);
+    await run(
+      "git",
+      ["commit", "-m", `Add ${upload.game} by ${upload.model}`],
+      options,
+    );
+    committed = true;
+    log("Pushing the source commit…\n");
+    await run("git", ["push", "origin", "main"], options);
+    const url = await publisher({ ...options, built: true });
+    return {
+      url,
+      file,
+      commit: await run("git", ["rev-parse", "HEAD"], {
+        ...options,
+        log: () => {},
+      }),
+    };
+  } catch (error) {
+    if (!committed) {
+      await run("git", ["reset", "--", `games/${folder}`, "catalog.json"], {
+        ...options,
+        log: () => {},
+      }).catch(() => {});
+      await writeFile(catalogPath, original);
+      await rm(destination, { recursive: true, force: true });
+    } else
+      error.message +=
+        "\nYour upload is committed locally. Use “Retry publishing” to push and deploy that commit without importing it again.";
+    error.committed = committed;
+    throw error;
+  }
+}
+
+export async function retryPublish({ cwd = root, log = console.log } = {}) {
+  if (await run("git", ["status", "--porcelain"], { cwd, log: () => {} }))
+    throw new Error("Commit or stash source changes before retrying.");
+  const branch = await run("git", ["branch", "--show-current"], {
+    cwd,
+    log: () => {},
+  });
+  if (branch !== "main") throw new Error("Switch to main before publishing.");
+  await run("git", ["push", "origin", "main"], { cwd, log });
+  return { url: await publish({ cwd, log }) };
+}
+
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  try {
+    console.log(await retryPublish());
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
+}
