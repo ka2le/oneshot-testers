@@ -73,7 +73,7 @@ function Logo() {
   );
 }
 
-function Card({ title, subtitle, color, rows, rowColor, selected, toggleCompare }) {
+function Card({ title, subtitle, color, rows, rowColor, selected, toggleCompare, showCount = true }) {
   const [open, setOpen] = useState(false);
   const limit = 7;
   const shown = open ? rows : rows.slice(0, limit);
@@ -85,9 +85,9 @@ function Card({ title, subtitle, color, rows, rowColor, selected, toggleCompare 
           <h2>{title}</h2>
           {subtitle && <span className="sub">{subtitle}</span>}
         </div>
-        <span className="count" title={`${total} builds`}>
+        {showCount && <span className="count" title={`${total} builds`}>
           {total}
-        </span>
+        </span>}
       </header>
       <ul className="rows">
         {shown.map(([name, items]) => (
@@ -119,7 +119,7 @@ function Card({ title, subtitle, color, rows, rowColor, selected, toggleCompare 
 
 function App() {
   const [mode, setMode] = useState(
-    initial.get("view") === "model" ? "model" : "game",
+    ["model", "new"].includes(initial.get("view")) ? initial.get("view") : "game",
   );
   const [family, setFamily] = useState(initial.get("family") || "");
   const [model, setModel] = useState(initial.get("model") || "");
@@ -136,6 +136,16 @@ function App() {
   );
 
   const cards = useMemo(() => {
+    if (mode === "new") {
+      return [...filtered]
+        .sort((a, b) => Date.parse(b.addedAt) - Date.parse(a.addedAt) || byName(a.file, b.file))
+        .map((item) => ({
+          id: item.id,
+          title: item.game,
+          items: [item],
+          rows: [[item.model, [item]]],
+        }));
+    }
     const primary = mode === "game" ? "game" : "model";
     const secondary = mode === "game" ? "model" : "game";
     return [...groupBy(filtered, (g) => g[primary])]
@@ -151,7 +161,7 @@ function App() {
 
   useEffect(() => {
     const params = new URLSearchParams();
-    if (mode === "model") params.set("view", "model");
+    if (mode !== "game") params.set("view", mode);
     for (const [key, value] of Object.entries({ family, model, q: search }))
       if (value) params.set(key, value);
     for (const id of selected) params.append("compare", id);
@@ -276,7 +286,7 @@ function App() {
 
         <main>
           <div className="toolbar">
-            <div className="tabs" role="group" aria-label="Group by">
+            <div className="tabs" role="group" aria-label="Archive view">
               <button
                 aria-pressed={mode === "game"}
                 onClick={() => setMode("game")}
@@ -288,6 +298,12 @@ function App() {
                 onClick={() => setMode("model")}
               >
                 Models
+              </button>
+              <button
+                aria-pressed={mode === "new"}
+                onClick={() => setMode("new")}
+              >
+                New
               </button>
             </div>
             {(family || model || search) && (
@@ -310,10 +326,11 @@ function App() {
 
           <div className="grid">
             {cards.map((card) =>
-              mode === "game" ? (
+              mode !== "model" ? (
                 <Card
-                  key={card.title}
+                  key={card.id || card.title}
                   title={card.title}
+                  showCount={mode !== "new"}
                   color={ringColor(card.title)}
                   selected={selected}
                   toggleCompare={toggleCompare}

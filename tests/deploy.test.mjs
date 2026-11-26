@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm, utimes } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -88,6 +88,26 @@ async function fixture(t) {
   };
   return { cwd, git, upload, vite };
 }
+test("catalog addition dates survive file edits and support new files and explicit dates", async (t) => {
+  const { cwd, git } = await fixture(t);
+  const file = path.join(cwd, "games", "Old-Qwen.html");
+  await writeFile(file, "<p>Original</p>");
+  await git(["add", "games"]);
+  await git(["commit", "-m", "Add game"]);
+  const addedAt = new Date(Number(await git(["log", "-1", "--format=%ct"])) * 1000).toISOString();
+  await writeFile(file, "<p>Edited later</p>");
+  await utimes(file, new Date("2000-01-01"), new Date("2000-01-01"));
+  await writeFile(path.join(cwd, "games", "New-Qwen.html"), "<p>New local game</p>");
+  await writeFile(path.join(cwd, "games", "Override-Qwen.html"), "<p>Explicit date</p>");
+  await writeFile(path.join(cwd, "catalog.json"), JSON.stringify({
+    "Override-Qwen.html": { addedAt: "2020-01-02T03:04:05.000Z" },
+  }));
+  const entries = await readCatalog(cwd);
+  assert.equal(entries.find((g) => g.file === "Old-Qwen.html").addedAt, addedAt);
+  assert(Number.isFinite(Date.parse(entries.find((g) => g.file === "New-Qwen.html").addedAt)));
+  assert.equal(entries.find((g) => g.file === "Override-Qwen.html").addedAt, "2020-01-02T03:04:05.000Z");
+});
+
 test("deploy commits only game files and metadata, pushes main, then invokes publishing", async (t) => {
   const { cwd, git, upload } = await fixture(t);
   let published = false;

@@ -1,8 +1,29 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import path from "node:path";
 
+const exec = promisify(execFile);
 export const root = path.resolve(import.meta.dirname, "..");
+
+async function additionDates(directory) {
+  const dates = new Map();
+  try {
+    const { stdout } = await exec("git", [
+      "log", "--diff-filter=A", "--format=%x00%ct", "--name-only", "-z", "--", "games/",
+    ], { cwd: directory, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+    let date;
+    for (const part of stdout.split("\0")) {
+      const value = part.replace(/^\n+/, "");
+      if (/^\d+$/.test(value)) date = new Date(Number(value) * 1000).toISOString();
+      else if (date && value.startsWith("games/")) dates.set(value.slice(6), date);
+    }
+  } catch {
+    // Source exports without Git history use the local file date instead.
+  }
+  return dates;
+}
 export function inferMetadata(file) {
   const stem = path.basename(file, ".html");
   const match =
@@ -96,6 +117,7 @@ export async function readCatalog(directory = root) {
   const overrides = JSON.parse(
     await readFile(path.join(directory, "catalog.json"), "utf8"),
   );
+  const dates = await additionDates(directory);
   const files = [];
   async function walk(folder, prefix = "") {
     for (const item of await readdir(folder, { withFileTypes: true })) {
@@ -124,7 +146,9 @@ export async function readCatalog(directory = root) {
     seen.add(hash);
     const inferred = inferMetadata(file);
     if (metadata?.model && !("quant" in metadata)) inferred.quant = "";
-    entries.push({ id: file, file, ...inferred, ...metadata });
+    const fileStat = dates.has(file) ? null : await stat(path.join(directory, "games", file));
+    const addedAt = dates.get(file) || new Date(fileStat.birthtimeMs || fileStat.mtimeMs).toISOString();
+    entries.push({ id: file, file, addedAt, ...inferred, ...metadata });
   }
   return entries.sort(
     (a, b) =>
