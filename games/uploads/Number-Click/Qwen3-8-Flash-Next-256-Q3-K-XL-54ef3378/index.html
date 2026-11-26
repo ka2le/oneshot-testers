@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Number Dance</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+  }
+  .game {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 24px;
+  }
+  .title {
+    font-size: 28px;
+    color: #fff;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+  .hud {
+    display: flex;
+    gap: 24px;
+    font-size: 18px;
+    color: #aaa;
+  }
+  .hud span { color: #fff; font-weight: bold; }
+  .hud .score { color: #4fc3f7; }
+  .hud .combo { color: #ffeb3b; }
+  .hud .lives { color: #ef5350; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 100px);
+    grid-template-rows: repeat(3, 100px);
+    gap: 8px;
+  }
+  .cell {
+    width: 100px;
+    height: 100px;
+    border-radius: 12px;
+    background: #2a2a4a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    font-weight: bold;
+    color: #556;
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+    cursor: pointer;
+    user-select: none;
+  }
+  .cell.active {
+    background: #4fc3f7;
+    color: #fff;
+    box-shadow: 0 0 20px #4fc3f7, 0 0 40px #4fc3f788;
+    animation: pulse 0.4s infinite alternate;
+  }
+  @keyframes pulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.08); }
+  }
+  .cell.hit {
+    background: #4caf50;
+    color: #fff;
+    box-shadow: 0 0 20px #4caf50;
+    animation: pop 0.3s;
+  }
+  @keyframes pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+  .popup {
+    position: absolute;
+    font-size: 24px;
+    font-weight: bold;
+    color: #ffeb3b;
+    pointer-events: none;
+    animation: float 0.8s forwards;
+    opacity: 0;
+  }
+  @keyframes float {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-50px); opacity: 0; }
+  }
+  .grid { position: relative; }
+  .cell.miss {
+    background: #ef5350;
+    color: #fff;
+    box-shadow: 0 0 20px #ef5350;
+  }
+  .message {
+    font-size: 20px;
+    color: #fff;
+    min-height: 30px;
+    text-align: center;
+  }
+  .btn {
+    padding: 12px 32px;
+    border-radius: 8px;
+    background: #4fc3f7;
+    color: #1a1a2e;
+    font-weight: bold;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+  }
+  .btn:hover { background: #81d4fa; }
+</style>
+</head>
+<body>
+<div class="game" id="game">
+  <div class="title">Number Dance</div>
+  <div class="hud">
+    <span class="score" id="score">Score: 0</span>
+    <span class="combo" id="combo">Combo: x1</span>
+    <span class="lives" id="lives">Lives: ♥♥♥</span>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="message" id="message">Press START to begin</div>
+  <button class="btn" id="startBtn">START</button>
+</div>
+<script src="./assets/3de3b260c5da6fa0c7ec.js"></script>
+</body>
+</html>
