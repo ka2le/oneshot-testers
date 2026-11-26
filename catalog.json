@@ -98,5 +98,13 @@
     "quant": "Q3_K_XL",
     "variant": "OpenCode Studio",
     "keepDuplicate": true
+  },
+  "uploads/3d-world-test/Qwen3-8-Flash-Next-256-Q3-K-XL-e144e2b1/index.html": {
+    "game": "3d-world-test",
+    "family": "Qwen",
+    "model": "Qwen3.8-Flash-Next-256",
+    "quant": "Q3_K_XL",
+    "variant": "OpenCode Studio",
+    "keepDuplicate": true
   }
 }
