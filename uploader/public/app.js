@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
-const FIELDS = ["game", "model", "version", "quant"];
+const FIELDS = ["game", "model", "version", "quant", "variant"];
+const PHASES = { check: "Checking source", import: "Preparing game files", build: "Building site", save: "Saving source commit", push: "Pushing source", publish: "Publishing to GitHub Pages", verify: "Verifying live update" };
 let token,
   catalog = [],
   staged,
@@ -21,8 +22,12 @@ async function api(url, options = {}) {
     headers: { "X-Upload-Token": token, ...options.headers },
   });
   const data = await response.json();
-  if (!response.ok)
-    throw new Error(data.error || `Request failed (${response.status})`);
+  if (!response.ok) {
+    const error = new Error(data.error || `Request failed (${response.status})`);
+    error.code = data.code;
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 const json = (data) => ({
@@ -78,6 +83,12 @@ function saveDraft() {
     "oneshots-draft",
     JSON.stringify(Object.fromEntries(FIELDS.map((id) => [id, $(id).value]))),
   );
+  updateCredit();
+}
+function updateCredit() {
+  $("credit").textContent = $("model").value.trim()
+    ? `Credit: ${composeModel()}${$("quant").value.trim() ? ` · ${$("quant").value.trim()}` : ""} · Build: ${$("variant").value.trim() || "Original"}`
+    : "Model version identifies the model. Game build identifies this attempt or revision.";
 }
 for (const id of FIELDS) $(id).addEventListener("input", saveDraft);
 $("model").addEventListener("input", updateSuggestions);
@@ -89,6 +100,7 @@ function resetFiles() {
   $("deploy").disabled = true;
   $("files").value = "";
   $("folder").value = "";
+  $("choose-again").hidden = true;
 }
 async function removeFiles() {
   if (staged) await api(`/api/uploads/${staged.id}`, { method: "DELETE" });
@@ -104,7 +116,6 @@ async function stage(files) {
   staging = true;
   setBusy(true);
   try {
-    await removeFiles();
     if (files.length > 500)
       throw new Error("Max 500 loose files. Use a ZIP for more.");
     if (files.reduce((sum, file) => sum + file.size, 0) > 100 * 1024 * 1024)
@@ -120,7 +131,10 @@ async function stage(files) {
       ),
     );
     for (const file of files) body.append("files", file, file.name);
-    staged = await api("/api/uploads", { method: "POST", body });
+    const replacement = await api("/api/uploads", { method: "POST", body });
+    const previous = staged;
+    staged = replacement;
+    if (previous) await api(`/api/uploads/${previous.id}`, { method: "DELETE" }).catch(() => {});
     $("entry").replaceChildren(
       ...staged.entries.map((file) => {
         const option = document.createElement("option");
@@ -133,6 +147,14 @@ async function stage(files) {
       .sort((a, b) => a.split("/").length - b.split("/").length)[0];
     if (index) $("entry").value = index;
     $("entry").hidden = staged.entries.length < 2;
+    $("single-entry").hidden = staged.entries.length > 1;
+    $("single-entry").textContent = staged.entries[0];
+    $("file-list").replaceChildren(...staged.paths.map((file) => {
+      const item = document.createElement("li");
+      item.textContent = file;
+      return item;
+    }));
+    $("file-details").open = false;
     const size =
       staged.bytes < 1024 * 1024
         ? `${Math.ceil(staged.bytes / 1024)} KB`
@@ -144,16 +166,42 @@ async function stage(files) {
     $("staged").hidden = false;
     $("drop-zone").hidden = true;
     $("deploy").disabled = false;
+    $("choose-again").hidden = true;
     notice();
   } catch (error) {
     notice(error.message, true);
   } finally {
+    // Selecting the same file again must still trigger a change event.
+    $("files").value = "";
+    $("folder").value = "";
     staging = false;
     setBusy(running);
   }
 }
 for (const id of ["files", "folder"])
   $(id).addEventListener("change", (event) => stage([...event.target.files]));
+$("replace-files").onclick = $("choose-again").onclick = () => $("files").click();
+$("replace-folder").onclick = () => $("folder").click();
+function uploadError(error) {
+  if (error.code === "UPLOAD_EXPIRED") {
+    resetFiles();
+    $("choose-again").hidden = false;
+  }
+  notice(error.message, true);
+}
+$("preview").onclick = async () => {
+  if (!staged || running || staging) return;
+  $("preview").disabled = true;
+  try {
+    const result = await api(`/api/uploads/${staged.id}/preview?entry=${encodeURIComponent($("entry").value)}`);
+    $("preview-entry").textContent = $("entry").value;
+    $("preview-frame").src = result.url;
+    $("preview-dialog").showModal();
+  } catch (error) { uploadError(error); }
+  finally { $("preview").disabled = false; }
+};
+$("close-preview").onclick = () => $("preview-dialog").close();
+$("preview-dialog").addEventListener("close", () => $("preview-frame").removeAttribute("src"));
 
 // Drop anywhere on the page.
 const zone = $("drop-zone");
@@ -219,13 +267,14 @@ $("upload-form").addEventListener("submit", async (event) => {
         game: $("game").value,
         model: composeModel(),
         quant: $("quant").value,
+        variant: $("variant").value,
       }),
     );
     track(job.id);
   } catch (error) {
     running = false;
     setBusy(false);
-    notice(error.message, true);
+    uploadError(error);
   }
 });
 
@@ -249,11 +298,15 @@ function track(id) {
   running = true;
   setBusy(true);
   $("retry").hidden = true;
+  $("reconnect").hidden = true;
+  $("recovery").hidden = true;
   $("job-panel").hidden = false;
   $("live-link").hidden = true;
   $("job-error").hidden = true;
   $("log-box").open = false;
   $("job-state").textContent = "Publishing…";
+  $("job-panel").focus({ preventScroll: true });
+  $("job-panel").scrollIntoView({ behavior: "smooth", block: "nearest" });
   localStorage.setItem("oneshots-job", id);
   poll();
 }
@@ -262,7 +315,9 @@ async function poll() {
     const job = await api(`/api/jobs/${jobId}`);
     $("log").textContent = job.log;
     $("log").scrollTop = $("log").scrollHeight;
+    $("job-target").textContent = job.target || (job.kind === "site" ? "Current site" : "Game upload");
     if (job.state === "running") {
+      $("job-state").textContent = `${PHASES[job.phase] || "Publishing"}…`;
       setTimeout(poll, 1000);
       return;
     }
@@ -274,24 +329,49 @@ async function poll() {
       $("live-link").href = job.result.url;
       $("live-link").hidden = false;
       if (job.kind !== "site") resetFiles();
-      catalog = (await api("/api/catalog")).games;
-      fillLists();
+      try { catalog = (await api("/api/catalog")).games; fillLists(); } catch {}
     } else {
-      $("job-state").textContent = "Failed";
+      $("job-state").textContent = `${PHASES[job.phase] || "Publication"} — needs attention`;
       $("job-error").textContent = job.error;
       $("job-error").hidden = false;
       $("log-box").open = true;
       $("retry").hidden = !job.canRetry;
+      $("recovery").hidden = false;
+      $("recovery").textContent = job.canRetry
+        ? (job.phase === "verify" ? "The site was pushed, but its live update is not yet verified. Your source is saved; retry publishing without uploading again." : "Your source is saved. Retry publishing without uploading the game again.")
+        : "No new source commit was saved. Fix the issue above, then use Publish again. Your form values are retained.";
       if (job.canRetry && job.kind !== "site") resetFiles();
     }
   } catch (error) {
-    $("job-state").textContent = "Uploader not reachable";
-    $("job-error").textContent = `${error.message} Restart it and reload.`;
+    const missing = error.code === "JOB_NOT_FOUND";
+    $("job-state").textContent = missing ? "Job history unavailable" : "Connection interrupted";
+    $("job-error").textContent = missing
+      ? "The uploader no longer has this job, usually after a restart. Check its terminal or the live archive before publishing again."
+      : "Publication may still be running. Reconnect to check this job; reconnecting does not publish again.";
     $("job-error").hidden = false;
-    running = false;
-    setBusy(false);
+    $("retry").hidden = true;
+    $("reconnect").hidden = missing;
+    running = !missing;
+    setBusy(running);
+    if (missing) {
+      localStorage.removeItem("oneshots-job");
+      resetFiles();
+      notice("Your metadata is retained. Choose files again if another upload is needed.");
+    }
   }
 }
+$("reconnect").onclick = async () => {
+  $("reconnect").disabled = true;
+  try {
+    const data = await api("/api/catalog");
+    token = data.token;
+    $("reconnect").hidden = true;
+    $("job-error").hidden = true;
+    await poll();
+  } catch {
+    $("job-error").textContent = "Cannot reach the local uploader. Start it again, then reconnect to check the job.";
+  } finally { $("reconnect").disabled = false; }
+};
 $("retry").onclick = async () => {
   if (running || staging) return;
   $("retry").disabled = true;
@@ -323,6 +403,7 @@ function fillLists() {
     catalog.map((item) => item.quant),
   );
   updateSuggestions();
+  updateCredit();
 }
 async function init() {
   try {

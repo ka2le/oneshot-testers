@@ -1,0 +1,255 @@
+// Production UI + real uploader HTTP/staging, with injected deployment callbacks.
+// No repository commits, pushes or real deployments are made by this script.
+import assert from "node:assert/strict";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { tmpdir } from "node:os";
+import express from "express";
+import { chromium } from "playwright";
+import { createUploader } from "../uploader/server.mjs";
+
+const root = path.resolve(import.meta.dirname, "..");
+const evidence = path.join(root, ".local", "ui-evidence");
+await mkdir(evidence, { recursive: true });
+const fixture = await mkdtemp(path.join(tmpdir(), "oneshots-ui-"));
+await mkdir(path.join(fixture, "games"));
+await writeFile(path.join(fixture, "catalog.json"), "{}");
+await writeFile(path.join(fixture, "games", "Snake-Qwen3.6.html"), "<p>Catalog fixture</p>");
+const bundle = path.join(fixture, "nested-bundle");
+await mkdir(path.join(bundle, "assets"), { recursive: true });
+await writeFile(path.join(bundle, "index.html"), '<!doctype html><link rel="stylesheet" href="assets/style.css"><h1>Nested folder preview</h1>');
+await writeFile(path.join(bundle, "assets", "style.css"), "h1{color:rgb(90,45,12)}");
+const listen = (app) => new Promise((resolve) => { const server = app.listen(0, "127.0.0.1", () => resolve(server)); });
+const host = (server) => `http://127.0.0.1:${server.address().port}`;
+let outcome = "success", calls = 0, retries = 0, lastUpload;
+const operation = async (upload, { phase, log }) => {
+  if (upload) { calls++; lastUpload = upload; }
+  phase("build"); log("Controlled fixture: building.\n");
+  await new Promise((r) => setTimeout(r, 250));
+  if (outcome === "build-failure") throw new Error("Fixture build failed. Correct the HTML and replace files.");
+  phase("verify"); log("Controlled fixture: checking live marker (simulated).\n");
+  await new Promise((r) => setTimeout(r, 1200));
+  if (outcome === "failure") {
+    const error = new Error("Fixture live update could not be verified.");
+    error.committed = true;
+    throw error;
+  }
+  return { url: "https://example.invalid/simulated-publication" };
+};
+const uploader = createUploader({ directory: fixture, deploy: operation, publishSite: (options) => operation(null, options), retry: (options) => { retries++; return operation(null, options); } });
+const uploadServer = await listen(uploader.app);
+const archiveApp = express();
+archiveApp.use("/oneshot-testers", express.static(path.join(root, "dist")));
+const archiveServer = await listen(archiveApp);
+const uploadUrl = host(uploadServer), archiveUrl = host(archiveServer) + "/oneshot-testers/";
+const fallback = path.join(process.env.LOCALAPPDATA || "", "ms-playwright", "chromium_headless_shell-1243", "chrome-headless-shell-win64", "chrome-headless-shell.exe");
+const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || (existsSync(chromium.executablePath()) ? undefined : existsSync(fallback) ? fallback : undefined);
+const browser = await chromium.launch({ headless: true, executablePath });
+const checks = [], errors = [];
+const record = (size, text) => { checks.push(`${size}: ${text}`); console.log(`PASS ${size}: ${text}`); };
+const file = (name, text, mimeType = "text/html") => ({ name, mimeType, buffer: Buffer.from(text) });
+const packageFiles = [
+  file("index.html", '<!doctype html><title>Package</title><link rel="stylesheet" href="style.css"><h1>Package preview</h1><button onclick="this.textContent=\'Played\'">Play</button><script>window.previewRan = true;</script>'),
+  file("help.html", "<!doctype html><h1>Help starting page</h1>"),
+  file("style.css", "body{background:rgb(235,245,255);font-family:sans-serif}h1{color:rgb(12,34,56)}", "text/css"),
+];
+async function shot(page, name) {
+  await page.screenshot({ path: path.join(evidence, name + ".png"), fullPage: true, animations: "disabled" });
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${name} horizontal overflow`);
+}
+try {
+  for (const [size, viewport] of [["desktop", { width: 1280, height: 900 }], ["mobile", { width: 390, height: 844 }]]) {
+    const context = await browser.newContext({ viewport, reducedMotion: "reduce" });
+    context.on("page", (page) => page.on("pageerror", (e) => errors.push(`${size}: ${e.message}`)));
+    const page = await context.newPage();
+    await page.goto(uploadUrl);
+    await page.waitForFunction(() => !document.querySelector("#publish-site").disabled);
+    await page.locator("#game").fill("Snake");
+    await page.locator("#model").fill("Qwen");
+    await page.locator("#version").fill("3.6");
+    await page.locator("#quant").fill("Q4_K_M");
+    await page.locator("#variant").fill("Second attempt");
+    assert.match(await page.locator("#credit").innerText(), /Qwen3.6.*Second attempt/);
+    await page.reload();
+    assert.equal(await page.locator("#variant").inputValue(), "Second attempt");
+    record(size, "model version and game build retain separate draft values");
+    await page.locator("#files").setInputFiles(packageFiles);
+    await page.locator("#staged").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#entry").inputValue(), "index.html");
+    await page.locator("#file-details summary").click();
+    assert.equal(await page.locator("#file-list li").count(), 3);
+    await shot(page, `${size}-package`);
+    await page.locator("#preview").click();
+    const frame = page.frameLocator("#preview-frame");
+    await frame.getByRole("heading", { name: "Package preview" }).waitFor();
+    assert.equal(await frame.locator("h1").evaluate((e) => getComputedStyle(e).color), "rgb(12, 34, 56)");
+    await frame.getByRole("button", { name: "Play", exact: true }).click();
+    await frame.getByRole("button", { name: "Played" }).waitFor();
+    const previewUrl = await page.locator("#preview-frame").getAttribute("src");
+    assert.notEqual(new URL(previewUrl).origin, uploadUrl);
+    assert.equal(await frame.locator("body").evaluate(() => { try { return parent.document.title; } catch { return "blocked"; } }), "blocked");
+    assert.equal(await frame.locator("body").evaluate(async (_, target) => { try { await fetch(target + "/api/catalog"); return "accessible"; } catch { return "blocked"; } }, uploadUrl), "blocked");
+    await shot(page, `${size}-preview`);
+    await page.locator("#close-preview").click();
+    await page.locator("#entry").selectOption("help.html");
+    await page.locator("#preview").click();
+    await frame.getByRole("heading", { name: "Help starting page" }).waitFor();
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator("#entry").inputValue(), "help.html");
+    record(size, "package assets/scripts render in isolated preview; entry choice and edits survive closing");
+    const previousSummary = await page.locator("#file-summary").innerText();
+    await page.locator("#files").setInputFiles(file("bad.txt", "No HTML", "text/plain"));
+    await page.waitForFunction(() => document.querySelector("#notice").textContent.includes("No HTML"));
+    assert.equal(await page.locator("#file-summary").innerText(), previousSummary);
+    assert.equal(await page.locator("#entry").inputValue(), "help.html");
+    await page.locator("#preview").click();
+    await frame.getByRole("heading", { name: "Help starting page" }).waitFor();
+    await page.locator("#close-preview").click();
+    record(size, "invalid replacement preserves the previous valid package and starting page");
+    await page.locator("#files").setInputFiles([]);
+    assert.equal(await page.locator("#entry").inputValue(), "help.html");
+    await page.locator("#folder").setInputFiles(bundle);
+    await page.waitForFunction(() => document.querySelector("#single-entry").textContent === "nested-bundle/index.html");
+    assert.equal(await page.locator("#entry").isVisible(), false);
+    assert.equal(await page.locator("#single-entry").isVisible(), true);
+    await page.locator("#preview").click();
+    await frame.getByRole("heading", { name: "Nested folder preview" }).waitFor();
+    assert.equal(await frame.locator("h1").evaluate((e) => getComputedStyle(e).color), "rgb(90, 45, 12)");
+    assert.equal((await fetch(previewUrl)).status, 410);
+    await page.locator("#close-preview").click();
+    await page.evaluate(() => document.documentElement.style.fontSize = "24px");
+    await shot(page, `${size}-package-large-text`);
+    await page.evaluate(() => document.documentElement.style.fontSize = "");
+    record(size, "empty selection preserves files; successful folder replacement preserves nested assets and retires the old preview");
+    outcome = "build-failure";
+    await page.locator("#deploy").click();
+    await page.waitForFunction(() => document.querySelector("#job-state").textContent.includes("needs attention"));
+    assert.match(await page.locator("#job-state").innerText(), /Building site/);
+    assert.equal(await page.locator("#retry").isVisible(), false);
+    assert.equal(await page.locator("#staged").isVisible(), true);
+    assert.equal(lastUpload.variant, "Second attempt");
+    assert.equal(lastUpload.model, "Qwen3.6");
+    record(size, "pre-commit failure retains staged files and reports the failed build stage");
+    outcome = "failure";
+    await page.locator("#deploy").click();
+    await page.locator("#retry").waitFor({ state: "visible" });
+    assert.match(await page.locator("#job-state").innerText(), /Verifying live update/);
+    assert.match(await page.locator("#recovery").innerText(), /source is saved/);
+    assert((await page.locator("#retry").boundingBox()).y < (await page.locator("#log-box").boundingBox()).y);
+    await shot(page, `${size}-failure`);
+    const callCount = calls;
+    outcome = "success";
+    await page.locator("#retry").click();
+    await page.locator("#live-link").waitFor({ state: "visible" });
+    assert.equal(calls, callCount);
+    record(size, "post-commit recovery precedes diagnostics and retries without importing another game");
+    // Simulate a transport interruption while the real controlled job continues.
+    let disconnected = true;
+    await page.route("**/api/jobs/*", (route) => disconnected ? route.abort() : route.continue());
+    await page.locator("#publish-site").click();
+    await page.locator("#reconnect").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#publish-site").isDisabled(), true);
+    disconnected = false;
+    await page.locator("#reconnect").click();
+    await page.locator("#live-link").waitFor({ state: "visible" });
+    await page.unroute("**/api/jobs/*");
+    record(size, "reconnect observes the existing job without replaying publication");
+    await page.evaluate(() => localStorage.setItem("oneshots-job", "job-from-previous-server"));
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector("#job-state").textContent === "Job history unavailable");
+    assert.equal(await page.evaluate(() => localStorage.getItem("oneshots-job")), null);
+    assert.equal(await page.locator("#variant").inputValue(), "Second attempt");
+    record(size, "missing server job clears stale tracking and keeps the form draft");
+    await page.locator("#files").setInputFiles(file("index.html", "<h1>Expiring</h1>"));
+    await page.locator("#preview").click();
+    await frame.getByRole("heading", { name: "Expiring" }).waitFor();
+    const expiring = new URL(await page.locator("#preview-frame").getAttribute("src")).pathname.split("/")[1];
+    await page.locator("#close-preview").click();
+    await page.evaluate(async (id) => { const { token } = await (await fetch("/api/catalog")).json(); await fetch(`/api/uploads/${id}`, { method: "DELETE", headers: { "X-Upload-Token": token } }); }, expiring);
+    await page.locator("#preview").click();
+    await page.locator("#choose-again").waitFor({ state: "visible" });
+    assert.match(await page.locator("#notice").innerText(), /expired/);
+    record(size, "expired package offers file selection while retaining metadata");
+
+    await page.goto(archiveUrl);
+    await page.getByRole("button", { name: "Paste HTML", exact: true }).click();
+    const pasted = '<!doctype html><h1>Draft one</h1><button onclick="this.textContent=\'Played\'">Play</button>';
+    await page.getByRole("textbox", { name: "HTML", exact: true }).fill(pasted);
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.frameLocator('iframe[title="Pasted HTML preview"]').getByRole("heading", { name: "Draft one" }).waitFor();
+    await page.getByRole("button", { name: "Back to edit" }).click();
+    assert.equal(await page.getByRole("textbox", { name: "HTML", exact: true }).inputValue(), pasted);
+    await page.getByRole("textbox", { name: "HTML", exact: true }).fill(pasted.replace("Draft one", "Draft two"));
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.frameLocator('iframe[title="Pasted HTML preview"]').getByRole("heading", { name: "Draft two" }).waitFor();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("button", { name: "Paste HTML", exact: true }).click();
+    assert.match(await page.getByRole("textbox", { name: "HTML", exact: true }).inputValue(), /Draft two/);
+    await shot(page, `${size}-paste-editor`);
+    for (let i = 0; i < 7; i++) {
+      await page.keyboard.press("Tab");
+      assert(await page.evaluate(() => document.activeElement.closest("dialog") !== null || document.activeElement.tagName === "BODY"));
+    }
+    await page.keyboard.press("Escape");
+    assert.equal(await page.getByRole("button", { name: "Paste HTML", exact: true }).evaluate((e) => document.activeElement === e), true);
+    record(size, "pasted HTML round-trips through preview/edit/close without losing code");
+    await page.getByRole("searchbox", { name: "Search", exact: true }).fill("Snake");
+    const picks = page.locator(".compare-pick");
+    await picks.nth(0).click();
+    await picks.nth(1).click();
+    const shared = page.url();
+    await page.reload();
+    assert.equal(await page.locator('.compare-pick[aria-pressed="true"]').count(), 2);
+    assert.equal(page.url(), shared);
+    await page.getByRole("button", { name: "Compare 2 builds", exact: true }).click();
+    await page.getByLabel("Choose build B").selectOption("Snake-Gemma4-31B-QAT-MTP-Q4.html");
+    await page.evaluate(() => localStorage.setItem("snakeHighScore", "17"));
+    await page.getByRole("button", { name: "Try B", exact: true }).click();
+    const realGame = page.frameLocator('iframe[title="Playing build B"]');
+    await realGame.getByRole("button", { name: "Start Game" }).waitFor();
+    assert.equal(await realGame.locator("#highScore").innerText(), "17");
+    await realGame.getByRole("button", { name: "Start Game" }).click();
+    await realGame.locator("#overlay").waitFor({ state: "hidden" });
+    const canvas = await realGame.locator("canvas").boundingBox();
+    const stageRect = await page.locator(".game-stage").boundingBox();
+    assert(canvas.x >= stageRect.x - 1 && canvas.y >= stageRect.y - 1 && canvas.x + canvas.width <= stageRect.x + stageRect.width + 1 && canvas.y + canvas.height <= stageRect.y + stageRect.height + 1, "full real-game canvas fits the comparison stage");
+    await shot(page, `${size}-comparison-real-game`);
+    await page.getByRole("button", { name: "Stop", exact: true }).click();
+    record(size, "a real archived Snake build starts in comparison and reads its saved browser state");
+    // Deterministic player fixture tests the archive's wrapper, not game internals.
+    await page.route("**/games/**", (route) => route.fulfill({ contentType: "text/html", body: '<h1>Playable comparison fixture</h1><button onclick="this.textContent=\'Played\'">Play</button>' }));
+    await page.getByRole("button", { name: "Try A", exact: true }).click();
+    await page.frameLocator('iframe[title="Playing build A"]').getByRole("heading", { name: "Playable comparison fixture" }).waitFor();
+    assert.equal(await page.locator(".compare-identities .model-credit").count(), 2);
+    await page.getByRole("button", { name: "Try B", exact: true }).click();
+    assert.equal(await page.locator('iframe[title="Playing build A"]').count(), 0);
+    await page.frameLocator('iframe[title="Playing build B"]').getByRole("button", { name: "Play", exact: true }).click();
+    await page.frameLocator('iframe[title="Playing build B"]').getByRole("button", { name: "Played" }).waitFor();
+    await page.getByLabel("Fit 960 × 900").uncheck();
+    await page.frameLocator('iframe[title="Playing build B"]').getByRole("button", { name: "Played" }).waitFor();
+    await page.getByLabel("Fit 960 × 900").check();
+    await shot(page, `${size}-comparison`);
+    await page.evaluate(() => document.documentElement.style.fontSize = "24px");
+    await shot(page, `${size}-comparison-large-text`);
+    await page.evaluate(() => document.documentElement.style.fontSize = "");
+    record(size, "enlarged text stays within the viewport; modal keyboard navigation returns focus to its opener");
+    const chooseA = page.getByLabel("Choose build A");
+    const alternate = await chooseA.locator("option").last().getAttribute("value");
+    await chooseA.selectOption(alternate);
+    assert.equal(await chooseA.inputValue(), alternate);
+    await page.getByRole("button", { name: "Back to archive" }).click();
+    await page.getByRole("button", { name: "Remove build A", exact: true }).click();
+    assert.equal(await page.getByRole("button", { name: "Choose one more build", exact: true }).isDisabled(), true);
+    record(size, "two build identities remain visible during play; selection shares, replaces and removes correctly");
+    await context.close();
+  }
+  assert.equal(errors.length, 0, JSON.stringify(errors));
+  await writeFile(path.join(evidence, "results.json"), JSON.stringify({ browser: browser.version(), checks, errors, uploadCalls: calls, retryCalls: retries, deployment: "Controlled callbacks only; no real publication", screenshots: "desktop/mobile package, package-large-text, preview, failure, paste-editor, comparison, comparison-real-game, comparison-large-text" }, null, 2));
+  console.log(`${checks.length} browser workflow checks passed. Evidence: ${evidence}`);
+} finally {
+  await browser.close();
+  for (const server of [uploadServer, archiveServer]) { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); }
+  await uploader.close();
+  await rm(fixture, { recursive: true, force: true });
+}

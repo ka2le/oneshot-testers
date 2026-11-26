@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { root, readCatalog, inferMetadata } from "../scripts/catalog.mjs";
 import { deployUpload, deploySite, retryPublish } from "../scripts/deploy.mjs";
-import { limits, prepareFiles, cleanLabel, assertEntry } from "./uploads.mjs";
+import { limits, prepareFiles, cleanLabel, assertEntry, safePath } from "./uploads.mjs";
 
 export function createUploader({
   deploy = deployUpload,
@@ -20,6 +20,39 @@ export function createUploader({
     uploads = new Map(),
     jobs = new Map();
   const token = randomBytes(32).toString("hex");
+  // Uploaded code runs on a separate, unprivileged loopback origin. The CSP
+  // sandbox also applies when its URL is opened outside the preview frame.
+  let previewServer, previewReady;
+  const previewApp = express();
+  previewApp.use((req, res, next) => {
+    if (req.headers.host !== `127.0.0.1:${req.socket.localPort}`)
+      return res.status(403).end();
+    res.set({
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Access-Control-Allow-Origin": "*",
+      "Content-Security-Policy": "sandbox allow-scripts allow-pointer-lock; default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors http://127.0.0.1:* http://localhost:*",
+    });
+    next();
+  });
+  previewApp.get(/^\/([^/]+)\/(.+)$/, (req, res) => {
+    const upload = uploads.get(req.params[0]);
+    if (!upload || Date.now() - upload.created > 3600000)
+      return res.status(410).type("text").send("This preview expired. Choose your files again in the uploader.");
+    let file;
+    try { file = safePath(req.params[1]); } catch { return res.status(400).end(); }
+    if (!upload.paths.includes(file)) return res.status(404).end();
+    res.sendFile(file, { root: upload.directory }, (error) => {
+      if (error && !res.headersSent) res.status(404).end();
+    });
+  });
+  function previewOrigin() {
+    return previewReady ||= new Promise((resolve, reject) => {
+      previewServer = previewApp.listen(0, "127.0.0.1", () =>
+        resolve(`http://127.0.0.1:${previewServer.address().port}`));
+      previewServer.once("error", reject);
+    }).catch((error) => { previewReady = undefined; throw error; });
+  }
   let busy = false,
     preparing = false;
   app.disable("x-powered-by");
@@ -37,7 +70,7 @@ export function createUploader({
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
       "Content-Security-Policy":
-        "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-src http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     });
     if (req.method !== "GET" && req.headers["x-upload-token"] !== token)
       return res
@@ -128,10 +161,19 @@ export function createUploader({
     }
     res.json({ ok: true });
   });
-  function startJob(operation, res, kind = "upload") {
+  app.get("/api/uploads/:id/preview", async (req, res) => {
+    const upload = uploads.get(req.params.id);
+    if (!upload || Date.now() - upload.created > 3600000)
+      return res.status(410).json({ code: "UPLOAD_EXPIRED", error: "This upload expired. Choose your files again." });
+    if (!upload.entries.includes(req.query.entry))
+      return res.status(400).json({ error: "Choose an HTML starting page from this upload." });
+    const origin = await previewOrigin();
+    res.json({ url: `${origin}/${req.params.id}/${req.query.entry.split("/").map(encodeURIComponent).join("/")}` });
+  });
+  function startJob(operation, res, kind = "upload", target = "Current site") {
     busy = true;
     const id = randomUUID(),
-      job = { id, kind, state: "running", log: "", created: Date.now() };
+      job = { id, kind, target, phase: "check", state: "running", log: "", created: Date.now() };
     jobs.set(id, job);
     if (jobs.size > 30) jobs.delete(jobs.keys().next().value);
     const log = (text) => {
@@ -139,7 +181,7 @@ export function createUploader({
       if (directory === root) process.stdout.write(text);
     };
     Promise.resolve()
-      .then(() => operation(log))
+      .then(() => operation(log, (phase) => { job.phase = phase; }))
       .then((result) => {
         Object.assign(job, { state: "succeeded", result });
         log("\nDeployment completed and verified on the live site.\n");
@@ -162,7 +204,7 @@ export function createUploader({
       return res
         .status(409)
         .json({ error: "A deployment or upload is already running." });
-    startJob((log) => publishSite({ cwd: directory, log }), res, "site");
+    startJob((log, phase) => publishSite({ cwd: directory, log, phase }), res, "site");
   });
   app.post("/api/deploy", async (req, res) => {
     if (busy || preparing)
@@ -170,13 +212,13 @@ export function createUploader({
         .status(409)
         .json({ error: "A deployment or upload is already running." });
     const staged = uploads.get(req.body.uploadId);
-    if (!staged)
+    if (!staged || Date.now() - staged.created > 3600000)
       return res
         .status(400)
-        .json({ error: "Choose your files again; this upload has expired." });
+        .json({ code: "UPLOAD_EXPIRED", error: "Choose your files again; this upload has expired." });
     const game = cleanLabel(req.body.game, "Game name"),
       model = cleanLabel(req.body.model, "Model"),
-      variant = cleanLabel(req.body.variant || "", "Version", true),
+      variant = cleanLabel(req.body.variant || "", "Game build", true),
       quant = cleanLabel(req.body.quant || "", "Quant", true);
     const inferredFamily = inferMetadata(`Upload-${model}.html`).family;
     const family = cleanLabel(
@@ -190,7 +232,7 @@ export function createUploader({
         .json({ error: "Choose an HTML entry page from this upload." });
     await assertEntry(staged.directory, req.body.entry);
     staged.inUse = true;
-    startJob(async (log) => {
+    startJob(async (log, phase) => {
       try {
         const result = await deploy(
           {
@@ -202,7 +244,7 @@ export function createUploader({
             variant,
             entry: req.body.entry,
           },
-          { cwd: directory, log },
+          { cwd: directory, log, phase },
         );
         uploads.delete(req.body.uploadId);
         await rm(staged.temp, { recursive: true, force: true });
@@ -216,7 +258,7 @@ export function createUploader({
       } finally {
         staged.inUse = false;
       }
-    }, res);
+    }, res, "upload", `${game} · ${model}${variant ? ` · ${variant}` : ""}`);
   });
   app.post("/api/jobs/:id/retry", (req, res) => {
     if (busy || preparing)
@@ -228,19 +270,21 @@ export function createUploader({
         .status(400)
         .json({ error: "This deployment has no saved source to retry." });
     startJob(
-      (log) =>
-        retry({ cwd: directory, log }).catch((error) => {
+      (log, phase) =>
+        retry({ cwd: directory, log, phase }).catch((error) => {
           error.committed = true;
           throw error;
         }),
       res,
       jobs.get(req.params.id).kind,
+      jobs.get(req.params.id).target,
     );
   });
   app.get("/api/jobs/:id", (req, res) => {
     const job = jobs.get(req.params.id);
     if (!job)
       return res.status(404).json({
+        code: "JOB_NOT_FOUND",
         error: "Deployment not found. Check your terminal for the last run.",
       });
     res.json(job);
@@ -261,6 +305,10 @@ export function createUploader({
     app,
     async close() {
       clearInterval(cleanup);
+      if (previewServer) {
+        previewServer.closeAllConnections();
+        await new Promise((resolve) => previewServer.close(resolve));
+      }
       for (const upload of uploads.values())
         await rm(upload.temp, { recursive: true, force: true });
     },

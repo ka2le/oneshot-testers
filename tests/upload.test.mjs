@@ -217,9 +217,10 @@ test("site publishing needs no upload, rejects concurrent operations and retains
     release = resolve;
   });
   const uploader = createUploader({
-    publishSite: async ({ log }) => {
+    publishSite: async ({ log, phase }) => {
       calls++;
       log("Publishing existing site\n");
+      phase("verify");
       await gate;
       const error = new Error("Saved source; simulated Pages failure");
       error.committed = true;
@@ -263,10 +264,47 @@ test("site publishing needs no upload, rejects concurrent operations and retains
   const failed = await completed(job.id);
   assert.equal(failed.kind, "site");
   assert.equal(failed.canRetry, true);
+  assert.equal(failed.phase, "verify");
+  assert.equal(failed.target, "Current site");
   assert.equal(calls, 1);
   const retry = await fetch(`${url}/api/jobs/${job.id}/retry`, post);
   assert.equal(retry.status, 202);
   const recovered = await completed((await retry.json()).id);
   assert.equal(recovered.kind, "site");
   assert.equal(recovered.state, "succeeded");
+});
+
+test("staged previews serve only package files on a sandboxed separate origin and never deploy", async (t) => {
+  const uploader = createUploader({ deploy: () => assert.fail("preview must not deploy") });
+  const server = await new Promise((resolve) => {
+    const s = uploader.app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+    await uploader.close();
+  });
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const { token } = await (await fetch(url + "/api/catalog")).json();
+  const form = new FormData();
+  form.append("paths", JSON.stringify(["game/index.html", "game/css/style.css"]));
+  form.append("files", new Blob(['<link rel="stylesheet" href="css/style.css"><p>Preview</p>']), "index.html");
+  form.append("files", new Blob(["body{color:red}"]), "style.css");
+  const stage = await (await fetch(url + "/api/uploads", { method: "POST", headers: { "X-Upload-Token": token }, body: form })).json();
+  assert.deepEqual(stage.paths.sort(), ["game/css/style.css", "game/index.html"]);
+  const preview = await (await fetch(`${url}/api/uploads/${stage.id}/preview?entry=game%2Findex.html`)).json();
+  assert.notEqual(new URL(preview.url).origin, url);
+  const page = await fetch(preview.url);
+  assert.equal(page.status, 200);
+  assert.match(page.headers.get("content-security-policy"), /sandbox allow-scripts allow-pointer-lock/);
+  assert(!page.headers.get("content-security-policy").includes("allow-same-origin"));
+  assert.equal(await (await fetch(new URL("css/style.css", preview.url))).text(), "body{color:red}");
+  assert.equal((await fetch(new URL("/api/catalog", preview.url))).status, 410);
+  assert.equal((await fetch(new URL("../catalog.json", preview.url))).status, 404);
+  assert.equal((await fetch(url + "/api/catalog", { headers: { Origin: "null" } })).status, 403);
+  assert.equal((await fetch(`${url}/api/uploads/${stage.id}/preview?entry=missing.html`)).status, 400);
+  await fetch(`${url}/api/uploads/${stage.id}`, { method: "DELETE", headers: { "X-Upload-Token": token } });
+  assert.equal((await fetch(preview.url)).status, 410);
+  assert.equal((await (await fetch(`${url}/api/uploads/${stage.id}/preview?entry=game%2Findex.html`)).json()).code, "UPLOAD_EXPIRED");
+  assert.equal((await (await fetch(`${url}/api/jobs/missing`)).json()).code, "JOB_NOT_FOUND");
 });

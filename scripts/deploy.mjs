@@ -39,14 +39,18 @@ export async function publish({
   cwd = root,
   log = console.log,
   built = false,
+  phase = () => {},
 } = {}) {
   // Build without invoking a shell, including on Windows.
-  if (!built)
+  if (!built) {
+    phase("build");
     await run(
       process.execPath,
       [path.join(cwd, "node_modules/vite/bin/vite.js"), "build"],
       { cwd, log },
     );
+  }
+  phase("publish");
   const { default: ghpages } = await import("gh-pages");
   const repo = await run("git", ["remote", "get-url", "origin"], {
     cwd,
@@ -77,6 +81,7 @@ export async function publish({
   );
   const url = "https://ka2le.github.io/oneshot-testers/";
   log("Waiting for the live site to serve this deployment…\n");
+  phase("verify");
   await waitForDeployment(url, deployment.id, { log });
   return url;
 }
@@ -159,8 +164,10 @@ export async function deploySite({
   cwd = root,
   log = console.log,
   publisher = publish,
+  phase = () => {},
 } = {}) {
-  const options = { cwd, log };
+  const options = { cwd, log, phase };
+  phase("check");
   const branch = await run("git", ["branch", "--show-current"], {
     cwd,
     log: () => {},
@@ -182,6 +189,7 @@ export async function deploySite({
   let saved = false;
   try {
     await readCatalog(cwd);
+    phase("build");
     await run(
       process.execPath,
       [path.join(cwd, "node_modules/vite/bin/vite.js"), "build"],
@@ -189,6 +197,7 @@ export async function deploySite({
     );
     const changes = await siteChanges(cwd);
     if (changes.length) {
+      phase("save");
       log(`Committing ${changes.length} changed project files…\n`);
       const roots = [...new Set(changes.map((file) => file.split("/")[0]))];
       await run("git", ["add", "--all", "--", ...roots], options);
@@ -199,6 +208,7 @@ export async function deploySite({
       );
     } else log("No source changes to commit. Republishing the current site…\n");
     saved = true;
+    phase("push");
     await run("git", ["push", "origin", "main"], options);
     const url = await publisher({ ...options, built: true });
     return {
@@ -217,9 +227,10 @@ export async function deploySite({
 
 export async function deployUpload(
   upload,
-  { cwd = root, log = console.log, publisher = publish } = {},
+  { cwd = root, log = console.log, publisher = publish, phase = () => {} } = {},
 ) {
-  const options = { cwd, log };
+  const options = { cwd, log, phase };
+  phase("check");
   const branch = await run("git", ["branch", "--show-current"], {
     ...options,
     log: () => {},
@@ -256,6 +267,7 @@ export async function deployUpload(
   const original = await readFile(catalogPath, "utf8");
   let committed = false;
   try {
+    phase("import");
     await mkdir(path.dirname(destination), { recursive: true });
     await cp(upload.directory, destination, {
       recursive: true,
@@ -281,11 +293,13 @@ export async function deployUpload(
     await rename(temp, catalogPath);
     await readCatalog(cwd);
     // A failed build never creates a source commit.
+    phase("build");
     await run(
       process.execPath,
       [path.join(cwd, "node_modules/vite/bin/vite.js"), "build"],
       options,
     );
+    phase("save");
     await run("git", ["add", "--", `games/${folder}`, "catalog.json"], options);
     await run(
       "git",
@@ -294,6 +308,7 @@ export async function deployUpload(
     );
     committed = true;
     log("Pushing the source commit…\n");
+    phase("push");
     await run("git", ["push", "origin", "main"], options);
     const url = await publisher({ ...options, built: true });
     return {
@@ -320,7 +335,8 @@ export async function deployUpload(
   }
 }
 
-export async function retryPublish({ cwd = root, log = console.log } = {}) {
+export async function retryPublish({ cwd = root, log = console.log, phase = () => {} } = {}) {
+  phase("check");
   if (await run("git", ["status", "--porcelain"], { cwd, log: () => {} }))
     throw new Error("Commit or stash source changes before retrying.");
   const branch = await run("git", ["branch", "--show-current"], {
@@ -328,8 +344,9 @@ export async function retryPublish({ cwd = root, log = console.log } = {}) {
     log: () => {},
   });
   if (branch !== "main") throw new Error("Switch to main before publishing.");
+  phase("push");
   await run("git", ["push", "origin", "main"], { cwd, log });
-  return { url: await publish({ cwd, log }) };
+  return { url: await publish({ cwd, log, phase }) };
 }
 
 if (

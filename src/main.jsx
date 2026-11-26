@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./styles.css";
+import { PasteDialog, CompareWorkspace } from "./Workspaces";
 import {
   games,
   filterGames,
@@ -72,7 +73,7 @@ function Logo() {
   );
 }
 
-function Card({ title, subtitle, color, rows, rowColor }) {
+function Card({ title, subtitle, color, rows, rowColor, selected, toggleCompare }) {
   const [open, setOpen] = useState(false);
   const limit = 7;
   const shown = open ? rows : rows.slice(0, limit);
@@ -94,33 +95,16 @@ function Card({ title, subtitle, color, rows, rowColor }) {
             key={name}
             className={name === UNSPECIFIED ? "row unspecified" : "row"}
           >
-            {items.length === 1 ? (
-              <a className="row-link" href={items[0].href}>
-                <span className="name">
-                  {rowColor && (
-                    <i className="dot" style={{ background: rowColor(items[0]) }} />
-                  )}
-                  {name}
-                </span>
-                <span className="label">{buildLabel(items[0])}</span>
-              </a>
-            ) : (
-              <>
-                <span className="name">
-                  {rowColor && (
-                    <i className="dot" style={{ background: rowColor(items[0]) }} />
-                  )}
-                  {name}
-                </span>
-                <span className="builds">
-                  {items.map((item) => (
-                    <a className="build" href={item.href} key={item.id}>
-                      {buildLabel(item)}
-                    </a>
-                  ))}
-                </span>
-              </>
-            )}
+            <span className="name">
+              {rowColor && <i className="dot" style={{ background: rowColor(items[0]) }} />}
+              {name}
+            </span>
+            <div className="build-options">
+              {items.map((item) => <div className="build-option" key={item.id}>
+                <a className="build" href={item.href} title={item.file} aria-label={`Play ${item.game}, ${item.model}, ${buildLabel(item)}`}>{buildLabel(item)}</a>
+                <button className="compare-pick" aria-label={`Compare ${item.game}, ${item.model}, ${buildLabel(item)}, ${item.file}`} aria-pressed={selected.includes(item.id)} disabled={selected.length === 2 && !selected.includes(item.id)} onClick={() => toggleCompare(item.id)}>{selected.includes(item.id) ? "Selected" : "Compare"}</button>
+              </div>)}
+            </div>
           </li>
         ))}
       </ul>
@@ -133,61 +117,6 @@ function Card({ title, subtitle, color, rows, rowColor }) {
   );
 }
 
-function PasteDialog({ onClose }) {
-  const [html, setHtml] = useState("");
-  const [preview, setPreview] = useState("");
-  useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview]);
-  useEffect(() => {
-    const esc = (e) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", esc);
-    return () => window.removeEventListener("keydown", esc);
-  }, [onClose]);
-  if (preview)
-    return (
-      <div className="overlay preview" role="dialog" aria-modal="true">
-        <div className="preview-bar">
-          <strong>Preview</strong>
-          <button autoFocus onClick={onClose}>
-            Close
-          </button>
-        </div>
-        <iframe
-          src={preview}
-          title="Pasted HTML preview"
-          sandbox="allow-scripts allow-pointer-lock"
-        />
-      </div>
-    );
-  return (
-    <div className="overlay" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="paste" onClick={(e) => e.stopPropagation()}>
-        <textarea
-          autoFocus
-          value={html}
-          onChange={(e) => setHtml(e.target.value)}
-          placeholder="Paste HTML…"
-          spellCheck={false}
-          aria-label="HTML"
-        />
-        <div className="paste-actions">
-          <button onClick={onClose}>Cancel</button>
-          <button
-            className="primary"
-            disabled={!/<[a-z!]/i.test(html)}
-            onClick={() =>
-              setPreview(
-                URL.createObjectURL(new Blob([html], { type: "text/html" })),
-              )
-            }
-          >
-            Open
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function App() {
   const [mode, setMode] = useState(
     initial.get("view") === "model" ? "model" : "game",
@@ -196,6 +125,10 @@ function App() {
   const [model, setModel] = useState(initial.get("model") || "");
   const [search, setSearch] = useState(initial.get("q") || "");
   const [paste, setPaste] = useState(false);
+  const [htmlDraft, setHtmlDraft] = useState("");
+  const [selected, setSelected] = useState(() => [...new Set(initial.getAll("compare"))].filter((id) => games.some((g) => g.id === id)).slice(0, 2));
+  const [comparing, setComparing] = useState(false);
+  const toggleCompare = (id) => setSelected((ids) => ids.includes(id) ? ids.filter((value) => value !== id) : ids.length < 2 ? [...ids, id] : ids);
 
   const filtered = useMemo(
     () => filterGames(games, { family, model, search }),
@@ -221,9 +154,10 @@ function App() {
     if (mode === "model") params.set("view", "model");
     for (const [key, value] of Object.entries({ family, model, q: search }))
       if (value) params.set(key, value);
+    for (const id of selected) params.append("compare", id);
     const query = params.toString();
     history.replaceState(null, "", query ? `?${query}` : location.pathname);
-  }, [mode, family, model, search]);
+  }, [mode, family, model, search, selected]);
 
   const pickFamily = (name) => {
     setFamily(family === name && !model ? "" : name);
@@ -381,6 +315,8 @@ function App() {
                   key={card.title}
                   title={card.title}
                   color={ringColor(card.title)}
+                  selected={selected}
+                  toggleCompare={toggleCompare}
                   rows={card.rows}
                   rowColor={(item) => familyColor(item.family)}
                 />
@@ -392,6 +328,8 @@ function App() {
                     card.title === UNSPECIFIED ? "" : card.items[0].family
                   }
                   color={familyColor(card.items[0].family)}
+                  selected={selected}
+                  toggleCompare={toggleCompare}
                   rows={card.rows}
                 />
               ),
@@ -405,7 +343,12 @@ function App() {
         <span>OneShots</span>
         <a href="https://github.com/ka2le/oneshot-testers">GitHub</a>
       </footer>
-      {paste && <PasteDialog onClose={() => setPaste(false)} />}
+      {!!selected.length && <aside className="compare-tray" aria-label="Selected builds">
+        <div className="selected-builds">{selected.map((id, i) => { const item = games.find((g) => g.id === id); return <div key={id}><span>{i ? "B" : "A"}: {item.game} · {item.model} · {buildLabel(item)}</span><button aria-label={`Remove build ${i ? "B" : "A"}`} onClick={() => toggleCompare(id)}>×</button></div>; })}</div>
+        <button className="primary" disabled={selected.length !== 2} onClick={() => setComparing(true)}>{selected.length === 2 ? "Compare 2 builds" : "Choose one more build"}</button>
+      </aside>}
+      {paste && <PasteDialog html={htmlDraft} setHtml={setHtmlDraft} onClose={() => setPaste(false)} />}
+      {comparing && selected.length === 2 && <CompareWorkspace selected={selected} onChange={setSelected} onClose={() => setComparing(false)} />}
     </div>
   );
 }

@@ -91,9 +91,11 @@ async function fixture(t) {
 test("deploy commits only game files and metadata, pushes main, then invokes publishing", async (t) => {
   const { cwd, git, upload } = await fixture(t);
   let published = false;
+  const phases = [];
   const result = await deployUpload(upload, {
     cwd,
     log: () => {},
+    phase: (value) => phases.push(value),
     publisher: async (options) => {
       assert(options.built);
       published = true;
@@ -105,6 +107,7 @@ test("deploy commits only game files and metadata, pushes main, then invokes pub
     },
   });
   assert(published);
+  assert.deepEqual(phases, ["check", "import", "build", "save", "push"]);
   assert.equal(await git(["status", "--porcelain"]), "");
   assert.equal(result.url, "https://example.com");
   const changed = (
@@ -125,6 +128,7 @@ test("deploy commits only game files and metadata, pushes main, then invokes pub
   const catalog = await readCatalog(cwd);
   assert.equal(catalog.length, 1);
   assert.equal(catalog[0].model, upload.model);
+  assert.equal(catalog[0].variant, "v1");
 });
 test("failed build rolls back import and creates no source commit", async (t) => {
   const { cwd, git, upload, vite } = await fixture(t),

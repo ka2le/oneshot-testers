@@ -67,7 +67,7 @@
               <datalist id="model-list"></datalist>
             </label>
             <label class="field"
-              >Version
+              >Model version <span class="optional">optional</span>
               <input
                 id="version"
                 maxlength="60"
@@ -78,7 +78,7 @@
               <datalist id="version-list"></datalist>
             </label>
             <label class="field"
-              >Quant
+              >Quantization <span class="optional">optional</span>
               <input
                 id="quant"
                 maxlength="60"
@@ -89,6 +89,10 @@
               <datalist id="quant-list"></datalist>
             </label>
           </div>
+          <label class="field">Game build <span class="optional">optional, e.g. v2 or second attempt</span>
+            <input id="variant" maxlength="120" placeholder="Original" autocomplete="off" />
+          </label>
+          <p id="credit" class="hint" aria-live="polite"></p>
 
           <div id="drop-zone" class="drop">
             <span>Drop files, a folder or a ZIP</span>
@@ -103,8 +107,7 @@
           </div>
 
           <div id="staged" class="staged" hidden>
-            <span id="file-summary"></span>
-            <select id="entry" aria-label="Page to open"></select>
+            <div class="package-heading"><span id="file-summary"></span>
             <button
               id="remove"
               type="button"
@@ -113,27 +116,50 @@
             >
               ×
             </button>
+            </div>
+            <label class="entry-field">Starting page
+              <select id="entry" aria-label="Starting page"></select>
+              <span id="single-entry"></span>
+            </label>
+            <details id="file-details"><summary>Included files</summary><ul id="file-list"></ul></details>
+            <div class="package-actions">
+              <button id="preview" class="pill" type="button">Preview game</button>
+              <button id="replace-files" class="pill" type="button">Replace files</button>
+              <button id="replace-folder" class="pill" type="button">Replace folder</button>
+            </div>
           </div>
 
           <p id="notice" role="status" aria-live="polite"></p>
+          <button id="choose-again" class="pill" type="button" hidden>Choose files again</button>
           <button id="deploy" class="publish" type="submit" disabled>
             Publish game
           </button>
+          <p class="hint">Publishes to the live archive. Preview runs locally without publishing.</p>
         </fieldset>
       </form>
 
-      <section id="job-panel" class="sheet job" hidden aria-label="Publishing">
+      <section id="job-panel" class="sheet job" hidden aria-label="Publishing" tabindex="-1">
         <div class="job-head">
-          <h2 id="job-state">Publishing…</h2>
+          <h2 id="job-state" role="status" aria-live="polite">Publishing…</h2>
           <a id="live-link" hidden target="_blank" rel="noopener">Open ↗</a>
         </div>
+        <p id="job-target" class="hint"></p>
         <p id="job-error" class="error" hidden></p>
+        <p id="recovery" class="hint" hidden></p>
+        <button id="retry" type="button" class="pill" hidden>Retry publishing saved source</button>
+        <button id="reconnect" type="button" class="pill" hidden>Reconnect</button>
         <details id="log-box">
           <summary>Log</summary>
           <pre id="log" tabindex="0"></pre>
         </details>
-        <button id="retry" type="button" class="pill" hidden>Retry</button>
       </section>
     </main>
+    <dialog id="preview-dialog" aria-labelledby="preview-title">
+      <header class="preview-head"><div><h2 id="preview-title">Local game preview</h2><p id="preview-entry"></p></div>
+        <button id="close-preview" type="button" class="pill">Back to upload</button>
+      </header>
+      <p class="preview-note">Unpublished preview. Local assets are included; external services and browser storage may be unavailable.</p>
+      <iframe id="preview-frame" title="Staged game preview" sandbox="allow-scripts allow-pointer-lock"></iframe>
+    </dialog>
   </body>
 </html>

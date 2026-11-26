@@ -12,7 +12,8 @@
     "uploader": "node uploader/server.mjs",
     "test": "node --test tests/*.test.mjs && node qa/wildfang.test.cjs && node qa/ninth-tide.test.cjs",
     "test:flow": "node qa/simulate-flow.cjs --full",
-    "test:browser": "node qa/ninth-tide.browser.cjs && node qa/ninth-tide-mobile.cjs"
+    "test:browser": "node qa/ninth-tide.browser.cjs && node qa/ninth-tide-mobile.cjs",
+    "test:ui": "npm run build && node qa/ui-workflows.mjs"
   },
   "dependencies": {
     "express": "^5.3.0",
