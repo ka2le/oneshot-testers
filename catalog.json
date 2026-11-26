@@ -90,5 +90,13 @@
     "quant": "Q3_K_XL",
     "variant": "",
     "keepDuplicate": true
+  },
+  "uploads/Number-Click/Qwen3-8-Flash-Next-256-Q3-K-XL-54ef3378/index.html": {
+    "game": "Number Click",
+    "family": "Qwen",
+    "model": "Qwen3.8-Flash-Next-256",
+    "quant": "Q3_K_XL",
+    "variant": "OpenCode Studio",
+    "keepDuplicate": true
   }
 }
