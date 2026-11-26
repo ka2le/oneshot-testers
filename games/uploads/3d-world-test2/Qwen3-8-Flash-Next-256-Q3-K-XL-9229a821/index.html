@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wildlands</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; background: #000; }
+  canvas { display: block; }
+  #hud {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    font-family: monospace; color: #fff; font-size: 14px;
+    text-shadow: 0 1px 2px rgba(0,0,0,.8);
+    padding: 10px 14px; pointer-events: none;
+    display: flex; justify-content: space-between;
+  }
+  #crosshair {
+    position: fixed; left: 50%; top: 50%; width: 10px; height: 10px;
+    transform: translate(-50%, -50%); pointer-events: none;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: rgba(255,255,255,.85);
+  }
+  #crosshair::before { left: 4px; top: 0; width: 2px; height: 10px; }
+  #crosshair::after { left: 0; top: 4px; width: 10px; height: 2px; }
+  #title {
+    position: fixed; left: 0; right: 0; top: 24px; text-align: center;
+    font-family: monospace; font-size: 22px; color: #ffe;
+    text-shadow: 0 2px 4px rgba(0,0,0,.9); pointer-events: none;
+  }
+  #title small { display: block; font-size: 12px; color: #cfe8c0; margin-top: 6px; }
+  #compass {
+    position: fixed; font-size: 26px; color: #ffe97a;
+    text-shadow: 0 0 6px rgba(0,0,0,.9); pointer-events: none;
+    transform: translate(-50%, -50%);
+  }
+</style>
+<script type="importmap">{"imports": {"three": "./assets/394bd561151edb01a42f.js"}}</script>
+<script type="module" src="./assets/9cf18351a0a8d2680cfa.js"></script>
+</body>
+</html>
