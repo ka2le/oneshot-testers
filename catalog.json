@@ -82,5 +82,13 @@
   "Pinball-Astra-6-modified from claude.html": {
     "family": "OpenAI",
     "model": "Astra 6.0"
+  },
+  "uploads/Number-Click/Qwen3-8-Flash-Next-Q3-K-XL-13dfc6de/OpenCode Studio.html": {
+    "game": "Number Click",
+    "family": "Qwen",
+    "model": "Qwen3.8-Flash-Next",
+    "quant": "Q3_K_XL",
+    "variant": "",
+    "keepDuplicate": true
   }
 }
