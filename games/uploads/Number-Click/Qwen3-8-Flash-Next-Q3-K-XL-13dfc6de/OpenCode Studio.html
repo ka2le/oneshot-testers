@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<!-- saved from url=(0022)http://127.0.0.1:4188/ -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenCode Studio</title>
+<link rel="icon" href="http://127.0.0.1:4188/favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="http://127.0.0.1:4188/icons/studio-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="http://127.0.0.1:4188/icons/studio-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="http://127.0.0.1:4188/icons/studio-180.png">
+<link rel="manifest" href="http://127.0.0.1:4188/site.webmanifest">
+<link rel="stylesheet" href="./OpenCode Studio_files/style.css"><script src="./OpenCode Studio_files/app.js.download" defer=""></script></head>
+<body>
+<iframe id="opencode" title="OpenCode" src="./OpenCode Studio_files/ses_de7b9a1aaffe0xbOF94g8avyU2.html" hidden=""></iframe>
+<section id="preview" aria-label="VM preview">
+ <div class="preview-bar"><button id="back-editor" type="button">← OpenCode</button><button id="reload-preview" type="button">Reload preview</button></div>
+ <iframe id="vm-preview" title="VM web preview" sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-downloads allow-pointer-lock" allow="autoplay; fullscreen; gamepad" allowfullscreen="" src="./OpenCode Studio_files/saved_resource.html"></iframe>
+</section>
+<div class="tools">
+ <button id="resume-preview" type="button" aria-label="Return to VM preview" hidden="">Preview</button>
+ <button id="tools-toggle" aria-label="VM tools" aria-describedby="tools-hint" aria-expanded="false" aria-controls="tools-panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m9 3-.6 2.4-2 .9L4.2 6 2 10l1.8 1.7v2.2L2 15.5l2.2 3.8 2.2-.5 2 .9L9 22h4l.6-2.3 2-.9 2.2.5 2.2-3.8-1.8-1.6v-2.2L20 10l-2.2-4-2.2.3-2-.9L13 3Z"></path><circle cx="11" cy="12.5" r="3.2"></circle></svg></button>
+ <span id="tools-hint" class="hint" role="tooltip">VM tools</span>
+ <section id="tools-panel" aria-label="VM tools" hidden="">
+  <form id="open-link"><label for="vm-url">Open VM link</label><div class="create-row"><input id="vm-url" name="url" type="url" placeholder="http://localhost:3000/" autocomplete="url" autocapitalize="none" spellcheck="false" maxlength="4096" required=""><button type="submit">Open</button></div><p id="link-message" role="status" aria-live="polite"></p></form>
+  <form id="create-game"><label for="game-name">New game</label><div class="create-row"><input id="game-name" name="name" placeholder="forest-game" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="48" required="" pattern="[a-z0-9][a-z0-9\-]{0,47}"><button type="submit">Create &amp; open</button></div></form>
+  <p id="message" role="status" aria-live="polite"></p>
+  <div id="games" aria-label="Games"><div class="game-row" data-name="first-game" data-active="false" data-downloading="false" data-download-error="false"><button class="game-open" aria-current="false">first-game</button><button class="game-download" aria-label="Download first-game as ZIP">Download</button><p class="download-message" id="download-status-first-game" role="status" aria-live="polite"></p></div><div class="game-row" data-name="number-dance" data-active="true" data-downloading="false" data-download-error="false"><button class="game-open" aria-current="true">number-dance</button><button class="game-download" aria-label="Download number-dance as ZIP">Download</button><p class="download-message" id="download-status-number-dance" role="status" aria-live="polite"></p></div></div>
+ </section>
+</div>
+
+</body></html>
