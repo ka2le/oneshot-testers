@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wildlands</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; background: #0a0e0a; }
+  canvas { display: block; }
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%);
+  }
+  #hud {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px; pointer-events: none;
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+  }
+  .panel {
+    background: rgba(12,18,14,0.62); border: 1px solid rgba(180,200,150,0.35);
+    border-radius: 8px; padding: 8px 14px;
+    color: #e8ecd8; font-size: 13px; letter-spacing: 0.5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  }
+  .panel b { color: #ffd97a; font-weight: 700; }
+  #crosshair {
+    position: fixed; left: 50%; top: 50%; width: 14px; height: 14px;
+    transform: translate(-50%, -50%); pointer-events: none; opacity: 0.9;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: rgba(240,245,230,0.9);
+  }
+  #crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
+  #crosshair::after { left: 0; top: 6px; width: 14px; height: 2px; }
+  #menu {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: radial-gradient(ellipse at center, rgba(8,14,10,0.35), rgba(4,8,6,0.85));
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; color: #f0f4e2;
+    transition: opacity 0.6s; z-index: 5;
+  }
+  #menu h1 { font-size: 46px; letter-spacing: 4px; text-shadow: 0 3px 8px rgba(0,0,0,0.9); margin: 0; }
+  #menu p { font-size: 15px; color: #b8c8a8; margin: 14px 0 0; max-width: 460px; line-height: 1.5; }
+  #menu .go { font-size: 18px; color: #ffd97a; margin-top: 22px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+  #menu.hide { opacity: 0; pointer-events: none; }
+  #compass {
+    position: fixed; font-size: 24px; color: #ffd97a;
+    text-shadow: 0 0 8px rgba(0,0,0,0.9); pointer-events: none;
+    transform: translate(-50%, -50%); z-index: 4;
+  }
+  #compass span { font-size: 11px; color: #cfe0b8; display: block; margin-top: 2px; }
+</style>
+<script type="importmap">{"imports": {"three": "./assets/394bd561151edb01a42f.js"}}</script>
+<script type="module" src="./assets/9cf18351a0a8d2680cfa.js"></script>
+</body>
+</html>
